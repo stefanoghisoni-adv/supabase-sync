@@ -1,0 +1,41 @@
+{
+  "name": "shopify-supabase-sync",
+  "version": "1.0.0",
+  "description": "Shopify app for syncing products and customers to merchant Supabase databases",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "shopify app dev",
+    "build": "remix vite:build",
+    "start": "remix-serve ./build/server/index.js",
+    "typecheck": "tsc"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@prisma/client": "^7.8.0",
+    "@remix-run/node": "^2.17.5",
+    "@remix-run/react": "^2.17.5",
+    "@remix-run/serve": "^2.17.5",
+    "@shopify/polaris": "^13.9.5",
+    "@shopify/shopify-app-remix": "^4.2.1",
+    "@supabase/supabase-js": "^2.110.2",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "bullmq": "^5.80.1",
+    "crypto-js": "^4.2.0",
+    "ioredis": "^5.11.1",
+    "isbot": "^5.2.0",
+    "prisma": "^7.8.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "^5.9.3",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@remix-run/dev": "^2.17.5",
+    "@types/crypto-js": "^4.2.2",
+    "vite": "^8.1.4"
+  }
+}
