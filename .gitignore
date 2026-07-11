@@ -7,3 +7,5 @@ build/
 prisma/migrations/dev.db*
 *.log
 .DS_Store
+
+/generated/prisma

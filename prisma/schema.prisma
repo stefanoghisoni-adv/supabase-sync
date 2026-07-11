@@ -1,0 +1,275 @@
+// Prisma schema for Shopify-Supabase Sync App
+// PostgreSQL database with UTC timezone
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Shop model - stores Shopify store credentials and configuration
+model Shop {
+  id                  String            @id @default(cuid())
+  shopifyDomain       String            @unique // mystore.myshopify.com
+  accessToken         String            // Encrypted OAuth token
+  scope               String            // OAuth scopes granted
+  planId              String?
+  plan                Plan?             @relation(fields: [planId], references: [id], onDelete: SetNull)
+
+  // Billing
+  billingStatus       BillingStatus     @default(ACTIVE)
+  trialEndsAt         DateTime?
+
+  // Sync configuration
+  syncEnabled         Boolean           @default(false)
+  syncProducts        Boolean           @default(true)
+  syncCustomers       Boolean           @default(true)
+  syncInventory       Boolean           @default(false)
+  syncOrders          Boolean           @default(false)
+
+  // Auto-sync settings
+  autoSyncEnabled     Boolean           @default(false)
+  syncFrequency       SyncFrequency     @default(DAILY)
+  lastSyncAt          DateTime?
+
+  // Metadata
+  installedAt         DateTime          @default(now())
+  uninstalledAt       DateTime?
+
+  // Relations
+  supabaseConfig      SupabaseConfig?
+  billingCharges      BillingCharge[]
+  syncJobs            SyncJob[]
+  customFields        CustomField[]
+  fieldMappings       FieldMapping[]
+
+  @@index([shopifyDomain])
+  @@index([planId])
+}
+
+// SupabaseConfig model - merchant Supabase credentials (encrypted)
+model SupabaseConfig {
+  id              String   @id @default(cuid())
+  shopId          String   @unique
+  shop            Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  supabaseUrl     String   // Encrypted
+  supabaseAnonKey String   // Encrypted
+  supabaseSchema  String   @default("public")
+
+  // Table names
+  productsTable   String   @default("products")
+  customersTable  String   @default("customers")
+  inventoryTable  String?
+  ordersTable     String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([shopId])
+}
+
+// Plan model - subscription tiers
+model Plan {
+  id                    String   @id @default(cuid())
+  name                  String   @unique // free, pro, business, enterprise
+  displayName           String   // "Free Plan", "Pro Plan"
+
+  // Pricing
+  price                 Float    // Monthly price in USD
+  trialDays             Int      @default(0)
+
+  // Limits
+  maxSyncJobs           Int      // Max jobs per month
+  maxProducts           Int      // Max products to sync
+  maxCustomers          Int      // Max customers to sync
+
+  // Features
+  enableAutoSync        Boolean  @default(false)
+  enableCustomFields    Boolean  @default(false)
+  enableInventorySync   Boolean  @default(false)
+  enableOrderSync       Boolean  @default(false)
+  enableWebhooks        Boolean  @default(false)
+  prioritySupport       Boolean  @default(false)
+
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  // Relations
+  shops                 Shop[]
+
+  @@index([name])
+}
+
+// BillingCharge model - Shopify recurring charges
+model BillingCharge {
+  id              String        @id @default(cuid())
+  shopId          String
+  shop            Shop          @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  shopifyChargeId String        @unique // Shopify charge ID
+  planId          String?
+
+  // Charge details
+  amount          Float
+  currency        String        @default("USD")
+  status          ChargeStatus  @default(PENDING)
+
+  // Shopify URLs
+  confirmationUrl String?
+
+  // Timestamps
+  activatedAt     DateTime?
+  billingOn       DateTime?
+  cancelledAt     DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([shopId])
+  @@index([shopifyChargeId])
+}
+
+// SyncJob model - sync operation logs
+model SyncJob {
+  id              String        @id @default(cuid())
+  shopId          String
+  shop            Shop          @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  // Job details
+  type            SyncType      // PRODUCTS, CUSTOMERS, INVENTORY, ORDERS
+  mode            SyncMode      @default(MANUAL) // MANUAL, AUTO
+  status          SyncStatus    @default(PENDING)
+
+  // Counters
+  totalRecords    Int           @default(0)
+  processedCount  Int           @default(0)
+  successCount    Int           @default(0)
+  errorCount      Int           @default(0)
+
+  // Results
+  errorDetails    Json?         // Array of error objects
+  summary         Json?         // Sync summary stats
+
+  // Timestamps
+  startedAt       DateTime?
+  completedAt     DateTime?
+  createdAt       DateTime      @default(now())
+
+  @@index([shopId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// CustomField model - merchant-defined custom fields
+model CustomField {
+  id              String          @id @default(cuid())
+  shopId          String
+  shop            Shop            @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  fieldName       String          // e.g., "cost_price", "supplier"
+  displayName     String          // e.g., "Cost Price", "Supplier"
+  fieldType       FieldType       // TEXT, NUMBER, BOOLEAN, DATE
+
+  // Default value
+  defaultValue    String?
+
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  // Relations
+  fieldMappings   FieldMapping[]
+
+  @@unique([shopId, fieldName])
+  @@index([shopId])
+}
+
+// FieldMapping model - Shopify to Supabase field mappings
+model FieldMapping {
+  id              String      @id @default(cuid())
+  shopId          String
+  shop            Shop        @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  entityType      EntityType  // PRODUCT, CUSTOMER
+
+  // Shopify field
+  shopifyField    String      // e.g., "product.title", "metafield.cost"
+
+  // Supabase field
+  supabaseField   String      // e.g., "name", "cost_price"
+
+  // Custom field reference (optional)
+  customFieldId   String?
+  customField     CustomField? @relation(fields: [customFieldId], references: [id], onDelete: SetNull)
+
+  // Transformation
+  transform       String?     // Optional JS transform function
+
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@unique([shopId, entityType, shopifyField])
+  @@index([shopId])
+  @@index([customFieldId])
+}
+
+// Enums
+enum BillingStatus {
+  ACTIVE
+  TRIAL
+  CANCELLED
+  SUSPENDED
+}
+
+enum SyncFrequency {
+  HOURLY
+  DAILY
+  WEEKLY
+  MANUAL
+}
+
+enum ChargeStatus {
+  PENDING
+  ACTIVE
+  CANCELLED
+  DECLINED
+  EXPIRED
+}
+
+enum SyncType {
+  PRODUCTS
+  CUSTOMERS
+  INVENTORY
+  ORDERS
+}
+
+enum SyncMode {
+  MANUAL
+  AUTO
+  WEBHOOK
+}
+
+enum SyncStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+enum FieldType {
+  TEXT
+  NUMBER
+  BOOLEAN
+  DATE
+  JSON
+}
+
+enum EntityType {
+  PRODUCT
+  CUSTOMER
+  ORDER
+  INVENTORY
+}
