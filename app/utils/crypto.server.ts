@@ -2,14 +2,12 @@ import crypto from 'crypto';
 
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 16;
-const TAG_LENGTH = 16;
-const KEY_LENGTH = 32; // 256 bits
 
 function getEncryptionKey(): Buffer {
   const secret = process.env.ENCRYPTION_SECRET;
 
   if (!secret) {
-    throw new Error('ENCRYPTION_SECRET not configured');
+    throw new Error('ENCRYPTION_SECRET environment variable not configured');
   }
 
   // Convert hex string to Buffer (expects 64-char hex = 32 bytes)
