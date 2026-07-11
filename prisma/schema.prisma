@@ -1,6 +1,3 @@
-// Prisma schema for Shopify-Supabase Sync App
-// PostgreSQL database with UTC timezone
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,266 +7,130 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Shop model - stores Shopify store credentials and configuration
 model Shop {
-  id                  String            @id @default(cuid())
-  shopifyDomain       String            @unique // mystore.myshopify.com
-  accessToken         String            // Encrypted OAuth token
-  scope               String            // OAuth scopes granted
-  planId              String?
-  plan                Plan?             @relation(fields: [planId], references: [id], onDelete: SetNull)
+  id                String             @id @default(uuid())
+  shopDomain        String             @unique @map("shop_domain")
+  accessToken       String             @map("access_token")
+  scopes            String
+  currentPlan       String             @default("free") @map("current_plan")
+  activeChargeId    String?            @map("active_charge_id")
+  trialEndsAt       DateTime?          @map("trial_ends_at")
+  isInTrial         Boolean            @default(true) @map("is_in_trial")
+  planStartedAt     DateTime?          @map("plan_started_at")
+  billingCycle      String?            @map("billing_cycle")
+  installedAt       DateTime           @default(now()) @map("installed_at")
+  uninstalledAt     DateTime?          @map("uninstalled_at")
 
-  // Billing
-  billingStatus       BillingStatus     @default(ACTIVE)
-  trialEndsAt         DateTime?
+  supabaseConfig    SupabaseConfig?
+  billingCharges    BillingCharge[]
+  syncJobs          SyncJob[]
+  customFields      CustomField[]
+  fieldMappings     FieldMapping[]
 
-  // Sync configuration
-  syncEnabled         Boolean           @default(false)
-  syncProducts        Boolean           @default(true)
-  syncCustomers       Boolean           @default(true)
-  syncInventory       Boolean           @default(false)
-  syncOrders          Boolean           @default(false)
-
-  // Auto-sync settings
-  autoSyncEnabled     Boolean           @default(false)
-  syncFrequency       SyncFrequency     @default(DAILY)
-  lastSyncAt          DateTime?
-
-  // Metadata
-  installedAt         DateTime          @default(now())
-  uninstalledAt       DateTime?
-
-  // Relations
-  supabaseConfig      SupabaseConfig?
-  billingCharges      BillingCharge[]
-  syncJobs            SyncJob[]
-  customFields        CustomField[]
-  fieldMappings       FieldMapping[]
-
-  @@index([shopifyDomain])
-  @@index([planId])
+  @@index([shopDomain])
+  @@map("shops")
 }
 
-// SupabaseConfig model - merchant Supabase credentials (encrypted)
 model SupabaseConfig {
-  id              String   @id @default(cuid())
-  shopId          String   @unique
-  shop            Shop     @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  id                     String   @id @default(uuid())
+  shopId                 String   @unique @map("shop_id")
+  supabaseUrl            String   @map("supabase_url")
+  supabasePublicKey      String   @map("supabase_public_key")
+  supabaseServiceRoleKey String   @map("supabase_service_role_key")
+  tableNameProducts      String   @default("products") @map("table_name_products")
+  tableNameCustomers     String   @default("customers") @map("table_name_customers")
+  syncEnabled            Boolean  @default(false) @map("sync_enabled")
+  syncIntervalHours      Int      @default(24) @map("sync_interval_hours")
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
 
-  supabaseUrl     String   // Encrypted
-  supabaseAnonKey String   // Encrypted
-  supabaseSchema  String   @default("public")
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
 
-  // Table names
-  productsTable   String   @default("products")
-  customersTable  String   @default("customers")
-  inventoryTable  String?
-  ordersTable     String?
-
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  @@index([shopId])
+  @@map("supabase_configs")
 }
 
-// Plan model - subscription tiers
 model Plan {
-  id                    String   @id @default(cuid())
-  name                  String   @unique // free, pro, business, enterprise
-  displayName           String   // "Free Plan", "Pro Plan"
+  id                     String   @id @default(uuid())
+  planName               String   @unique @map("plan_name")
+  priceMonthly           Decimal  @map("price_monthly") @db.Decimal(10, 2)
+  priceYearly            Decimal  @map("price_yearly") @db.Decimal(10, 2)
+  maxProducts            Int?     @map("max_products")
+  maxCustomers           Int?     @map("max_customers")
+  maxSyncFrequencyHours  Int      @map("max_sync_frequency_hours")
+  customFieldsLimit      Int?     @map("custom_fields_limit")
+  supportLevel           String   @map("support_level")
+  customersSyncEnabled   Boolean  @default(false) @map("customers_sync_enabled")
+  createdAt              DateTime @default(now()) @map("created_at")
 
-  // Pricing
-  price                 Float    // Monthly price in USD
-  trialDays             Int      @default(0)
-
-  // Limits
-  maxSyncJobs           Int      // Max jobs per month
-  maxProducts           Int      // Max products to sync
-  maxCustomers          Int      // Max customers to sync
-
-  // Features
-  enableAutoSync        Boolean  @default(false)
-  enableCustomFields    Boolean  @default(false)
-  enableInventorySync   Boolean  @default(false)
-  enableOrderSync       Boolean  @default(false)
-  enableWebhooks        Boolean  @default(false)
-  prioritySupport       Boolean  @default(false)
-
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
-
-  // Relations
-  shops                 Shop[]
-
-  @@index([name])
+  @@map("plans")
 }
 
-// BillingCharge model - Shopify recurring charges
 model BillingCharge {
-  id              String        @id @default(cuid())
-  shopId          String
-  shop            Shop          @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  id                String    @id @default(uuid())
+  shopId            String    @map("shop_id")
+  shopifyChargeId   BigInt?   @unique @map("shopify_charge_id")
+  planType          String    @map("plan_type")
+  price             Decimal?  @db.Decimal(10, 2)
+  billingCycle      String?   @map("billing_cycle")
+  status            String
+  trialDays         Int       @default(7) @map("trial_days")
+  trialEndsAt       DateTime? @map("trial_ends_at")
+  confirmationUrl   String?   @map("confirmation_url")
+  activatedAt       DateTime? @map("activated_at")
+  cancelledAt       DateTime? @map("cancelled_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
 
-  shopifyChargeId String        @unique // Shopify charge ID
-  planId          String?
-
-  // Charge details
-  amount          Float
-  currency        String        @default("USD")
-  status          ChargeStatus  @default(PENDING)
-
-  // Shopify URLs
-  confirmationUrl String?
-
-  // Timestamps
-  activatedAt     DateTime?
-  billingOn       DateTime?
-  cancelledAt     DateTime?
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
 
   @@index([shopId])
-  @@index([shopifyChargeId])
+  @@map("billing_charges")
 }
 
-// SyncJob model - sync operation logs
 model SyncJob {
-  id              String        @id @default(cuid())
-  shopId          String
-  shop            Shop          @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  id              String    @id @default(uuid())
+  shopId          String    @map("shop_id")
+  jobType         String    @map("job_type")
+  status          String
+  startedAt       DateTime  @default(now()) @map("started_at")
+  completedAt     DateTime? @map("completed_at")
+  productsSynced  Int       @default(0) @map("products_synced")
+  variantsSynced  Int       @default(0) @map("variants_synced")
+  customersSynced Int       @default(0) @map("customers_synced")
+  errors          Json?
 
-  // Job details
-  type            SyncType      // PRODUCTS, CUSTOMERS, INVENTORY, ORDERS
-  mode            SyncMode      @default(MANUAL) // MANUAL, AUTO
-  status          SyncStatus    @default(PENDING)
-
-  // Counters
-  totalRecords    Int           @default(0)
-  processedCount  Int           @default(0)
-  successCount    Int           @default(0)
-  errorCount      Int           @default(0)
-
-  // Results
-  errorDetails    Json?         // Array of error objects
-  summary         Json?         // Sync summary stats
-
-  // Timestamps
-  startedAt       DateTime?
-  completedAt     DateTime?
-  createdAt       DateTime      @default(now())
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
 
   @@index([shopId])
   @@index([status])
-  @@index([createdAt])
+  @@index([startedAt(sort: Desc)])
+  @@map("sync_jobs")
 }
 
-// CustomField model - merchant-defined custom fields
 model CustomField {
-  id              String          @id @default(cuid())
-  shopId          String
-  shop            Shop            @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  id           String   @id @default(uuid())
+  shopId       String   @map("shop_id")
+  fieldName    String   @map("field_name")
+  fieldType    String   @map("field_type")
+  appliesTo    String   @map("applies_to")
+  defaultValue String?  @map("default_value")
+  createdAt    DateTime @default(now()) @map("created_at")
 
-  fieldName       String          // e.g., "cost_price", "supplier"
-  displayName     String          // e.g., "Cost Price", "Supplier"
-  fieldType       FieldType       // TEXT, NUMBER, BOOLEAN, DATE
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
 
-  // Default value
-  defaultValue    String?
-
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-
-  // Relations
-  fieldMappings   FieldMapping[]
-
-  @@unique([shopId, fieldName])
-  @@index([shopId])
+  @@unique([shopId, fieldName, appliesTo])
+  @@map("custom_fields")
 }
 
-// FieldMapping model - Shopify to Supabase field mappings
 model FieldMapping {
-  id              String      @id @default(cuid())
-  shopId          String
-  shop            Shop        @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  id             String  @id @default(uuid())
+  shopId         String  @map("shop_id")
+  shopifyField   String  @map("shopify_field")
+  enabled        Boolean @default(false)
+  syncToColumn   String? @map("sync_to_column")
+  appliesTo      String  @map("applies_to")
 
-  entityType      EntityType  // PRODUCT, CUSTOMER
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
 
-  // Shopify field
-  shopifyField    String      // e.g., "product.title", "metafield.cost"
-
-  // Supabase field
-  supabaseField   String      // e.g., "name", "cost_price"
-
-  // Custom field reference (optional)
-  customFieldId   String?
-  customField     CustomField? @relation(fields: [customFieldId], references: [id], onDelete: SetNull)
-
-  // Transformation
-  transform       String?     // Optional JS transform function
-
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
-
-  @@unique([shopId, entityType, shopifyField])
-  @@index([shopId])
-  @@index([customFieldId])
-}
-
-// Enums
-enum BillingStatus {
-  ACTIVE
-  TRIAL
-  CANCELLED
-  SUSPENDED
-}
-
-enum SyncFrequency {
-  HOURLY
-  DAILY
-  WEEKLY
-  MANUAL
-}
-
-enum ChargeStatus {
-  PENDING
-  ACTIVE
-  CANCELLED
-  DECLINED
-  EXPIRED
-}
-
-enum SyncType {
-  PRODUCTS
-  CUSTOMERS
-  INVENTORY
-  ORDERS
-}
-
-enum SyncMode {
-  MANUAL
-  AUTO
-  WEBHOOK
-}
-
-enum SyncStatus {
-  PENDING
-  RUNNING
-  COMPLETED
-  FAILED
-  CANCELLED
-}
-
-enum FieldType {
-  TEXT
-  NUMBER
-  BOOLEAN
-  DATE
-  JSON
-}
-
-enum EntityType {
-  PRODUCT
-  CUSTOMER
-  ORDER
-  INVENTORY
+  @@unique([shopId, shopifyField])
+  @@map("field_mappings")
 }
