@@ -1,0 +1,18 @@
+# Shopify App Configuration
+# Full configuration will be completed in Part 4 (OAuth Integration)
+
+name = "shopify-supabase-sync"
+client_id = "" # Set after Partner Dashboard registration
+handle = "shopify-supabase-sync"
+application_url = "http://localhost:3000"
+
+[access_scopes]
+scopes = "read_products,write_products,read_inventory,read_cost,read_customers,write_customers,read_metafields"
+
+[auth]
+redirect_urls = [
+  "http://localhost:3000/auth/callback"
+]
+
+[webhooks]
+api_version = "2024-01"
