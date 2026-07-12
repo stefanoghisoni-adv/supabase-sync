@@ -13,7 +13,13 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   try {
-    const { shop_domain, customer } = JSON.parse(body);
+    const payload = JSON.parse(body);
+    const { shop_domain, customer } = payload;
+
+    if (!shop_domain || !customer?.id) {
+      console.error('GDPR payload missing required fields:', { shop_domain, customer_id: customer?.id });
+      return json({ error: 'Invalid payload' }, { status: 400 });
+    }
 
     const shop = await prisma.shop.findUnique({
       where: { shopDomain: shop_domain },
@@ -21,23 +27,78 @@ export async function action({ request }: ActionFunctionArgs) {
     });
 
     if (!shop?.supabaseConfig) {
+      console.log(`Shop ${shop_domain} not configured; skipping customer redaction`);
       return json({ ok: true }, { status: 200 });
     }
 
     const supabase = createSupabaseClient(shop.supabaseConfig);
 
     // Hard delete customer data (GDPR right to be forgotten)
-    await supabase
+    const { error } = await supabase
       .from(shop.supabaseConfig.tableNameCustomers)
       .delete()
       .eq('shopify_customer_id', customer.id);
 
+    if (error) {
+      console.error(`GDPR customer redact failed for ${customer.id}:`, error);
+
+      // Log failed GDPR action for audit
+      await prisma.syncJob.create({
+        data: {
+          shopId: shop.id,
+          jobType: 'gdpr_redact',
+          status: 'failed',
+          productsSynced: 0,
+          variantsSynced: 0,
+          errors: { message: error.message, code: error.code, customer_id: customer.id },
+        },
+      });
+
+      // Return 500 so Shopify retries
+      return json({ error: 'Redaction failed' }, { status: 500 });
+    }
+
     console.log(`GDPR redacted customer ${customer.id} for shop ${shop_domain}`);
+
+    // Log successful GDPR action for audit
+    await prisma.syncJob.create({
+      data: {
+        shopId: shop.id,
+        jobType: 'gdpr_redact',
+        status: 'completed',
+        productsSynced: 0,
+        variantsSynced: 0,
+      },
+    });
 
     return json({ ok: true }, { status: 200 });
 
   } catch (error) {
     console.error('GDPR customer redact error:', error);
-    return json({ ok: true }, { status: 200 });
+
+    // Try to log failed attempt
+    try {
+      const body = await request.text();
+      const payload = JSON.parse(body);
+      const shop = await prisma.shop.findUnique({
+        where: { shopDomain: payload.shop_domain || '' },
+      });
+      if (shop) {
+        await prisma.syncJob.create({
+          data: {
+            shopId: shop.id,
+            jobType: 'gdpr_redact',
+            status: 'failed',
+            productsSynced: 0,
+            variantsSynced: 0,
+            errors: { message: String(error) },
+          },
+        });
+      }
+    } catch {
+      // Silent fail on logging
+    }
+
+    return json({ error: 'Processing failed' }, { status: 500 });
   }
 }

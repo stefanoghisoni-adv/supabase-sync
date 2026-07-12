@@ -24,6 +24,11 @@ export async function action({ request }: ActionFunctionArgs) {
   try {
     const product: ShopifyProduct = JSON.parse(body);
 
+    if (!product.id || !Array.isArray(product.variants) || product.variants.length === 0) {
+      console.warn('Invalid product payload: missing id or empty variants');
+      return json({ ok: true }, { status: 200 });
+    }
+
     // Load shop config
     const shop = await prisma.shop.findUnique({
       where: { shopDomain },
@@ -45,32 +50,98 @@ export async function action({ request }: ActionFunctionArgs) {
 
     // Create Supabase client
     const supabase = createSupabaseClient(shop.supabaseConfig);
+    const tableName = shop.supabaseConfig.tableNameProducts;
 
-    // Upsert rows
-    const { error } = await supabase
-      .from(shop.supabaseConfig.tableNameProducts)
-      .upsert(rows, {
-        onConflict: 'shopify_variant_id',
-        ignoreDuplicates: false,
-      });
+    // Separate variant rows from non-variant row
+    const variantRows = rows.filter(r => r.is_variant);
+    const nonVariantRows = rows.filter(r => !r.is_variant);
 
-    if (error) {
-      console.error('Supabase upsert error:', error);
+    // Upsert variant rows with variant-specific conflict resolution
+    if (variantRows.length > 0) {
+      const { error } = await supabase
+        .from(tableName)
+        .upsert(variantRows, {
+          onConflict: 'shopify_variant_id',
+          ignoreDuplicates: false,
+        });
 
-      // Log failed sync job
-      await prisma.syncJob.create({
-        data: {
-          shopId: shop.id,
-          jobType: 'webhook',
-          status: 'failed',
-          productsSynced: 0,
-          variantsSynced: 0,
-          errors: { message: error.message, code: error.code },
-        },
-      });
+      if (error) {
+        console.error('Supabase variant upsert error:', error);
+        await prisma.syncJob.create({
+          data: {
+            shopId: shop.id,
+            jobType: 'webhook',
+            status: 'failed',
+            productsSynced: 0,
+            variantsSynced: 0,
+            errors: { message: error.message, code: error.code },
+          },
+        });
+        return json({ ok: true }, { status: 200 });
+      }
+    }
 
-      // Return 200 anyway to prevent Shopify retries
-      return json({ ok: true }, { status: 200 });
+    // Upsert non-variant row with product-specific conflict resolution
+    if (nonVariantRows.length > 0) {
+      const { error } = await supabase
+        .from(tableName)
+        .upsert(nonVariantRows, {
+          onConflict: 'shopify_product_id',
+          ignoreDuplicates: false,
+        });
+
+      if (error) {
+        console.error('Supabase non-variant upsert error:', error);
+        await prisma.syncJob.create({
+          data: {
+            shopId: shop.id,
+            jobType: 'webhook',
+            status: 'failed',
+            productsSynced: 0,
+            variantsSynced: 0,
+            errors: { message: error.message, code: error.code },
+          },
+        });
+        return json({ ok: true }, { status: 200 });
+      }
+    }
+
+    // Clean up stale variants: delete any rows for this product not in current payload
+    const currentVariantIds = variantRows.map(r => r.shopify_variant_id);
+    if (currentVariantIds.length > 0) {
+      const { error: deleteError } = await supabase
+        .from(tableName)
+        .delete()
+        .eq('shopify_product_id', product.id)
+        .not('shopify_variant_id', 'in', `(${currentVariantIds.map(id => `'${id}'`).join(',')})`);
+
+      if (deleteError) {
+        console.warn('Could not clean stale variants:', deleteError);
+      }
+    }
+
+    // Clean up non-variant rows if product now has variants
+    if (variantRows.length > 0) {
+      const { error: deleteError } = await supabase
+        .from(tableName)
+        .delete()
+        .eq('shopify_product_id', product.id)
+        .not('shopify_variant_id', 'is', null);
+
+      if (deleteError) {
+        console.warn('Could not clean old non-variant row:', deleteError);
+      }
+    } else if (nonVariantRows.length > 0) {
+      // Conversely, if product is now single-variant, delete old variant rows
+      const { error: deleteError } = await supabase
+        .from(tableName)
+        .delete()
+        .eq('shopify_product_id', product.id)
+        .not('shopify_variant_id', 'is', null);
+
+      if (deleteError) {
+        console.warn('Could not clean old variant rows:', deleteError);
+      }
     }
 
     // Log successful sync
@@ -89,6 +160,28 @@ export async function action({ request }: ActionFunctionArgs) {
 
   } catch (error) {
     console.error('Webhook processing error:', error);
-    return json({ ok: true }, { status: 200 }); // Acknowledge anyway
+
+    // Try to log failed job (shop config may not exist)
+    try {
+      const shop = await prisma.shop.findUnique({
+        where: { shopDomain: shopDomain || '' },
+      });
+      if (shop) {
+        await prisma.syncJob.create({
+          data: {
+            shopId: shop.id,
+            jobType: 'webhook',
+            status: 'failed',
+            productsSynced: 0,
+            variantsSynced: 0,
+            errors: { message: String(error) },
+          },
+        });
+      }
+    } catch {
+      // Silent fail on logging
+    }
+
+    return json({ ok: true }, { status: 200 });
   }
 }

@@ -13,7 +13,13 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   try {
-    const { shop_domain, customer } = JSON.parse(body);
+    const payload = JSON.parse(body);
+    const { shop_domain, customer } = payload;
+
+    if (!shop_domain || !customer?.id) {
+      console.error('GDPR data request: missing required fields');
+      return json({ error: 'Invalid payload' }, { status: 400 });
+    }
 
     const shop = await prisma.shop.findUnique({
       where: { shopDomain: shop_domain },
@@ -34,9 +40,39 @@ export async function action({ request }: ActionFunctionArgs) {
       .eq('shopify_customer_id', customer.id)
       .single();
 
-    if (!error && data) {
-      // Log the data request
+    if (error) {
+      console.error(`GDPR data request failed for customer ${customer.id}:`, error);
+
+      // Log failed data request for audit
+      await prisma.syncJob.create({
+        data: {
+          shopId: shop.id,
+          jobType: 'gdpr_data_request',
+          status: 'failed',
+          productsSynced: 0,
+          variantsSynced: 0,
+          errors: { message: error.message, code: error.code, customer_id: customer.id },
+        },
+      });
+
+      // Return 500 so Shopify retries
+      return json({ error: 'Data retrieval failed' }, { status: 500 });
+    }
+
+    if (data) {
       console.log(`GDPR data request for customer ${customer.id} from shop ${shop_domain}`);
+
+      // Log successful data request for audit
+      await prisma.syncJob.create({
+        data: {
+          shopId: shop.id,
+          jobType: 'gdpr_data_request',
+          status: 'completed',
+          productsSynced: 0,
+          variantsSynced: 0,
+        },
+      });
+
       // In production: send email to merchant with customer data
       // For now: just log
     }
@@ -45,6 +81,29 @@ export async function action({ request }: ActionFunctionArgs) {
 
   } catch (error) {
     console.error('GDPR data request error:', error);
-    return json({ ok: true }, { status: 200 });
+
+    // Try to log failed attempt
+    try {
+      const payload = JSON.parse(body);
+      const shop = await prisma.shop.findUnique({
+        where: { shopDomain: payload.shop_domain || '' },
+      });
+      if (shop) {
+        await prisma.syncJob.create({
+          data: {
+            shopId: shop.id,
+            jobType: 'gdpr_data_request',
+            status: 'failed',
+            productsSynced: 0,
+            variantsSynced: 0,
+            errors: { message: String(error) },
+          },
+        });
+      }
+    } catch {
+      // Silent fail on logging
+    }
+
+    return json({ error: 'Processing failed' }, { status: 500 });
   }
 }

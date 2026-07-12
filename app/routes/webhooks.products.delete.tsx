@@ -18,7 +18,13 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   try {
-    const { id: productId } = JSON.parse(body);
+    const payload = JSON.parse(body);
+    const { id: productId } = payload;
+
+    if (!productId) {
+      console.warn('Product delete webhook: missing product id');
+      return json({ ok: true }, { status: 200 });
+    }
 
     const shop = await prisma.shop.findUnique({
       where: { shopDomain },
@@ -35,7 +41,7 @@ export async function action({ request }: ActionFunctionArgs) {
     const { error } = await supabase
       .from(shop.supabaseConfig.tableNameProducts)
       .delete()
-      .eq('shopify_product_id', productId);
+      .eq('shopify_product_id', String(productId));
 
     if (error) {
       console.error('Supabase delete error:', error);
@@ -44,7 +50,9 @@ export async function action({ request }: ActionFunctionArgs) {
           shopId: shop.id,
           jobType: 'webhook',
           status: 'failed',
-          errors: { message: error.message },
+          productsSynced: 0,
+          variantsSynced: 0,
+          errors: { message: error.message, code: error.code },
         },
       });
     } else {
@@ -53,7 +61,8 @@ export async function action({ request }: ActionFunctionArgs) {
           shopId: shop.id,
           jobType: 'webhook',
           status: 'completed',
-          productsSynced: 0, // Deletion
+          productsSynced: 0,
+          variantsSynced: 0,
           completedAt: new Date(),
         },
       });
@@ -63,6 +72,27 @@ export async function action({ request }: ActionFunctionArgs) {
 
   } catch (error) {
     console.error('Delete webhook error:', error);
+
+    try {
+      const shop = await prisma.shop.findUnique({
+        where: { shopDomain },
+      });
+      if (shop) {
+        await prisma.syncJob.create({
+          data: {
+            shopId: shop.id,
+            jobType: 'webhook',
+            status: 'failed',
+            productsSynced: 0,
+            variantsSynced: 0,
+            errors: { message: String(error) },
+          },
+        });
+      }
+    } catch {
+      // Silent fail on logging
+    }
+
     return json({ ok: true }, { status: 200 });
   }
 }
