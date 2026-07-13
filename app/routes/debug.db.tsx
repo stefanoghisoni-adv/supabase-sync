@@ -3,10 +3,10 @@ import { json } from '@remix-run/node';
 import { prisma } from '~/db.server';
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  // Solo in development
-  if (process.env.NODE_ENV === 'production') {
-    throw new Response('Not Found', { status: 404 });
-  }
+  // Temporaneamente abilitato in production per debug
+  // if (process.env.NODE_ENV === 'production') {
+  //   throw new Response('Not Found', { status: 404 });
+  // }
 
   try {
     const sessionCount = await prisma.session.count();
