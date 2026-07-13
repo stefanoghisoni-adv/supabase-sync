@@ -1,9 +1,10 @@
 name: Sync Cron Trigger
 
 # Vercel Cron on the Free plan runs at most once per day, so the every-30-minutes
-# periodic sync is delegated to GitHub Actions (free). Configure in the repo:
-#   - Variables: APP_URL (e.g. https://your-app.vercel.app)
-#   - Secrets:   CRON_SECRET (same value as the Vercel env var)
+# periodic sync is delegated to GitHub Actions (free).
+# Configure in repo settings:
+#   - Variables: APP_URL = https://supabase-sync-six.vercel.app
+#   - Secrets:   CRON_SECRET (from Vercel env var)
 
 on:
   schedule:

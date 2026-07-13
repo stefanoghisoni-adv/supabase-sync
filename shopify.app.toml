@@ -1,12 +1,11 @@
 # Shopify App Configuration
-# NOTE: aggiorna `application_url` e i `redirect_urls` con l'URL di produzione
-# Vercel (es. https://your-app.vercel.app) prima del deploy, poi esegui
-# `shopify app deploy` per attivare le webhook subscriptions dichiarate qui.
+# Production URL: https://supabase-sync-six.vercel.app
+# Eseguire `shopify app deploy` per attivare le webhook subscriptions.
 
 name = "shopify-supabase-sync"
 client_id = "ab96efeed79987564061e5b93c31f6f8"
 handle = "shopify-supabase-sync"
-application_url = "http://localhost:3000"
+application_url = "https://supabase-sync-six.vercel.app"
 embedded = true
 
 [access_scopes]
@@ -14,7 +13,7 @@ scopes = "read_products,write_products,read_inventory,read_cost,read_customers,w
 
 [auth]
 redirect_urls = [
-  "http://localhost:3000/auth/callback"
+  "https://supabase-sync-six.vercel.app/auth/callback"
 ]
 
 [webhooks]
