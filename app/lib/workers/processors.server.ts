@@ -8,10 +8,173 @@ import { prisma } from '../../db.server';
 
 /**
  * Process periodic sync check for a shop
- * Task 9: Implement periodic sync checking logic
+ * Task 11: Implements incremental sync with delta detection
+ *
+ * Fetches only products updated since last sync, detects orphaned variants,
+ * and uses separated upserts to avoid NULL-conflict bug:
+ * - Variant rows: onConflict: 'shopify_variant_id'
+ * - Non-variant rows: onConflict: 'shopify_product_id'
  */
 export async function processPeriodicSyncCheck(shopId: string): Promise<void> {
-  throw new Error('processPeriodicSyncCheck not yet implemented (Task 9)');
+  const shop = await prisma.shop.findUnique({
+    where: { id: shopId },
+    include: { supabaseConfig: true },
+  });
+
+  if (!shop || !shop.supabaseConfig || !shop.supabaseConfig.syncEnabled) {
+    console.log(`Shop ${shopId} not configured for periodic sync`);
+    return;
+  }
+
+  const shopifyClient = new ShopifyAPIClient(shop.shopDomain, shop.accessToken);
+  const supabase = createSupabaseClient(shop.supabaseConfig);
+
+  // Get last periodic sync timestamp
+  const lastSyncJob = await prisma.syncJob.findFirst({
+    where: {
+      shopId: shop.id,
+      jobType: 'periodic_check',
+      status: 'completed',
+    },
+    orderBy: {
+      completedAt: 'desc',
+    },
+  });
+
+  const lastSyncTime = lastSyncJob?.completedAt || shop.supabaseConfig.updatedAt;
+
+  // Create sync job
+  const syncJob = await prisma.syncJob.create({
+    data: {
+      shopId: shop.id,
+      jobType: 'periodic_check',
+      status: 'running',
+    },
+  });
+
+  try {
+    let totalProducts = 0;
+    let totalVariants = 0;
+    let nextPageInfo: string | null = null;
+
+    do {
+      // Fetch updated products since last sync (delta)
+      const { products, nextPageInfo: nextPage } = await shopifyClient.getProducts({
+        limit: 250,
+        pageInfo: nextPageInfo || undefined,
+        updatedAtMin: lastSyncTime.toISOString(),
+      });
+
+      if (products.length === 0) break;
+
+      // Process each product individually for delta detection
+      for (const product of products) {
+        // Fetch existing rows from Supabase for this product
+        const { data: existingRows } = await supabase
+          .from(shop.supabaseConfig.tableNameProducts)
+          .select('shopify_variant_id')
+          .eq('shopify_product_id', product.id);
+
+        const existingVariantIds = new Set(
+          existingRows?.map(row => row.shopify_variant_id).filter(Boolean) || []
+        );
+
+        // Transform current product
+        const currentRows = transformProduct(product);
+        const currentVariantIds = new Set(
+          currentRows
+            .filter(r => r.is_variant)
+            .map(r => r.shopify_variant_id)
+            .filter(Boolean)
+        );
+
+        // Find orphaned variants (exist in Supabase but not in Shopify anymore)
+        const orphanedVariantIds = [...existingVariantIds].filter(
+          id => !currentVariantIds.has(id)
+        );
+
+        // Delete orphaned variants
+        if (orphanedVariantIds.length > 0) {
+          const { error: deleteError } = await supabase
+            .from(shop.supabaseConfig.tableNameProducts)
+            .delete()
+            .in('shopify_variant_id', orphanedVariantIds);
+
+          if (deleteError) {
+            console.warn(`Could not delete orphaned variants for product ${product.id}:`, deleteError);
+          }
+        }
+
+        // Separate variant rows from non-variant rows (CRITICAL for NULL handling)
+        const variantRows = currentRows.filter(r => r.is_variant);
+        const nonVariantRows = currentRows.filter(r => !r.is_variant);
+
+        // Upsert variant rows
+        if (variantRows.length > 0) {
+          const { error } = await supabase
+            .from(shop.supabaseConfig.tableNameProducts)
+            .upsert(variantRows, {
+              onConflict: 'shopify_variant_id',
+              ignoreDuplicates: false,
+            });
+
+          if (error) {
+            console.error(`Periodic sync variant upsert error for product ${product.id}:`, error);
+            continue;
+          }
+        }
+
+        // Upsert non-variant rows
+        if (nonVariantRows.length > 0) {
+          const { error } = await supabase
+            .from(shop.supabaseConfig.tableNameProducts)
+            .upsert(nonVariantRows, {
+              onConflict: 'shopify_product_id',
+              ignoreDuplicates: false,
+            });
+
+          if (error) {
+            console.error(`Periodic sync non-variant upsert error for product ${product.id}:`, error);
+            continue;
+          }
+        }
+
+        totalProducts++;
+        totalVariants += currentRows.length;
+      }
+
+      nextPageInfo = nextPage;
+
+    } while (nextPageInfo);
+
+    // Mark completed
+    await prisma.syncJob.update({
+      where: { id: syncJob.id },
+      data: {
+        status: 'completed',
+        completedAt: new Date(),
+        productsSynced: totalProducts,
+        variantsSynced: totalVariants,
+      },
+    });
+
+    console.log(`Periodic sync check completed: ${totalProducts} products checked, ${totalVariants} variants synced`);
+
+  } catch (error) {
+    await prisma.syncJob.update({
+      where: { id: syncJob.id },
+      data: {
+        status: 'failed',
+        completedAt: new Date(),
+        errors: {
+          message: error instanceof Error ? error.message : 'Unknown error',
+        },
+      },
+    });
+
+    console.error('Periodic sync check failed:', error);
+    throw error;
+  }
 }
 
 /**
