@@ -18,6 +18,7 @@ import { useState } from 'react';
 import { authenticate } from '~/shopify.server';
 import { prisma } from '~/db.server';
 import { encrypt } from '~/utils/crypto.server';
+import { validateSupabaseUrl } from '~/utils/supabase-url.server';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const { session } = await authenticate.admin(request);
@@ -47,7 +48,12 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   if (intent === 'save') {
-    const url = formData.get('url') as string;
+    const rawUrl = formData.get('url') as string;
+    const urlCheck = validateSupabaseUrl(rawUrl);
+    if (!urlCheck.ok) {
+      return json({ error: urlCheck.error }, { status: 400 });
+    }
+    const url = urlCheck.url!;
     const publicKey = formData.get('publicKey') as string;
     const serviceKey = formData.get('serviceKey') as string;
     const syncEnabled = formData.get('syncEnabled') === 'on';

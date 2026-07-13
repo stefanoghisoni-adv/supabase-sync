@@ -3,6 +3,7 @@ import { json } from '@remix-run/node';
 import { authenticate } from '~/shopify.server';
 import { prisma } from '~/db.server';
 import { decrypt } from '~/utils/crypto.server';
+import { validateSupabaseUrl } from '~/utils/supabase-url.server';
 
 const PRODUCTS_TABLE_SQL = `
 CREATE TABLE IF NOT EXISTS products (
@@ -88,6 +89,13 @@ export async function action({ request }: ActionFunctionArgs) {
     return json({ error: 'Supabase not configured' }, { status: 400 });
   }
 
+  // Defense in depth: revalidate the stored URL before sending the service key.
+  const urlCheck = validateSupabaseUrl(shop.supabaseConfig.supabaseUrl);
+  if (!urlCheck.ok) {
+    return json({ error: 'Invalid Supabase URL configured' }, { status: 400 });
+  }
+  const supabaseUrl = urlCheck.url!;
+
   try {
     const serviceRoleKey = decrypt(shop.supabaseConfig.supabaseServiceRoleKey);
 
@@ -95,7 +103,7 @@ export async function action({ request }: ActionFunctionArgs) {
     // Postgres function that must exist in the merchant database (documented in
     // the setup instructions). Without it the request returns an error.
     const response = await fetch(
-      `${shop.supabaseConfig.supabaseUrl}/rest/v1/rpc/exec_sql`,
+      `${supabaseUrl}/rest/v1/rpc/exec_sql`,
       {
         method: 'POST',
         headers: {
