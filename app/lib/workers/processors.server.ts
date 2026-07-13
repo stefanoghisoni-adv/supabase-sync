@@ -93,11 +93,12 @@ export async function processPeriodicSyncCheck(shopId: string): Promise<void> {
           id => !currentVariantIds.has(id)
         );
 
-        // Delete orphaned variants
+        // Delete orphaned variants (scoped by product to prevent cross-product deletes)
         if (orphanedVariantIds.length > 0) {
           const { error: deleteError } = await supabase
             .from(shop.supabaseConfig.tableNameProducts)
             .delete()
+            .eq('shopify_product_id', product.id)
             .in('shopify_variant_id', orphanedVariantIds);
 
           if (deleteError) {
@@ -136,6 +137,31 @@ export async function processPeriodicSyncCheck(shopId: string): Promise<void> {
           if (error) {
             console.error(`Periodic sync non-variant upsert error for product ${product.id}:`, error);
             continue;
+          }
+        }
+
+        // Handle single↔multi variant transitions (mirroring Part 1 webhook pattern)
+        // Clean up non-variant rows if product now has variants (multi-variant product)
+        if (variantRows.length > 0) {
+          const { error: deleteError } = await supabase
+            .from(shop.supabaseConfig.tableNameProducts)
+            .delete()
+            .eq('shopify_product_id', product.id)
+            .not('shopify_variant_id', 'is', null);
+
+          if (deleteError) {
+            console.warn(`Could not clean old non-variant row for product ${product.id}:`, deleteError);
+          }
+        } else if (nonVariantRows.length > 0) {
+          // Conversely, if product is now single-variant, delete old variant rows
+          const { error: deleteError } = await supabase
+            .from(shop.supabaseConfig.tableNameProducts)
+            .delete()
+            .eq('shopify_product_id', product.id)
+            .not('shopify_variant_id', 'is', null);
+
+          if (deleteError) {
+            console.warn(`Could not clean old variant rows for product ${product.id}:`, deleteError);
           }
         }
 

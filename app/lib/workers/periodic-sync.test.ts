@@ -106,8 +106,15 @@ describe('Periodic sync check processor', () => {
       }),
     });
 
+    const mockDeleteIn = vi.fn().mockResolvedValue({ error: null });
+    const mockDeleteEq = vi.fn().mockReturnValue({
+      in: mockDeleteIn,
+      not: vi.fn().mockResolvedValue({ error: null }),
+    });
     const mockDelete = vi.fn().mockReturnValue({
-      in: vi.fn().mockResolvedValue({ error: null }),
+      eq: mockDeleteEq,
+      in: mockDeleteIn,
+      not: vi.fn().mockResolvedValue({ error: null }),
     });
 
     const mockUpsert = vi.fn().mockResolvedValue({ error: null });
@@ -162,10 +169,10 @@ describe('Periodic sync check processor', () => {
     // Verify existing rows were fetched for delta detection
     expect(mockSelect).toHaveBeenCalled();
 
-    // Verify orphaned variant (103) was deleted
+    // Verify orphaned variant (103) was deleted with product scoping
     expect(mockDelete).toHaveBeenCalled();
-    const deleteInCall = mockDelete().in;
-    expect(deleteInCall).toHaveBeenCalledWith('shopify_variant_id', [103]);
+    expect(mockDeleteEq).toHaveBeenCalledWith('shopify_product_id', 1);
+    expect(mockDeleteIn).toHaveBeenCalledWith('shopify_variant_id', [103]);
 
     // Verify SEPARATED upserts for variant rows
     expect(mockUpsert).toHaveBeenCalled();
@@ -303,6 +310,92 @@ describe('Periodic sync check processor', () => {
     expect(prisma.syncJob.create).not.toHaveBeenCalled();
   });
 
+  it('should handle single→multi variant transition by deleting old non-variant row', async () => {
+    const mockShop = {
+      id: 'shop-6',
+      shopDomain: 'test-shop.myshopify.com',
+      accessToken: 'encrypted-token',
+      supabaseConfig: {
+        syncEnabled: true,
+        tableNameProducts: 'products',
+        supabaseUrl: 'https://test.supabase.co',
+        supabasePublicKey: 'encrypted-key',
+        supabaseServiceRoleKey: 'encrypted-service',
+        updatedAt: new Date('2026-07-10T00:00:00Z'),
+      },
+    };
+
+    vi.mocked(prisma.shop.findUnique).mockResolvedValue(mockShop as any);
+    vi.mocked(prisma.syncJob.findFirst).mockResolvedValue(null);
+
+    const mockSyncJob = { id: 'sync-job-6' };
+    vi.mocked(prisma.syncJob.create).mockResolvedValue(mockSyncJob as any);
+    vi.mocked(prisma.syncJob.update).mockResolvedValue({} as any);
+
+    // Product that transitioned from single (non-variant) to multi-variant
+    const mockProduct = {
+      id: 100,
+      title: 'Product 100',
+      variants: [
+        { id: 1001, title: 'Variant 1' },
+        { id: 1002, title: 'Variant 2' },
+      ],
+    };
+
+    const mockGetProducts = vi.fn().mockResolvedValueOnce({
+      products: [mockProduct],
+      nextPageInfo: null,
+    });
+
+    vi.mocked(ShopifyAPIClient).mockImplementation(() => ({
+      getProducts: mockGetProducts,
+    } as any));
+
+    // Transform returns 2 variant rows (current state)
+    vi.mocked(transformProduct).mockReturnValueOnce([
+      { shopify_product_id: 100, shopify_variant_id: 1001, is_variant: true, title: 'Product 100 - Variant 1' } as any,
+      { shopify_product_id: 100, shopify_variant_id: 1002, is_variant: true, title: 'Product 100 - Variant 2' } as any,
+    ]);
+
+    // Existing rows in DB: Product 100 previously had a non-variant row (shopify_variant_id = null)
+    // This row has shopify_variant_id = null, so it's filtered out by .filter(Boolean)
+    const mockSelect = vi.fn().mockReturnValue({
+      eq: vi.fn().mockResolvedValue({
+        data: [
+          { shopify_variant_id: null }, // Old non-variant row (single-variant product)
+        ],
+      }),
+    });
+
+    const mockDeleteNot = vi.fn().mockResolvedValue({ error: null });
+    const mockDeleteEq = vi.fn().mockReturnValue({
+      not: mockDeleteNot,
+    });
+    const mockDelete = vi.fn().mockReturnValue({
+      eq: mockDeleteEq,
+      not: mockDeleteNot,
+    });
+
+    const mockUpsert = vi.fn().mockResolvedValue({ error: null });
+
+    const mockFrom = vi.fn().mockImplementation((tableName) => ({
+      select: mockSelect,
+      delete: mockDelete,
+      upsert: mockUpsert,
+    }));
+
+    vi.mocked(createSupabaseClient).mockReturnValue({
+      from: mockFrom,
+    } as any);
+
+    await processPeriodicSyncCheck('shop-6');
+
+    // Verify old non-variant row was deleted (single→multi transition cleanup)
+    expect(mockDelete).toHaveBeenCalled();
+    expect(mockDeleteEq).toHaveBeenCalledWith('shopify_product_id', 100);
+    expect(mockDeleteNot).toHaveBeenCalledWith('shopify_variant_id', 'is', null);
+  });
+
   it('should handle pagination correctly', async () => {
     const mockShop = {
       id: 'shop-5',
@@ -355,6 +448,11 @@ describe('Periodic sync check processor', () => {
     const mockFrom = vi.fn().mockReturnValue({
       select: vi.fn().mockReturnValue({
         eq: vi.fn().mockResolvedValue({ data: [] }),
+      }),
+      delete: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          not: vi.fn().mockResolvedValue({ error: null }),
+        }),
       }),
       upsert: vi.fn().mockResolvedValue({ error: null }),
     });
