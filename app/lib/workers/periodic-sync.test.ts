@@ -109,11 +109,13 @@ describe('Periodic sync check processor', () => {
     const mockDeleteIn = vi.fn().mockResolvedValue({ error: null });
     const mockDeleteEq = vi.fn().mockReturnValue({
       in: mockDeleteIn,
+      is: vi.fn().mockResolvedValue({ error: null }),
       not: vi.fn().mockResolvedValue({ error: null }),
     });
     const mockDelete = vi.fn().mockReturnValue({
       eq: mockDeleteEq,
       in: mockDeleteIn,
+      is: vi.fn().mockResolvedValue({ error: null }),
       not: vi.fn().mockResolvedValue({ error: null }),
     });
 
@@ -368,12 +370,17 @@ describe('Periodic sync check processor', () => {
     });
 
     const mockDeleteNot = vi.fn().mockResolvedValue({ error: null });
+    const mockDeleteIs = vi.fn().mockResolvedValue({ error: null });
+    const mockDeleteIn = vi.fn().mockResolvedValue({ error: null });
     const mockDeleteEq = vi.fn().mockReturnValue({
       not: mockDeleteNot,
+      is: mockDeleteIs,
+      in: mockDeleteIn,
     });
     const mockDelete = vi.fn().mockReturnValue({
       eq: mockDeleteEq,
       not: mockDeleteNot,
+      is: mockDeleteIs,
     });
 
     const mockUpsert = vi.fn().mockResolvedValue({ error: null });
@@ -390,10 +397,14 @@ describe('Periodic sync check processor', () => {
 
     await processPeriodicSyncCheck('shop-6');
 
-    // Verify old non-variant row was deleted (single→multi transition cleanup)
+    // Verify old non-variant (NULL) row was deleted (single→multi transition cleanup).
+    // Multi-variant products must delete the stale shopify_variant_id IS NULL row,
+    // NOT the freshly-upserted variant rows.
     expect(mockDelete).toHaveBeenCalled();
     expect(mockDeleteEq).toHaveBeenCalledWith('shopify_product_id', 100);
-    expect(mockDeleteNot).toHaveBeenCalledWith('shopify_variant_id', 'is', null);
+    expect(mockDeleteIs).toHaveBeenCalledWith('shopify_variant_id', null);
+    // Must NOT delete non-null variant rows in a multi-variant product transition
+    expect(mockDeleteNot).not.toHaveBeenCalledWith('shopify_variant_id', 'is', null);
   });
 
   it('should handle pagination correctly', async () => {
@@ -452,6 +463,8 @@ describe('Periodic sync check processor', () => {
       delete: vi.fn().mockReturnValue({
         eq: vi.fn().mockReturnValue({
           not: vi.fn().mockResolvedValue({ error: null }),
+          is: vi.fn().mockResolvedValue({ error: null }),
+          in: vi.fn().mockResolvedValue({ error: null }),
         }),
       }),
       upsert: vi.fn().mockResolvedValue({ error: null }),

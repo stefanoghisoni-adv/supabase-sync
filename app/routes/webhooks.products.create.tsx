@@ -126,7 +126,7 @@ export async function action({ request }: ActionFunctionArgs) {
         .from(tableName)
         .delete()
         .eq('shopify_product_id', product.id)
-        .not('shopify_variant_id', 'is', null);
+        .is('shopify_variant_id', null);
 
       if (deleteError) {
         console.warn('Could not clean old non-variant row:', deleteError);
