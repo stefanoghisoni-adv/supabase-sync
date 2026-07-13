@@ -2,14 +2,14 @@
 # Production URL: https://supabase-sync-six.vercel.app
 # Eseguire `shopify app deploy` per attivare le webhook subscriptions.
 
-name = "shopify-supabase-sync"
+name = "Supabase Tracking Sync"
 client_id = "ab96efeed79987564061e5b93c31f6f8"
-handle = "shopify-supabase-sync"
+handle = "supabase-tracking-sync"
 application_url = "https://supabase-sync-six.vercel.app"
 embedded = true
 
 [access_scopes]
-scopes = "read_products,write_products,read_inventory,read_cost,read_customers,write_customers,read_metafields"
+scopes = "read_products,write_products,read_inventory,read_customers,write_customers"
 
 [auth]
 redirect_urls = [
