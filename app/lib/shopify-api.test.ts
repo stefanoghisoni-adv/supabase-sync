@@ -35,6 +35,45 @@ describe('Shopify API Client', () => {
     expect(result.nextPageInfo).toBe('abc');
   });
 
+  it('should NOT combine page_info with updated_at_min (Shopify cursor constraint)', async () => {
+    const mockFetch = global.fetch as any;
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ products: [] }),
+      headers: new Map(),
+    });
+
+    const client = new ShopifyAPIClient('test.myshopify.com', 'token');
+    await client.getProducts({
+      limit: 250,
+      pageInfo: 'cursor123',
+      updatedAtMin: '2026-07-10T00:00:00Z',
+    });
+
+    const calledUrl = new URL(mockFetch.mock.calls[0][0]);
+    expect(calledUrl.searchParams.get('page_info')).toBe('cursor123');
+    expect(calledUrl.searchParams.get('updated_at_min')).toBeNull();
+  });
+
+  it('should send updated_at_min on the first page (no cursor)', async () => {
+    const mockFetch = global.fetch as any;
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ products: [] }),
+      headers: new Map(),
+    });
+
+    const client = new ShopifyAPIClient('test.myshopify.com', 'token');
+    await client.getProducts({
+      limit: 250,
+      updatedAtMin: '2026-07-10T00:00:00Z',
+    });
+
+    const calledUrl = new URL(mockFetch.mock.calls[0][0]);
+    expect(calledUrl.searchParams.get('updated_at_min')).toBe('2026-07-10T00:00:00Z');
+    expect(calledUrl.searchParams.get('page_info')).toBeNull();
+  });
+
   it('should respect rate limits', async () => {
     const mockFetch = global.fetch as any;
     mockFetch.mockResolvedValueOnce({

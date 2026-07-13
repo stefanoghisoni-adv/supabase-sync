@@ -74,11 +74,12 @@ export class ShopifyAPIClient {
       limit: options.limit || 250,
     };
 
+    // Shopify cursor pagination: page_info may only be combined with limit/fields.
+    // The original filters (updated_at_min) are already encoded in the cursor, so
+    // they must be dropped on subsequent pages or Shopify returns 400.
     if (options.pageInfo) {
       params.page_info = options.pageInfo;
-    }
-
-    if (options.updatedAtMin) {
+    } else if (options.updatedAtMin) {
       params.updated_at_min = options.updatedAtMin;
     }
 
@@ -104,11 +105,10 @@ export class ShopifyAPIClient {
       limit: options.limit || 250,
     };
 
+    // Shopify cursor pagination: page_info may only be combined with limit/fields.
     if (options.pageInfo) {
       params.page_info = options.pageInfo;
-    }
-
-    if (options.updatedAtMin) {
+    } else if (options.updatedAtMin) {
       params.updated_at_min = options.updatedAtMin;
     }
 
