@@ -39,6 +39,49 @@ export interface ShopifyImage {
   src: string;
 }
 
+export interface ShopifyCustomer {
+  id: number;
+  email: string | null;
+  phone: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  accepts_marketing?: boolean;
+  marketing_opt_in_level?: string | null;
+  email_marketing_consent?: {
+    state?: string | null;
+    opt_in_level?: string | null;
+  } | null;
+  total_spent?: string | null;
+  orders_count?: number | null;
+  state?: string | null;
+  tags?: string;
+  note?: string | null;
+  verified_email?: boolean | null;
+  tax_exempt?: boolean | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+}
+
+export interface SupabaseCustomerRow {
+  shopify_customer_id: number;
+  email: string | null;
+  phone: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  accepts_marketing: boolean | null;
+  marketing_opt_in_level: string | null;
+  total_spent: number | null;
+  orders_count: number | null;
+  customer_state: string | null;
+  tags: string[];
+  note: string | null;
+  verified_email: boolean | null;
+  tax_exempt: boolean | null;
+  created_at: string | null;
+  updated_at: string | null;
+  synced_at: string;
+}
+
 export interface SupabaseProductRow {
   shopify_product_id: number;
   shopify_variant_id: number | null;

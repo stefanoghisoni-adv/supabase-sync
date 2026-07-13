@@ -79,7 +79,7 @@ model Plan {
   priceYearly            Decimal  @map("price_yearly") @db.Decimal(10, 2)
   maxProducts            Int?     @map("max_products")
   maxCustomers           Int?     @map("max_customers")
-  maxSyncFrequencyHours  Int      @map("max_sync_frequency_hours")
+  maxSyncFrequencyHours  Float    @map("max_sync_frequency_hours")
   customFieldsLimit      Int?     @map("custom_fields_limit")
   supportLevel           String   @map("support_level")
   customersSyncEnabled   Boolean  @default(false) @map("customers_sync_enabled")

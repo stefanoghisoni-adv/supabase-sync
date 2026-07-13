@@ -1,10 +1,62 @@
 // Processor implementations for background sync jobs
 import type { Job } from 'bullmq';
 import type { SyncJobData } from '../queue/queues.server';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { ShopifyAPIClient } from '../shopify-api.server';
 import { transformProduct } from '../transformers/product.server';
+import { transformCustomer } from '../transformers/customer.server';
 import { createSupabaseClient } from '../supabase.server';
 import { prisma } from '../../db.server';
+import type { ShopifyCustomer } from '~/types/shopify';
+
+/**
+ * Syncs customers from Shopify into the merchant's Supabase `customers` table.
+ * Paginated upsert keyed on shopify_customer_id. When `updatedAtMin` is provided
+ * only customers changed since then are fetched (incremental periodic check);
+ * otherwise every customer is synced (initial bulk).
+ *
+ * Caller is responsible for the plan entitlement check (customersSyncEnabled).
+ * Returns the number of customers upserted.
+ */
+async function syncCustomers(
+  shopifyClient: ShopifyAPIClient,
+  supabase: SupabaseClient,
+  tableName: string,
+  updatedAtMin?: string
+): Promise<number> {
+  let total = 0;
+  let nextPageInfo: string | null = null;
+
+  do {
+    const { customers, nextPageInfo: nextPage } = await shopifyClient.getCustomers({
+      limit: 250,
+      pageInfo: nextPageInfo || undefined,
+      updatedAtMin,
+    });
+
+    if (!customers || customers.length === 0) break;
+
+    const rows = (customers as ShopifyCustomer[]).map(transformCustomer);
+
+    const chunkSize = 1000;
+    for (let i = 0; i < rows.length; i += chunkSize) {
+      const chunk = rows.slice(i, i + chunkSize);
+      const { error } = await supabase.from(tableName).upsert(chunk, {
+        onConflict: 'shopify_customer_id',
+        ignoreDuplicates: false,
+      });
+
+      if (error) {
+        throw new Error(`Supabase customer upsert failed: ${error.message}`);
+      }
+    }
+
+    total += rows.length;
+    nextPageInfo = nextPage;
+  } while (nextPageInfo);
+
+  return total;
+}
 
 /**
  * Process periodic sync check for a shop
@@ -173,6 +225,20 @@ export async function processPeriodicSyncCheck(shopId: string): Promise<void> {
 
     } while (nextPageInfo);
 
+    // Incremental customer sync (delta) if the shop's plan includes customer sync
+    let totalCustomers = 0;
+    const plan = await prisma.plan.findUnique({
+      where: { planName: shop.currentPlan },
+    });
+    if (plan?.customersSyncEnabled) {
+      totalCustomers = await syncCustomers(
+        shopifyClient,
+        supabase,
+        shop.supabaseConfig.tableNameCustomers,
+        lastSyncTime.toISOString()
+      );
+    }
+
     // Mark completed
     await prisma.syncJob.update({
       where: { id: syncJob.id },
@@ -181,10 +247,11 @@ export async function processPeriodicSyncCheck(shopId: string): Promise<void> {
         completedAt: new Date(),
         productsSynced: totalProducts,
         variantsSynced: totalVariants,
+        customersSynced: totalCustomers,
       },
     });
 
-    console.log(`Periodic sync check completed: ${totalProducts} products checked, ${totalVariants} variants synced`);
+    console.log(`Periodic sync check completed: ${totalProducts} products checked, ${totalVariants} variants synced, ${totalCustomers} customers synced`);
 
   } catch (error) {
     await prisma.syncJob.update({
@@ -319,16 +386,30 @@ export async function processInitialBulkSync(shopId: string, job: Job<any>): Pro
 
     } while (nextPageInfo);
 
+    // Sync customers if the shop's plan includes customer sync
+    let totalCustomers = 0;
+    const plan = await prisma.plan.findUnique({
+      where: { planName: shop.currentPlan },
+    });
+    if (plan?.customersSyncEnabled) {
+      totalCustomers = await syncCustomers(
+        shopifyClient,
+        supabase,
+        shop.supabaseConfig.tableNameCustomers
+      );
+    }
+
     // Mark sync job as completed
     await prisma.syncJob.update({
       where: { id: syncJob.id },
       data: {
         status: 'completed',
         completedAt: new Date(),
+        customersSynced: totalCustomers,
       },
     });
 
-    console.log(`Bulk sync completed: ${totalProducts} products, ${totalVariants} variants`);
+    console.log(`Bulk sync completed: ${totalProducts} products, ${totalVariants} variants, ${totalCustomers} customers`);
 
   } catch (error) {
     // Mark sync job as failed

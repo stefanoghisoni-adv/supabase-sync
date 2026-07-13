@@ -11,6 +11,9 @@ vi.mock('../../db.server', () => ({
       create: vi.fn(),
       update: vi.fn(),
     },
+    plan: {
+      findUnique: vi.fn(),
+    },
   },
 }));
 

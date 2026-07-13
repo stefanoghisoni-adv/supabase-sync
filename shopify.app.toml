@@ -1,10 +1,13 @@
 # Shopify App Configuration
-# Full configuration will be completed in Part 4 (OAuth Integration)
+# NOTE: aggiorna `application_url` e i `redirect_urls` con l'URL di produzione
+# Vercel (es. https://your-app.vercel.app) prima del deploy, poi esegui
+# `shopify app deploy` per attivare le webhook subscriptions dichiarate qui.
 
 name = "shopify-supabase-sync"
-client_id = "" # Set after Partner Dashboard registration
+client_id = "ab96efeed79987564061e5b93c31f6f8"
 handle = "shopify-supabase-sync"
 application_url = "http://localhost:3000"
+embedded = true
 
 [access_scopes]
 scopes = "read_products,write_products,read_inventory,read_cost,read_customers,write_customers,read_metafields"
@@ -16,3 +19,39 @@ redirect_urls = [
 
 [webhooks]
 api_version = "2025-01"
+
+[[webhooks.subscriptions]]
+topics = ["products/create"]
+uri = "/webhooks/products/create"
+
+[[webhooks.subscriptions]]
+topics = ["products/update"]
+uri = "/webhooks/products/update"
+
+[[webhooks.subscriptions]]
+topics = ["products/delete"]
+uri = "/webhooks/products/delete"
+
+[[webhooks.subscriptions]]
+topics = ["customers/create"]
+uri = "/webhooks/customers/create"
+
+[[webhooks.subscriptions]]
+topics = ["customers/update"]
+uri = "/webhooks/customers/update"
+
+[[webhooks.subscriptions]]
+topics = ["customers/delete"]
+uri = "/webhooks/customers/delete"
+
+[[webhooks.subscriptions]]
+compliance_topics = ["customers/data_request"]
+uri = "/webhooks/gdpr/data-request"
+
+[[webhooks.subscriptions]]
+compliance_topics = ["customers/redact"]
+uri = "/webhooks/gdpr/customers-redact"
+
+[[webhooks.subscriptions]]
+compliance_topics = ["shop/redact"]
+uri = "/webhooks/gdpr/shop-redact"

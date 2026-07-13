@@ -1,6 +1,6 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from '@remix-run/node';
 import { json } from '@remix-run/node';
-import { useLoaderData, useActionData, Form } from '@remix-run/react';
+import { useLoaderData, useActionData, useFetcher, Form } from '@remix-run/react';
 import {
   Page,
   Layout,
@@ -104,6 +104,30 @@ export default function SupabaseSettings() {
     String(config?.syncIntervalHours || 24),
   ]);
 
+  const testFetcher = useFetcher<{ ok: boolean; message: string }>();
+  const createTablesFetcher = useFetcher<{ ok?: boolean; message?: string; error?: string }>();
+
+  const testConnection = () => {
+    testFetcher.submit(
+      { url, serviceRoleKey: serviceKey },
+      {
+        method: 'post',
+        action: '/api/supabase/test-connection',
+        encType: 'application/json',
+      }
+    );
+  };
+
+  const createTables = () => {
+    createTablesFetcher.submit(
+      {},
+      { method: 'post', action: '/api/supabase/create-tables' }
+    );
+  };
+
+  const testResult = testFetcher.data;
+  const createResult = createTablesFetcher.data;
+
   return (
     <Page title="Supabase Configuration" backAction={{ url: '/' }}>
       <Layout>
@@ -172,6 +196,18 @@ export default function SupabaseSettings() {
                     <Button variant="primary" submit>
                       Save Configuration
                     </Button>
+                    <Button
+                      onClick={testConnection}
+                      loading={testFetcher.state !== 'idle'}
+                      disabled={!url || !serviceKey}
+                    >
+                      Test Connection
+                    </Button>
+                    {testResult && (
+                      <Banner tone={testResult.ok ? 'success' : 'critical'}>
+                        {testResult.message}
+                      </Banner>
+                    )}
                   </BlockStack>
                 </FormLayout>
               </Form>
@@ -185,7 +221,17 @@ export default function SupabaseSettings() {
                 <Text as="p" tone="subdued">
                   After saving your configuration, create the required tables in your Supabase database.
                 </Text>
-                <Button>Create Tables in Supabase</Button>
+                <Button
+                  onClick={createTables}
+                  loading={createTablesFetcher.state !== 'idle'}
+                >
+                  Create Tables in Supabase
+                </Button>
+                {createResult && (
+                  <Banner tone={createResult.error ? 'critical' : 'success'}>
+                    {createResult.error || createResult.message || 'Done'}
+                  </Banner>
+                )}
               </BlockStack>
             </Card>
           </BlockStack>

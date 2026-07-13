@@ -1,0 +1,23 @@
+name: Sync Cron Trigger
+
+# Vercel Cron on the Free plan runs at most once per day, so the every-30-minutes
+# periodic sync is delegated to GitHub Actions (free). Configure in the repo:
+#   - Variables: APP_URL (e.g. https://your-app.vercel.app)
+#   - Secrets:   CRON_SECRET (same value as the Vercel env var)
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call /api/cron/sync
+        run: |
+          curl --fail-with-body -sS "$APP_URL/api/cron/sync" \
+            -H "Authorization: Bearer $CRON_SECRET"
+        env:
+          APP_URL: ${{ vars.APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
