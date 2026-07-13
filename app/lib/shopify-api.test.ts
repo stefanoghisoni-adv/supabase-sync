@@ -24,7 +24,7 @@ describe('Shopify API Client', () => {
         ],
       }),
       headers: new Map([
-        ['link', '<https://test.myshopify.com/admin/api/2024-01/products.json?page_info=abc>; rel="next"'],
+        ['link', '<https://test.myshopify.com/admin/api/2025-01/products.json?page_info=abc>; rel="next"'],
       ]),
     });
 

@@ -4,6 +4,8 @@ export class ShopifyAPIClient {
   private shopDomain: string;
   private accessToken: string;
   private apiVersion: string;
+  private readonly RATE_LIMIT_THRESHOLD = 0.9;
+  private readonly THROTTLE_DELAY_MS = 500;
 
   constructor(shopDomain: string, encryptedAccessToken: string) {
     this.shopDomain = shopDomain;
@@ -11,7 +13,7 @@ export class ShopifyAPIClient {
     this.apiVersion = process.env.SHOPIFY_API_VERSION || '2025-01';
   }
 
-  private async makeRequest(endpoint: string, params?: Record<string, any>) {
+  private async makeRequest(endpoint: string, params?: Record<string, string | number | boolean | undefined>) {
     const url = new URL(`https://${this.shopDomain}/admin/api/${this.apiVersion}/${endpoint}`);
 
     if (params) {
@@ -33,9 +35,9 @@ export class ShopifyAPIClient {
     const rateLimitHeader = response.headers.get('X-Shopify-Shop-Api-Call-Limit');
     if (rateLimitHeader) {
       const [current, max] = rateLimitHeader.split('/').map(Number);
-      if (current >= max * 0.9) {
+      if (current >= max * this.RATE_LIMIT_THRESHOLD) {
         console.warn(`Approaching rate limit: ${current}/${max}`);
-        await this.sleep(500); // Throttle
+        await this.sleep(this.THROTTLE_DELAY_MS); // Throttle
       }
     }
 
@@ -68,7 +70,7 @@ export class ShopifyAPIClient {
     pageInfo?: string;
     updatedAtMin?: string;
   } = {}) {
-    const params: Record<string, any> = {
+    const params: Record<string, string | number | boolean | undefined> = {
       limit: options.limit || 250,
     };
 
@@ -98,7 +100,7 @@ export class ShopifyAPIClient {
     pageInfo?: string;
     updatedAtMin?: string;
   } = {}) {
-    const params: Record<string, any> = {
+    const params: Record<string, string | number | boolean | undefined> = {
       limit: options.limit || 250,
     };
 
