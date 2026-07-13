@@ -358,9 +358,12 @@ export async function processManualSync(shopId: string, job: Job<any>): Promise<
 }
 
 /**
- * Process retry of failed webhook
- * Task 11: Implement webhook retry logic
+ * Process retry of a failed webhook.
+ *
+ * Deferred: no producer currently enqueues 'retry-failed-webhook' jobs. The
+ * type and worker branch exist so the retry pipeline can be wired up in a later
+ * phase without reshaping the queue contract. Throws if invoked prematurely.
  */
 export async function processRetryWebhook(data: Extract<SyncJobData, { type: 'retry-failed-webhook' }>): Promise<void> {
-  throw new Error('processRetryWebhook not yet implemented (Task 11)');
+  throw new Error('processRetryWebhook not yet implemented');
 }
