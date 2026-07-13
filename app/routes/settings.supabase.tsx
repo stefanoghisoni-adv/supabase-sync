@@ -137,6 +137,23 @@ export default function SupabaseSettings() {
             {errorMessage && <Banner tone="critical">{errorMessage}</Banner>}
 
             <Card>
+              <BlockStack gap="300">
+                <Text as="h2" variant="headingMd">
+                  Non hai un account Supabase?
+                </Text>
+                <Text as="p" tone="subdued">
+                  Iscriviti gratuitamente e crea un progetto per sincronizzare i tuoi dati.
+                </Text>
+                <Button
+                  url="https://supabase.com/sign-up"
+                  target="_blank"
+                >
+                  Crea account Supabase
+                </Button>
+              </BlockStack>
+            </Card>
+
+            <Card>
               <Form method="post">
                 <input type="hidden" name="_action" value="save" />
 
