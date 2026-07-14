@@ -90,4 +90,20 @@ describe('Shopify API Client', () => {
     // Should log rate limit warning
     expect(mockFetch).toHaveBeenCalled();
   });
+
+  it('should return the customers count from customers/count.json', async () => {
+    const mockFetch = global.fetch as any;
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ count: 42 }),
+      headers: new Map(),
+    });
+
+    const client = new ShopifyAPIClient('test.myshopify.com', 'token');
+    const count = await client.getCustomersCount();
+
+    const calledUrl = new URL(mockFetch.mock.calls[0][0]);
+    expect(calledUrl.pathname).toContain('customers/count.json');
+    expect(count).toBe(42);
+  });
 });
