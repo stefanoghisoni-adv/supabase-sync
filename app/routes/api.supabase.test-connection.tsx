@@ -2,11 +2,12 @@ import type { ActionFunctionArgs } from '@remix-run/node';
 import { json } from '@remix-run/node';
 import { createClient } from '@supabase/supabase-js';
 import { authenticate } from '~/shopify.server';
+import { prisma } from '~/db.server';
 import { validateSupabaseUrl } from '~/utils/supabase-url.server';
 
 export async function action({ request }: ActionFunctionArgs) {
   // Only authenticated merchants may probe a Supabase connection.
-  await authenticate.admin(request);
+  const { session } = await authenticate.admin(request);
 
   const body = await request.json();
   const { url, serviceRoleKey } = body;
@@ -36,8 +37,30 @@ export async function action({ request }: ActionFunctionArgs) {
       throw error;
     }
 
+    const shop = await prisma.shop.findUnique({
+      where: { shopDomain: session.shop },
+      include: { supabaseConfig: true },
+    });
+    if (shop?.supabaseConfig) {
+      await prisma.supabaseConfig.update({
+        where: { shopId: shop.id },
+        data: { connectionVerifiedAt: new Date() },
+      });
+    }
+
     return json({ ok: true, message: 'Connection successful' });
   } catch (error) {
+    const shop = await prisma.shop.findUnique({
+      where: { shopDomain: session.shop },
+      include: { supabaseConfig: true },
+    });
+    if (shop?.supabaseConfig) {
+      await prisma.supabaseConfig.update({
+        where: { shopId: shop.id },
+        data: { connectionVerifiedAt: null },
+      });
+    }
+
     const message = error instanceof Error ? error.message : 'Connection failed';
     return json({ ok: false, message }, { status: 400 });
   }

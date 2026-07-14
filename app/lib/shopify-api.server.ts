@@ -119,4 +119,9 @@ export class ShopifyAPIClient {
       nextPageInfo,
     };
   }
+
+  async getCustomersCount(): Promise<number> {
+    const { data } = await this.makeRequest('customers/count.json');
+    return typeof data.count === 'number' ? data.count : 0;
+  }
 }

@@ -13,6 +13,7 @@ import {
   BlockStack,
   ChoiceList,
   Text,
+  InlineStack,
 } from '@shopify/polaris';
 import { useState } from 'react';
 import { authenticate } from '~/shopify.server';
@@ -144,12 +145,11 @@ export default function SupabaseSettings() {
                 <Text as="p" tone="subdued">
                   Iscriviti gratuitamente e crea un progetto per sincronizzare i tuoi dati.
                 </Text>
-                <Button
-                  url="https://supabase.com/sign-up"
-                  target="_blank"
-                >
-                  Crea account Supabase
-                </Button>
+                <InlineStack align="end">
+                  <Button url="https://supabase.com/sign-up" target="_blank">
+                    Crea account Supabase
+                  </Button>
+                </InlineStack>
               </BlockStack>
             </Card>
 
@@ -210,16 +210,20 @@ export default function SupabaseSettings() {
                   />
 
                   <BlockStack gap="300">
-                    <Button variant="primary" submit>
-                      Save Configuration
-                    </Button>
-                    <Button
-                      onClick={testConnection}
-                      loading={testFetcher.state !== 'idle'}
-                      disabled={!url || !serviceKey}
-                    >
-                      Test Connection
-                    </Button>
+                    <InlineStack align="end">
+                      <BlockStack gap="200" inlineAlign="end">
+                        <Button variant="primary" submit>
+                          Save Configuration
+                        </Button>
+                        <Button
+                          onClick={testConnection}
+                          loading={testFetcher.state !== 'idle'}
+                          disabled={!url || !serviceKey}
+                        >
+                          Test Connection
+                        </Button>
+                      </BlockStack>
+                    </InlineStack>
                     {testResult && (
                       <Banner tone={testResult.ok ? 'success' : 'critical'}>
                         {testResult.message}
@@ -238,12 +242,14 @@ export default function SupabaseSettings() {
                 <Text as="p" tone="subdued">
                   After saving your configuration, create the required tables in your Supabase database.
                 </Text>
-                <Button
-                  onClick={createTables}
-                  loading={createTablesFetcher.state !== 'idle'}
-                >
-                  Create Tables in Supabase
-                </Button>
+                <InlineStack align="end">
+                  <Button
+                    onClick={createTables}
+                    loading={createTablesFetcher.state !== 'idle'}
+                  >
+                    Create Tables in Supabase
+                  </Button>
+                </InlineStack>
                 {createResult && (
                   <Banner tone={createResult.error ? 'critical' : 'success'}>
                     {createResult.error || createResult.message || 'Done'}
