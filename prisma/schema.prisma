@@ -64,6 +64,7 @@ model SupabaseConfig {
   tableNameCustomers     String   @default("customers") @map("table_name_customers")
   syncEnabled            Boolean  @default(false) @map("sync_enabled")
   syncIntervalHours      Int      @default(24) @map("sync_interval_hours")
+  connectionVerifiedAt   DateTime? @map("connection_verified_at")
   createdAt              DateTime @default(now()) @map("created_at")
   updatedAt              DateTime @updatedAt @map("updated_at")
 

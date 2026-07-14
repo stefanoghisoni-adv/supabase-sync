@@ -22,6 +22,7 @@ describe('Supabase client factory', () => {
       tableNameCustomers: 'customers',
       syncEnabled: true,
       syncIntervalHours: 24,
+      connectionVerifiedAt: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
