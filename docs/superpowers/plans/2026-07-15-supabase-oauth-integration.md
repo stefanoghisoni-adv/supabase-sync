@@ -25,14 +25,14 @@
 
 ---
 
-### Task OAUTH-1: Tabella `supabase_oauth_tokens`
+### Task 1: Tabella `supabase_oauth_tokens`
 
 **Files:**
 - Modify: `prisma/schema.prisma` (nuovo model + relazione su `Shop`)
 - Create: migrazione in `prisma/migrations/`
 
 **Interfaces:**
-- Produces: model Prisma `SupabaseOAuthToken` (tabella `supabase_oauth_tokens`), 1:1 con `shops`. Usato da OAUTH-3, 5, 6, 7.
+- Produces: model Prisma `SupabaseOAuthToken` (tabella `supabase_oauth_tokens`), 1:1 con `shops`. Usato da Task 3, 5, 6, 7.
 
 - [ ] **Step 1: Aggiungere il model e la relazione**
 
@@ -106,7 +106,7 @@ git commit -m "feat: add supabase_oauth_tokens table"
 
 ---
 
-### Task OAUTH-2: Client Management API
+### Task 2: Client Management API
 
 **Files:**
 - Create: `app/lib/supabase-management.server.ts`
@@ -124,7 +124,7 @@ git commit -m "feat: add supabase_oauth_tokens table"
   - `getProjectApiKeys(accessToken: string, ref: string): Promise<SupabaseProjectKeys>`
   - `runQuery(accessToken: string, ref: string, query: string): Promise<void>`
   - `projectUrl(ref: string): string`
-  - Usati da OAUTH-3, 4, 5, 6, 7.
+  - Usati da Task 3, 4, 5, 6, 7.
 
 - [ ] **Step 1: Scrivere i test che falliscono**
 
@@ -370,20 +370,20 @@ git commit -m "feat: add Supabase Management API client"
 
 ---
 
-### Task OAUTH-3: State firmato + storage/refresh token
+### Task 3: State firmato + storage/refresh token
 
 **Files:**
 - Create: `app/lib/supabase-oauth.server.ts`
 - Test: `app/lib/supabase-oauth.test.ts`
 
 **Interfaces:**
-- Consumes: `refreshAccessToken` (OAUTH-2), `encrypt`/`decrypt` (`~/utils/crypto.server`), `prisma`.
+- Consumes: `refreshAccessToken` (Task 2), `encrypt`/`decrypt` (`~/utils/crypto.server`), `prisma`.
 - Produces:
   - `signState(shopId: string, now?: number): string`
   - `verifyState(state: string, now?: number): { shopId: string } | null`
   - `saveTokens(shopId: string, t: { access_token: string; refresh_token: string; expires_in: number }): Promise<void>`
   - `getValidAccessToken(shopId: string): Promise<string>`
-  - Usati da OAUTH-4, 5, 6, 7.
+  - Usati da Task 4, 5, 6, 7.
 
 - [ ] **Step 1: Scrivere i test che falliscono**
 
@@ -533,14 +533,14 @@ git commit -m "feat: add Supabase OAuth state signing and token storage"
 
 ---
 
-### Task OAUTH-4: Route `POST /api/supabase/oauth-url`
+### Task 4: Route `POST /api/supabase/oauth-url`
 
 **Files:**
 - Create: `app/routes/api.supabase.oauth-url.tsx`
 
 **Interfaces:**
-- Consumes: `authenticate` (`~/shopify.server`), `prisma`, `signState` (OAUTH-3), `buildAuthorizeUrl` (OAUTH-2).
-- Produces: `POST` → `{ url: string }` (authorize URL con state firmato). Usato dal componente OAUTH-8.
+- Consumes: `authenticate` (`~/shopify.server`), `prisma`, `signState` (Task 3), `buildAuthorizeUrl` (Task 2).
+- Produces: `POST` → `{ url: string }` (authorize URL con state firmato). Usato dal componente Task 8.
 
 - [ ] **Step 1: Creare la route**
 
@@ -594,13 +594,13 @@ git commit -m "feat: add authenticated Supabase OAuth URL endpoint"
 
 ---
 
-### Task OAUTH-5: Route `/auth/supabase/callback`
+### Task 5: Route `/auth/supabase/callback`
 
 **Files:**
 - Create: `app/routes/auth.supabase.callback.tsx`
 
 **Interfaces:**
-- Consumes: `verifyState`, `saveTokens` (OAUTH-3), `exchangeCode` (OAUTH-2).
+- Consumes: `verifyState`, `saveTokens` (Task 3), `exchangeCode` (Task 2).
 - Produces: resource route (solo `loader`, nessun componente) che risponde HTML con `postMessage({ type: 'supabase-oauth', ok, error? })` + `window.close()`.
 
 **Nota:** essendo un resource route (nessun default export), la Response HTML viene restituita così com'è, senza passare dal rendering documento e senza gli header CSP di Shopify — lo script inline gira. Non richiede autenticazione Shopify (lo shop è identificato dallo `state`).
@@ -676,9 +676,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
 Run: `npm run typecheck`
 Expected: nessun errore.
 
-- [ ] **Step 3: Verifica manuale (rimandabile a OAUTH-8)**
+- [ ] **Step 3: Verifica manuale (rimandabile a Task 8)**
 
-Il flusso end-to-end si prova col componente in OAUTH-8. Qui basta il typecheck.
+Il flusso end-to-end si prova col componente in Task 8. Qui basta il typecheck.
 
 - [ ] **Step 4: Commit**
 
@@ -689,14 +689,14 @@ git commit -m "feat: add Supabase OAuth callback route"
 
 ---
 
-### Task OAUTH-6: Route `GET /api/supabase/projects`
+### Task 6: Route `GET /api/supabase/projects`
 
 **Files:**
 - Create: `app/routes/api.supabase.projects.tsx`
 
 **Interfaces:**
-- Consumes: `authenticate`, `prisma`, `getValidAccessToken` (OAUTH-3), `listProjects` (OAUTH-2).
-- Produces: `GET` → `{ projects: SupabaseProject[] }`. Usato dal componente OAUTH-8.
+- Consumes: `authenticate`, `prisma`, `getValidAccessToken` (Task 3), `listProjects` (Task 2).
+- Produces: `GET` → `{ projects: SupabaseProject[] }`. Usato dal componente Task 8.
 
 - [ ] **Step 1: Creare la route**
 
@@ -744,7 +744,7 @@ git commit -m "feat: add Supabase projects list endpoint"
 
 ---
 
-### Task OAUTH-7: DDL condiviso + route `POST /api/supabase/select-project`
+### Task 7: DDL condiviso + route `POST /api/supabase/select-project`
 
 **Files:**
 - Create: `app/lib/supabase-schema.ts`
@@ -752,7 +752,7 @@ git commit -m "feat: add Supabase projects list endpoint"
 - Create: `app/routes/api.supabase.select-project.tsx`
 
 **Interfaces:**
-- Consumes: `authenticate`, `prisma`, `encrypt`, `getValidAccessToken` (OAUTH-3), `getProjectApiKeys`/`runQuery`/`projectUrl` (OAUTH-2).
+- Consumes: `authenticate`, `prisma`, `encrypt`, `getValidAccessToken` (Task 3), `getProjectApiKeys`/`runQuery`/`projectUrl` (Task 2).
 - Produces:
   - `app/lib/supabase-schema.ts` esporta `PRODUCTS_TABLE_SQL`, `CUSTOMERS_TABLE_SQL`, `MERCHANT_TABLES_SQL` (= i due concatenati).
   - `POST /api/supabase/select-project` con body `{ ref: string }` → `{ ok: true }` | `{ ok: false, error }`.
@@ -937,14 +937,14 @@ git commit -m "feat: add select-project endpoint and share merchant DDL"
 
 ---
 
-### Task OAUTH-8: UI Step 1 — componente `SupabaseConnect`
+### Task 8: UI Step 1 — componente `SupabaseConnect`
 
 **Files:**
 - Create: `app/components/Dashboard/SupabaseConnect.tsx`
 - Modify: `app/routes/_index.tsx` (usa `SupabaseConnect` come contenuto dello Step 1)
 
 **Interfaces:**
-- Consumes: endpoint `POST /api/supabase/oauth-url` (OAUTH-4), `GET /api/supabase/projects` (OAUTH-6), `POST /api/supabase/select-project` (OAUTH-7); `SupabaseProject` (OAUTH-2, ri-dichiarato localmente come tipo di risposta).
+- Consumes: endpoint `POST /api/supabase/oauth-url` (Task 4), `GET /api/supabase/projects` (Task 6), `POST /api/supabase/select-project` (Task 7); `SupabaseProject` (Task 2, ri-dichiarato localmente come tipo di risposta).
 - Produces: componente React `SupabaseConnect` renderizzato nello Step 1.
 
 **Comportamenti chiave:** popup aperto **sincronicamente** nel click (per evitare il blocco), `postMessage` con **origine validata**, spinner + pulsante disabilitato durante il collegamento, `Select` Polaris dei progetti, stato vuoto con link, riepilogo + "Conferma e crea tabelle", `revalidate()` al successo per far avanzare lo stepper.
@@ -1154,15 +1154,15 @@ git commit -m "feat: OAuth-based Supabase connect flow in step 1"
 ## Self-Review
 
 **Spec coverage:**
-- §1 scope v1 (collegamento + selezione esistenti) → OAUTH-4/5/6/7/8; creazione progetto esplicitamente fuori scope.
-- §2 flusso utente (spinner/disabled, popup, dropdown, riepilogo+conferma, empty state) → OAUTH-8; token exchange → OAUTH-5; recupero chiavi+tabelle+`connectionVerifiedAt` → OAUTH-7.
-- §3 Management API endpoints → OAUTH-2; creazione tabelle via `database/query` → OAUTH-7.
-- §4 componenti/file → OAUTH-1 (tabella token), OAUTH-2 (management client), OAUTH-3 (oauth server), route → OAUTH-4/5/6/7, UI → OAUTH-8. (`auth.supabase.start` sostituito da `api.supabase.oauth-url` — deviazione documentata nei Global Constraints.)
-- §5 sicurezza (state firmato timing-safe, token cifrati, postMessage con origine, service_role mai al client, client_secret solo server) → OAUTH-3 (state), OAUTH-2/7 (cifratura via encrypt), OAUTH-5/8 (postMessage origine).
-- §6 errori (popup bloccato, consenso negato, state invalido, token scaduto→refresh, API 4xx/5xx, nessun progetto, DDL fallito) → OAUTH-8 (UI), OAUTH-3 (refresh), OAUTH-5/6/7 (server).
-- §7 test → OAUTH-2 (client, fetch mockato), OAUTH-3 (state), altri via typecheck+manuale (assenza RTL nei Global Constraints).
-- §8 prerequisiti rollout (OAuth app, env var, migrazione prod, incident chiuso) → Global Constraints + OAUTH-1 nota produzione; incident già chiuso fuori da questo piano.
+- §1 scope v1 (collegamento + selezione esistenti) → Task 4/5/6/7/8; creazione progetto esplicitamente fuori scope.
+- §2 flusso utente (spinner/disabled, popup, dropdown, riepilogo+conferma, empty state) → Task 8; token exchange → Task 5; recupero chiavi+tabelle+`connectionVerifiedAt` → Task 7.
+- §3 Management API endpoints → Task 2; creazione tabelle via `database/query` → Task 7.
+- §4 componenti/file → Task 1 (tabella token), Task 2 (management client), Task 3 (oauth server), route → Task 4/5/6/7, UI → Task 8. (`auth.supabase.start` sostituito da `api.supabase.oauth-url` — deviazione documentata nei Global Constraints.)
+- §5 sicurezza (state firmato timing-safe, token cifrati, postMessage con origine, service_role mai al client, client_secret solo server) → Task 3 (state), Task 2/7 (cifratura via encrypt), Task 5/8 (postMessage origine).
+- §6 errori (popup bloccato, consenso negato, state invalido, token scaduto→refresh, API 4xx/5xx, nessun progetto, DDL fallito) → Task 8 (UI), Task 3 (refresh), Task 5/6/7 (server).
+- §7 test → Task 2 (client, fetch mockato), Task 3 (state), altri via typecheck+manuale (assenza RTL nei Global Constraints).
+- §8 prerequisiti rollout (OAuth app, env var, migrazione prod, incident chiuso) → Global Constraints + Task 1 nota produzione; incident già chiuso fuori da questo piano.
 
-**Placeholder scan:** nessun "TBD/TODO"; ogni step con codice mostra il codice completo. Le note "verificare gli shape contro i doc Supabase" (spec §3) sono un caveat operativo isolato nel client OAUTH-2, non un buco del piano.
+**Placeholder scan:** nessun "TBD/TODO"; ogni step con codice mostra il codice completo. Le note "verificare gli shape contro i doc Supabase" (spec §3) sono un caveat operativo isolato nel client Task 2, non un buco del piano.
 
-**Type consistency:** `SupabaseTokenResponse`/`SupabaseProject`/`SupabaseProjectKeys` (OAUTH-2) usati coerentemente in OAUTH-3/5/6/7; `signState`/`verifyState`/`saveTokens`/`getValidAccessToken` (OAUTH-3) usati in OAUTH-4/5/6/7; `MERCHANT_TABLES_SQL` (OAUTH-7) usato in select-project; risposta `{ url }` di OAUTH-4, `{ projects }` di OAUTH-6, `{ ok }` di OAUTH-7 combaciano con i fetcher del componente OAUTH-8.
+**Type consistency:** `SupabaseTokenResponse`/`SupabaseProject`/`SupabaseProjectKeys` (Task 2) usati coerentemente in Task 3/5/6/7; `signState`/`verifyState`/`saveTokens`/`getValidAccessToken` (Task 3) usati in Task 4/5/6/7; `MERCHANT_TABLES_SQL` (Task 7) usato in select-project; risposta `{ url }` di Task 4, `{ projects }` di Task 6, `{ ok }` di Task 7 combaciano con i fetcher del componente Task 8.
