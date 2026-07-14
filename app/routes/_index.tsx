@@ -1,20 +1,22 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from '@remix-run/node';
 import { json } from '@remix-run/node';
-import { useLoaderData, Form } from '@remix-run/react';
+import { useLoaderData, Form, useFetcher } from '@remix-run/react';
+import { useEffect } from 'react';
 import {
   Page,
   Layout,
-  Card,
-  Button,
   BlockStack,
   InlineGrid,
+  InlineStack,
+  Button,
   Text,
 } from '@shopify/polaris';
 import { StatsCard } from '~/components/Dashboard/StatsCard';
 import { ActivityLog } from '~/components/Dashboard/ActivityLog';
 import { PlanBanner } from '~/components/Dashboard/PlanBanner';
+import { Stepper, type StepperItem } from '~/components/Dashboard/Stepper';
+import { resolveStepStates } from '~/components/Dashboard/stepper-state';
 import { prisma } from '~/db.server';
-import { createSupabaseClient } from '~/lib/supabase.server';
 import { syncQueue } from '~/lib/queue/queues.server';
 import { authenticate } from '~/shopify.server';
 
@@ -24,9 +26,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const shop = await prisma.shop.findUnique({
     where: { shopDomain },
-    include: {
-      supabaseConfig: true,
-    },
+    include: { supabaseConfig: true },
   });
 
   if (!shop) {
@@ -37,50 +37,21 @@ export async function loader({ request }: LoaderFunctionArgs) {
     where: { planName: shop.currentPlan },
   });
 
-  // Get recent sync jobs
   const recentJobs = await prisma.syncJob.findMany({
     where: { shopId: shop.id },
     orderBy: { startedAt: 'desc' },
     take: 10,
   });
 
-  // Get usage stats
-  let productCount = 0;
-  let variantCount = 0;
-
-  if (shop.supabaseConfig) {
-    const supabase = createSupabaseClient(shop.supabaseConfig);
-
-    const { count: prodCount } = await supabase
-      .from(shop.supabaseConfig.tableNameProducts)
-      .select('*', { count: 'exact', head: true })
-      .eq('is_variant', false);
-
-    const { count: varCount } = await supabase
-      .from(shop.supabaseConfig.tableNameProducts)
-      .select('*', { count: 'exact', head: true });
-
-    productCount = prodCount || 0;
-    variantCount = varCount || 0;
-  }
-
-  const customFieldsCount = await prisma.customField.count({
-    where: { shopId: shop.id },
-  });
-
-  const lastSync = recentJobs.find((j) => j.status === 'completed');
+  const supabaseConnected = !!shop.supabaseConfig?.connectionVerifiedAt;
+  const customersEnabled = plan?.customersSyncEnabled ?? false;
 
   return json({
     shop,
     plan,
     recentJobs,
-    stats: {
-      supabaseConnected: !!shop.supabaseConfig?.syncEnabled,
-      productCount,
-      variantCount,
-      customFieldsCount,
-      lastSyncTime: lastSync?.completedAt ?? null,
-    },
+    supabaseConnected,
+    customersEnabled,
   });
 }
 
@@ -105,8 +76,83 @@ export async function action({ request }: ActionFunctionArgs) {
   return json({ ok: true });
 }
 
+interface StatsResponse {
+  totalProducts: number;
+  readyCount: number;
+  problemCount: number;
+  customersEnabled: boolean;
+  customerCount: number | null;
+}
+
 export default function Dashboard() {
-  const { shop, plan, recentJobs, stats } = useLoaderData<typeof loader>();
+  const { shop, plan, recentJobs, supabaseConnected, customersEnabled } =
+    useLoaderData<typeof loader>();
+
+  const statsFetcher = useFetcher<StatsResponse>();
+
+  useEffect(() => {
+    statsFetcher.load('/api/stats/products');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const stats = statsFetcher.data;
+  const statsLoading = statsFetcher.state === 'loading' || !stats;
+
+  const steps = resolveStepStates(supabaseConnected);
+  const syncTitle = customersEnabled
+    ? 'Sincronizza prodotti e clienti'
+    : 'Sincronizza prodotti';
+
+  const previewProducts = stats?.totalProducts ?? '…';
+  const previewCustomers = stats?.customerCount ?? '…';
+
+  const stepperItems: StepperItem[] = [
+    {
+      id: 'connect-supabase',
+      title: 'Collega Supabase',
+      state: steps.connectSupabase,
+      content: (
+        <BlockStack gap="200">
+          <Text as="p" tone="subdued">
+            Collega il tuo progetto Supabase per ricevere i dati sincronizzati.
+            Le tabelle necessarie verranno create automaticamente in base al tuo
+            piano.
+          </Text>
+          <InlineStack>
+            <Button url="/settings/supabase" variant="primary">
+              Collega Supabase
+            </Button>
+          </InlineStack>
+        </BlockStack>
+      ),
+    },
+    {
+      id: 'sync',
+      title: syncTitle,
+      state: steps.sync,
+      lockedHint:
+        'Completa il collegamento a Supabase per sbloccare la sincronizzazione.',
+      content: (
+        <BlockStack gap="300">
+          <Text as="p" tone="subdued">
+            Sincronizzerai {previewProducts} prodotti da Shopify → tabella{' '}
+            <code>products</code> su Supabase
+            {customersEnabled
+              ? ` e ${previewCustomers} clienti → tabella customers`
+              : ''}
+            .
+          </Text>
+          <Form method="post">
+            <InlineStack>
+              <Button submit variant="primary">
+                Avvia sincronizzazione
+              </Button>
+            </InlineStack>
+          </Form>
+        </BlockStack>
+      ),
+    },
+  ];
 
   return (
     <Page title="Dashboard">
@@ -116,70 +162,49 @@ export default function Dashboard() {
             shop={shop}
             plan={plan}
             currentUsage={{
-              products: stats.productCount,
-              customers: 0,
-              customFields: stats.customFieldsCount,
+              products: stats?.totalProducts ?? 0,
+              customers: stats?.customerCount ?? 0,
+              customFields: 0,
             }}
           />
         )}
 
-        <InlineGrid columns={{ xs: 1, sm: 3 }} gap="400">
+        <InlineGrid columns={{ xs: 1, sm: 2, md: customersEnabled ? 4 : 3 }} gap="400">
           <StatsCard
-            title="Supabase Status"
-            value={stats.supabaseConnected ? 'Connected' : 'Not Configured'}
-            status={stats.supabaseConnected ? 'success' : 'warning'}
+            title="Prodotti totali"
+            value={stats?.totalProducts ?? 0}
+            loading={statsLoading}
           />
-
-          <StatsCard title="Products Synced" value={stats.productCount} />
-
-          <StatsCard title="Variants Synced" value={stats.variantCount} />
+          <StatsCard
+            title="Prodotti pronti"
+            value={stats?.readyCount ?? 0}
+            status="success"
+            loading={statsLoading}
+          />
+          <StatsCard
+            title="Prodotti con problemi"
+            value={stats?.problemCount ?? 0}
+            status="critical"
+            loading={statsLoading}
+          />
+          {customersEnabled && (
+            <StatsCard
+              title="Clienti"
+              value={stats?.customerCount ?? 0}
+              loading={statsLoading}
+            />
+          )}
         </InlineGrid>
 
-        <Layout>
-          <Layout.Section>
-            <Card>
-              <BlockStack gap="400">
-                <Text as="h2" variant="headingMd">
-                  Sync Controls
-                </Text>
+        <Stepper steps={stepperItems} />
 
-                {stats.lastSyncTime && (
-                  <Text as="p" tone="subdued">
-                    Last sync: {new Date(stats.lastSyncTime).toLocaleString()}
-                  </Text>
-                )}
-
-                <Form method="post">
-                  <Button
-                    variant="primary"
-                    size="large"
-                    submit
-                    disabled={!stats.supabaseConnected}
-                  >
-                    Sync Now
-                  </Button>
-                </Form>
-
-                {!stats.supabaseConnected && (
-                  <BlockStack gap="200">
-                    <Text as="p" tone="subdued">
-                      Collega il tuo account Supabase per abilitare la
-                      sincronizzazione. Le tabelle necessarie verranno create
-                      automaticamente in base al tuo piano.
-                    </Text>
-                    <Button url="/settings/supabase" variant="primary">
-                      Configura Supabase
-                    </Button>
-                  </BlockStack>
-                )}
-              </BlockStack>
-            </Card>
-          </Layout.Section>
-
-          <Layout.Section>
-            <ActivityLog jobs={recentJobs} />
-          </Layout.Section>
-        </Layout>
+        {supabaseConnected && (
+          <Layout>
+            <Layout.Section>
+              <ActivityLog jobs={recentJobs} />
+            </Layout.Section>
+          </Layout>
+        )}
       </BlockStack>
     </Page>
   );
