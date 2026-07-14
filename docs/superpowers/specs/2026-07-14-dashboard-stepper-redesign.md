@@ -147,15 +147,22 @@ rispettivo blocco.
 
 ## 6. Gestione errori — niente più "Application Error" bianco
 
-Aggiungere/estendere un `ErrorBoundary` Remix (a livello **root**, `app/root.tsx`, e dove
-utile per rotta) che, invece della schermata bianca di default, renderizza il **guscio
-Polaris** (`AppProvider` + `Page`) con un **Banner `tone="critical"`** contenente il
-messaggio d'errore **preciso**:
+Oggi, quando qualcosa va storto, dentro l'iframe dell'app compare **solo** il testo
+"Application Error" e un banner vuoto: sparisce tutto il resto dell'interfaccia.
+Obiettivo: **il resto dell'app deve continuare a comparire** — il frame embedded
+(`AppProvider`, `NavMenu`, titolo di pagina, stile Polaris) resta renderizzato — con un
+**Banner rosso** che spiega con precisione il problema, al posto della schermata spoglia.
 
-- Se `isRouteErrorResponse(error)` → mostra `status` + `statusText` + eventuale `data`.
-- Altrimenti → mostra `error.message` (e `stack` solo in sviluppo).
+Aggiungere/estendere un `ErrorBoundary` Remix a livello **root** (`app/root.tsx`) e, dove
+utile, per singola rotta, che renderizza:
 
-L'app resta navigabile per quanto possibile; l'errore è leggibile e specifico, non generico.
+- il guscio embedded dell'app (Polaris `AppProvider` + `NavMenu` + `Page` con titolo),
+- un **Banner `tone="critical"`** con il messaggio d'errore **preciso**:
+  - se `isRouteErrorResponse(error)` → `status` + `statusText` + eventuale `data`;
+  - altrimenti → `error.message` (e `stack` solo in sviluppo).
+
+Così l'utente vede l'app "normale" con l'errore evidenziato in rosso, non una pagina vuota.
+L'app resta navigabile per quanto possibile.
 
 ---
 
