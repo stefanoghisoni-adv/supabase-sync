@@ -57,11 +57,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
   } catch (err) {
     // Le Response (redirect di auth, 404) devono passare intatte.
     if (err instanceof Response) throw err;
-    // Remix censura il messaggio degli Error non gestiti in produzione:
-    // lo rilanciamo come Response perché il testo raggiunga il banner.
+    // Il dettaglio completo va SOLO nei log del server: rilanciare il testo
+    // grezzo al browser esporrebbe dettagli interni (info-disclosure).
     console.error('[dashboard loader] errore non gestito:', err);
-    const message = err instanceof Error ? err.message : String(err);
-    throw new Response(message, { status: 500, statusText: 'Errore dashboard' });
+    const isDev = process.env.NODE_ENV !== 'production';
+    const detail =
+      isDev && err instanceof Error
+        ? err.message
+        : "Errore interno del server. Controlla i log dell'app per il dettaglio.";
+    throw new Response(detail, { status: 500, statusText: 'Errore dashboard' });
   }
 }
 
