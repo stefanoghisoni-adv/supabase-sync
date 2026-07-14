@@ -45,6 +45,7 @@ model Shop {
   uninstalledAt     DateTime?          @map("uninstalled_at")
 
   supabaseConfig    SupabaseConfig?
+  supabaseOAuthToken SupabaseOAuthToken?
   billingCharges    BillingCharge[]
   syncJobs          SyncJob[]
   customFields      CustomField[]
@@ -157,4 +158,18 @@ model FieldMapping {
 
   @@unique([shopId, shopifyField])
   @@map("field_mappings")
+}
+
+model SupabaseOAuthToken {
+  id           String   @id @default(uuid())
+  shopId       String   @unique @map("shop_id")
+  accessToken  String   @map("access_token")
+  refreshToken String   @map("refresh_token")
+  expiresAt    DateTime @map("expires_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@map("supabase_oauth_tokens")
 }
