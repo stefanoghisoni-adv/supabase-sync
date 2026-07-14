@@ -21,38 +21,48 @@ import { syncQueue } from '~/lib/queue/queues.server';
 import { authenticate } from '~/shopify.server';
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const { session } = await authenticate.admin(request);
-  const shopDomain = session.shop;
+  try {
+    const { session } = await authenticate.admin(request);
+    const shopDomain = session.shop;
 
-  const shop = await prisma.shop.findUnique({
-    where: { shopDomain },
-    include: { supabaseConfig: true },
-  });
+    const shop = await prisma.shop.findUnique({
+      where: { shopDomain },
+      include: { supabaseConfig: true },
+    });
 
-  if (!shop) {
-    throw new Response('Shop not found', { status: 404 });
+    if (!shop) {
+      throw new Response('Shop not found', { status: 404 });
+    }
+
+    const plan = await prisma.plan.findUnique({
+      where: { planName: shop.currentPlan },
+    });
+
+    const recentJobs = await prisma.syncJob.findMany({
+      where: { shopId: shop.id },
+      orderBy: { startedAt: 'desc' },
+      take: 10,
+    });
+
+    const supabaseConnected = !!shop.supabaseConfig?.connectionVerifiedAt;
+    const customersEnabled = plan?.customersSyncEnabled ?? false;
+
+    return json({
+      shop,
+      plan,
+      recentJobs,
+      supabaseConnected,
+      customersEnabled,
+    });
+  } catch (err) {
+    // Le Response (redirect di auth, 404) devono passare intatte.
+    if (err instanceof Response) throw err;
+    // Remix censura il messaggio degli Error non gestiti in produzione:
+    // lo rilanciamo come Response perché il testo raggiunga il banner.
+    console.error('[dashboard loader] errore non gestito:', err);
+    const message = err instanceof Error ? err.message : String(err);
+    throw new Response(message, { status: 500, statusText: 'Errore dashboard' });
   }
-
-  const plan = await prisma.plan.findUnique({
-    where: { planName: shop.currentPlan },
-  });
-
-  const recentJobs = await prisma.syncJob.findMany({
-    where: { shopId: shop.id },
-    orderBy: { startedAt: 'desc' },
-    take: 10,
-  });
-
-  const supabaseConnected = !!shop.supabaseConfig?.connectionVerifiedAt;
-  const customersEnabled = plan?.customersSyncEnabled ?? false;
-
-  return json({
-    shop,
-    plan,
-    recentJobs,
-    supabaseConnected,
-    customersEnabled,
-  });
 }
 
 export async function action({ request }: ActionFunctionArgs) {
