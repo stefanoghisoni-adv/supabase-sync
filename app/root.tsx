@@ -1,6 +1,7 @@
 import type { LinksFunction } from '@remix-run/node';
 import { json } from '@remix-run/node';
 import {
+  Link,
   Links,
   Meta,
   Outlet,
@@ -9,6 +10,7 @@ import {
   useLoaderData,
 } from '@remix-run/react';
 import { AppProvider } from '@shopify/shopify-app-remix/react';
+import { NavMenu } from '@shopify/app-bridge-react';
 import polarisStyles from '@shopify/polaris/build/esm/styles.css?url';
 
 export const links: LinksFunction = () => [
@@ -33,6 +35,12 @@ export default function App() {
       </head>
       <body>
         <AppProvider isEmbeddedApp apiKey={apiKey}>
+          <NavMenu>
+            <Link to="/" rel="home">
+              Dashboard
+            </Link>
+            <Link to="/settings/supabase">Impostazioni Supabase</Link>
+          </NavMenu>
           <Outlet />
         </AppProvider>
         <ScrollRestoration />

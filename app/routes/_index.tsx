@@ -161,9 +161,16 @@ export default function Dashboard() {
                 </Form>
 
                 {!stats.supabaseConnected && (
-                  <Text as="p" tone="subdued">
-                    Configure Supabase to enable sync
-                  </Text>
+                  <BlockStack gap="200">
+                    <Text as="p" tone="subdued">
+                      Collega il tuo account Supabase per abilitare la
+                      sincronizzazione. Le tabelle necessarie verranno create
+                      automaticamente in base al tuo piano.
+                    </Text>
+                    <Button url="/settings/supabase" variant="primary">
+                      Configura Supabase
+                    </Button>
+                  </BlockStack>
                 )}
               </BlockStack>
             </Card>
