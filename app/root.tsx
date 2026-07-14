@@ -8,20 +8,14 @@ import {
   Scripts,
   ScrollRestoration,
   useLoaderData,
+  useRouteLoaderData,
   useRouteError,
   isRouteErrorResponse,
 } from '@remix-run/react';
 import { AppProvider } from '@shopify/shopify-app-remix/react';
 import { NavMenu } from '@shopify/app-bridge-react';
 import polarisStyles from '@shopify/polaris/build/esm/styles.css?url';
-import {
-  AppProvider as PolarisAppProvider,
-  Page,
-  Banner,
-  Text,
-  BlockStack,
-} from '@shopify/polaris';
-import enTranslations from '@shopify/polaris/locales/en.json';
+import { Page, Banner, Text, BlockStack } from '@shopify/polaris';
 
 export const links: LinksFunction = () => [
   { rel: 'stylesheet', href: polarisStyles },
@@ -62,6 +56,10 @@ export default function App() {
 
 export function ErrorBoundary() {
   const error = useRouteError();
+  // Il loader di root normalmente riesce anche quando una rotta figlia lancia:
+  // recuperiamo apiKey per mantenere il frame embedded (App Bridge + NavMenu).
+  const rootData = useRouteLoaderData<typeof loader>('root');
+  const apiKey = rootData?.apiKey || '';
 
   let title = 'Si è verificato un errore';
   let detail = 'Errore sconosciuto';
@@ -85,7 +83,13 @@ export function ErrorBoundary() {
         <Links />
       </head>
       <body>
-        <PolarisAppProvider i18n={enTranslations}>
+        <AppProvider isEmbeddedApp apiKey={apiKey}>
+          <NavMenu>
+            <Link to="/" rel="home">
+              Dashboard
+            </Link>
+            <Link to="/settings/supabase">Impostazioni Supabase</Link>
+          </NavMenu>
           <Page title="Supabase Tracking Sync">
             <BlockStack gap="400">
               <Banner tone="critical" title={title}>
@@ -93,7 +97,7 @@ export function ErrorBoundary() {
               </Banner>
             </BlockStack>
           </Page>
-        </PolarisAppProvider>
+        </AppProvider>
         <ScrollRestoration />
         <Scripts />
       </body>
