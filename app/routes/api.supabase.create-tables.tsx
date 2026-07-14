@@ -121,8 +121,18 @@ export async function action({ request }: ActionFunctionArgs) {
       throw new Error('Failed to create tables');
     }
 
+    await prisma.supabaseConfig.update({
+      where: { shopId: shop.id },
+      data: { connectionVerifiedAt: new Date() },
+    });
+
     return json({ ok: true, message: 'Tables created successfully' });
   } catch (error) {
+    await prisma.supabaseConfig.update({
+      where: { shopId: shop.id },
+      data: { connectionVerifiedAt: null },
+    }).catch(() => {});
+
     const message = error instanceof Error ? error.message : 'Unknown error';
     return json({ error: message }, { status: 500 });
   }
