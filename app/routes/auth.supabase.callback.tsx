@@ -2,13 +2,25 @@ import type { LoaderFunctionArgs } from '@remix-run/node';
 import { verifyState, saveTokens } from '~/lib/supabase-oauth.server';
 import { exchangeCode } from '~/lib/supabase-management.server';
 
+// Serializza un valore per l'inserimento sicuro dentro un tag <script>.
+// JSON.stringify NON neutralizza `</script>` né i separatori di riga
+// U+2028/U+2029, quindi un `error` riflesso (dai query param di Supabase)
+// potrebbe spezzare il tag ed eseguire codice arbitrario (XSS). Escapiamo
+// `<`, `>`, `&` e i due separatori di riga come escape unicode.
+function jsonForScript(value: unknown): string {
+  return JSON.stringify(value).replace(
+    /[<>&\u2028\u2029]/g,
+    (c) => '\\u' + c.charCodeAt(0).toString(16).padStart(4, '0'),
+  );
+}
+
 function closePage(message: Record<string, unknown>, appOrigin: string): Response {
   const html = `<!doctype html><html><head><meta charset="utf-8"></head><body>
 <script>
 (function () {
   try {
     if (window.opener) {
-      window.opener.postMessage(${JSON.stringify(message)}, ${JSON.stringify(appOrigin)});
+      window.opener.postMessage(${jsonForScript(message)}, ${jsonForScript(appOrigin)});
     }
   } catch (e) {}
   window.close();
