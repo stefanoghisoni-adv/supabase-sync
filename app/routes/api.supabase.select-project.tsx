@@ -49,9 +49,12 @@ export async function action({ request }: ActionFunctionArgs) {
 
     await runQuery(token, ref, MERCHANT_TABLES_SQL);
 
+    // Abilita la sincronizzazione al collegamento: senza syncEnabled i
+    // processor rifiutano il job. Le successive sync automatiche seguono
+    // l'intervallo impostato in Impostazioni.
     await prisma.supabaseConfig.update({
       where: { shopId: shop.id },
-      data: { connectionVerifiedAt: new Date() },
+      data: { connectionVerifiedAt: new Date(), syncEnabled: true },
     });
 
     return json({ ok: true });

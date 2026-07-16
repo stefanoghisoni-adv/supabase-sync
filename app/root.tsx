@@ -51,7 +51,7 @@ export default function App() {
             <Link to="/" rel="home">
               Dashboard
             </Link>
-            <Link to="/settings/supabase">Impostazioni Supabase</Link>
+            <Link to="/settings/supabase">Impostazioni</Link>
           </NavMenu>
           <Outlet />
         </AppProvider>
@@ -102,7 +102,7 @@ export function ErrorBoundary() {
             <Link to="/" rel="home">
               Dashboard
             </Link>
-            <Link to="/settings/supabase">Impostazioni Supabase</Link>
+            <Link to="/settings/supabase">Impostazioni</Link>
           </NavMenu>
           <Page title="Supabase Tracking Sync">
             <BlockStack gap="400">

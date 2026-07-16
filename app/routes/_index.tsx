@@ -19,7 +19,7 @@ import { resolveStepStates } from '~/components/Dashboard/stepper-state';
 import { SupabaseConnect } from '~/components/Dashboard/SupabaseConnect';
 import { prisma } from '~/db.server';
 import { getOrCreateShop } from '~/utils/shop.server';
-import { syncQueue } from '~/lib/queue/queues.server';
+import { processManualSync } from '~/lib/workers/processors.server';
 import { authenticate } from '~/shopify.server';
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -71,19 +71,22 @@ export async function action({ request }: ActionFunctionArgs) {
   try {
     const shop = await getOrCreateShop(session);
 
-    // Trigger manual sync (BullMQ signature: add(jobName, data))
-    await syncQueue.add('manual-sync', {
-      type: 'manual-sync',
-      shopId: shop.id,
-    });
+    // Sincronizzazione manuale eseguita SUBITO, in modo sincrono: la prima
+    // popolazione delle tabelle è immediata (niente attesa del cron). Le
+    // sync automatiche periodiche restano gestite dal cron secondo l'intervallo
+    // configurato in Impostazioni. Lo stub `job` copre updateProgress, usato
+    // solo per il tracking di coda (qui non serve).
+    const stubJob = {
+      updateProgress: async () => {},
+    } as unknown as Parameters<typeof processManualSync>[1];
+    await processManualSync(shop.id, stubJob);
 
     return json({ ok: true });
   } catch (err) {
-    // La coda (BullMQ/Redis) può fallire su serverless: non far crashare la
-    // pagina con "Unexpected Server Error", restituisci un errore gestito.
-    console.error('[dashboard action] sync non avviata:', err instanceof Error ? err.message : 'errore sconosciuto');
+    // Non far crashare la pagina con "Unexpected Server Error": errore gestito.
+    console.error('[dashboard action] sync fallita:', err instanceof Error ? err.message : 'errore sconosciuto');
     return json(
-      { error: "Impossibile avviare la sincronizzazione. Riprova tra poco." },
+      { error: 'Sincronizzazione non riuscita. Verifica il collegamento a Supabase e riprova.' },
       { status: 502 },
     );
   }
