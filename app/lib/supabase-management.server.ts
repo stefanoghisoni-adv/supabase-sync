@@ -220,3 +220,22 @@ export async function getProject(
   const data = (await res.json()) as { status?: unknown };
   return { status: String(data.status ?? 'UNKNOWN') };
 }
+
+export async function resetDbPassword(
+  accessToken: string,
+  ref: string,
+  newPass: string,
+): Promise<void> {
+  const res = await fetch(`${MGMT_BASE}/v1/projects/${ref}/config/database`, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ password: newPass }),
+  });
+  if (res.status === 404 || res.status === 405) {
+    throw new Error('unsupported: reset db password non disponibile');
+  }
+  if (!res.ok) throw new Error(`Supabase reset password error: ${res.status}`);
+}

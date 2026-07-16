@@ -9,6 +9,7 @@ import {
   listRegions,
   createProject,
   getProject,
+  resetDbPassword,
 } from './supabase-management.server';
 
 global.fetch = vi.fn();
@@ -170,5 +171,23 @@ describe('getProject', () => {
     expect(res.status).toBe('ACTIVE_HEALTHY');
     const [url] = mockFetch.mock.calls[0];
     expect(url).toBe('https://api.supabase.com/v1/projects/r1');
+  });
+});
+
+describe('resetDbPassword', () => {
+  beforeEach(() => (global.fetch as any).mockReset());
+
+  it('invia la nuova password al progetto e risolve su ok', async () => {
+    const mockFetch = global.fetch as any;
+    mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({}) });
+    await expect(resetDbPassword('tok', 'r1', 'NewPass-9')).resolves.toBeUndefined();
+    const [url, init] = mockFetch.mock.calls[0];
+    expect(url).toContain('https://api.supabase.com/v1/projects/r1');
+    expect(String(init.body)).toContain('NewPass-9');
+  });
+
+  it('segnala unsupported su 404', async () => {
+    (global.fetch as any).mockResolvedValueOnce({ ok: false, status: 404 });
+    await expect(resetDbPassword('tok', 'r1', 'p')).rejects.toThrow('unsupported');
   });
 });
