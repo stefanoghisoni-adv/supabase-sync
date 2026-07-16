@@ -8,6 +8,10 @@ export interface StepperItem {
   state: StepState;
   content?: ReactNode;
   lockedHint?: string;
+  // Label opzionali per stato, così ogni step può dare un testo più parlante
+  // (es. "Collegato" invece del generico "Completato").
+  completeLabel?: string;
+  activeLabel?: string;
 }
 
 const BADGE: Record<StepState, { tone?: 'success' | 'info'; label: string }> = {
@@ -15,6 +19,12 @@ const BADGE: Record<StepState, { tone?: 'success' | 'info'; label: string }> = {
   active: { tone: 'info', label: 'In corso' },
   locked: { tone: undefined, label: 'Bloccato' },
 };
+
+function badgeLabel(step: StepperItem): string {
+  if (step.state === 'complete' && step.completeLabel) return step.completeLabel;
+  if (step.state === 'active' && step.activeLabel) return step.activeLabel;
+  return BADGE[step.state].label;
+}
 
 export function Stepper({ steps }: { steps: StepperItem[] }) {
   return (
@@ -31,7 +41,7 @@ export function Stepper({ steps }: { steps: StepperItem[] }) {
                 {index + 1}. {step.title}
               </Text>
               <Badge tone={BADGE[step.state].tone}>
-                {BADGE[step.state].label}
+                {badgeLabel(step)}
               </Badge>
             </InlineStack>
 

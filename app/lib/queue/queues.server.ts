@@ -10,7 +10,11 @@ const connectionOptions = {
   port: parseInt(url.port || '6379', 10),
   username: url.username || undefined,
   password: url.password || undefined,
-  db: url.pathname ? parseInt(url.pathname.slice(1), 10) : 0,
+  db: url.pathname && url.pathname !== '/' ? parseInt(url.pathname.slice(1), 10) : 0,
+  // Upstash (e ogni Redis gestito) usa lo schema rediss:// → serve TLS.
+  // Senza questo, BullMQ tenta una connessione in chiaro e ogni comando
+  // (es. queue.add) fallisce, facendo crashare l'action di sync.
+  tls: url.protocol === 'rediss:' ? {} : undefined,
   lazyConnect: true,
 };
 
