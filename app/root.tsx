@@ -34,6 +34,14 @@ export default function App() {
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
+        {/* Forza sempre il tema chiaro: Polaris è light-only e non vogliamo che
+            il canvas del browser in dark mode traspaia dietro le superfici. */}
+        <meta name="color-scheme" content="light" />
+        <style
+          dangerouslySetInnerHTML={{
+            __html: ':root{color-scheme:light}html,body{background:#f1f1f1}',
+          }}
+        />
         <Meta />
         <Links />
       </head>
@@ -79,6 +87,12 @@ export function ErrorBoundary() {
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="color-scheme" content="light" />
+        <style
+          dangerouslySetInnerHTML={{
+            __html: ':root{color-scheme:light}html,body{background:#f1f1f1}',
+          }}
+        />
         <Meta />
         <Links />
       </head>

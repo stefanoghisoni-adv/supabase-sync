@@ -124,6 +124,7 @@ export default function Dashboard() {
       id: 'connect-supabase',
       title: 'Collega Supabase',
       state: steps.connectSupabase,
+      completeLabel: 'Collegato',
       content: (
         <SupabaseConnect
           connected={supabaseConnected}
