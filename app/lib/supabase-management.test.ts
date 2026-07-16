@@ -4,6 +4,7 @@ import {
   exchangeCode,
   listProjects,
   getProjectApiKeys,
+  listOrganizations,
   projectUrl,
 } from './supabase-management.server';
 
@@ -75,6 +76,28 @@ describe('getProjectApiKeys', () => {
       json: async () => [{ name: 'anon', api_key: 'anon-key' }],
     });
     await expect(getProjectApiKeys('tok', 'ref1')).rejects.toThrow();
+  });
+});
+
+describe('listOrganizations', () => {
+  beforeEach(() => (global.fetch as any).mockReset());
+
+  it('GET /v1/organizations e mappa id/name', async () => {
+    const mockFetch = global.fetch as any;
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => [{ id: 'org1', name: 'Stefano Ghisoni', extra: 1 }],
+    });
+    const orgs = await listOrganizations('tok');
+    expect(orgs).toEqual([{ id: 'org1', name: 'Stefano Ghisoni' }]);
+    const [url, init] = mockFetch.mock.calls[0];
+    expect(url).toBe('https://api.supabase.com/v1/organizations');
+    expect(init.headers.Authorization).toBe('Bearer tok');
+  });
+
+  it('lancia in errore su risposta non ok', async () => {
+    (global.fetch as any).mockResolvedValueOnce({ ok: false, status: 500 });
+    await expect(listOrganizations('tok')).rejects.toThrow();
   });
 });
 

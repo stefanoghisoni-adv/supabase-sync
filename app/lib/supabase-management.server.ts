@@ -19,6 +19,11 @@ export interface SupabaseProjectKeys {
   serviceRole: string;
 }
 
+export interface SupabaseOrganization {
+  id: string;
+  name: string;
+}
+
 export function buildAuthorizeUrl(params: {
   clientId: string;
   redirectUri: string;
@@ -121,6 +126,17 @@ export async function runQuery(
     body: JSON.stringify({ query }),
   });
   if (!res.ok) throw new Error(`Supabase query error: ${res.status}`);
+}
+
+export async function listOrganizations(
+  accessToken: string,
+): Promise<SupabaseOrganization[]> {
+  const res = await fetch(`${MGMT_BASE}/v1/organizations`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!res.ok) throw new Error(`Supabase organizations error: ${res.status}`);
+  const data = (await res.json()) as Array<Record<string, unknown>>;
+  return data.map((o) => ({ id: String(o.id), name: String(o.name) }));
 }
 
 export function projectUrl(ref: string): string {
