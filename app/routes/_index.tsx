@@ -16,6 +16,7 @@ import { ActivityLog } from '~/components/Dashboard/ActivityLog';
 import { PlanBanner } from '~/components/Dashboard/PlanBanner';
 import { Stepper, type StepperItem } from '~/components/Dashboard/Stepper';
 import { resolveStepStates } from '~/components/Dashboard/stepper-state';
+import { SupabaseConnect } from '~/components/Dashboard/SupabaseConnect';
 import { prisma } from '~/db.server';
 import { syncQueue } from '~/lib/queue/queues.server';
 import { authenticate } from '~/shopify.server';
@@ -125,20 +126,7 @@ export default function Dashboard() {
       id: 'connect-supabase',
       title: 'Collega Supabase',
       state: steps.connectSupabase,
-      content: (
-        <BlockStack gap="200">
-          <Text as="p" tone="subdued">
-            Collega il tuo progetto Supabase per ricevere i dati sincronizzati.
-            Le tabelle necessarie verranno create automaticamente in base al tuo
-            piano.
-          </Text>
-          <InlineStack>
-            <Button url="/settings/supabase" variant="primary">
-              Collega Supabase
-            </Button>
-          </InlineStack>
-        </BlockStack>
-      ),
+      content: <SupabaseConnect />,
     },
     {
       id: 'sync',
