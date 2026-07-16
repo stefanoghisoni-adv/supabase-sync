@@ -38,6 +38,7 @@ export function SupabaseConnect() {
       const data = event.data as { type?: string; ok?: boolean; error?: string };
       if (!data || data.type !== 'supabase-oauth') return;
       setConnecting(false);
+      setPopupRef(null);
       if (data.ok) {
         setOauthError(null);
         projectsFetcher.load('/api/supabase/projects');
@@ -56,6 +57,7 @@ export function SupabaseConnect() {
       popupRef.location.href = urlFetcher.data.url;
     } else if (urlFetcher.data?.error && popupRef) {
       popupRef.close();
+      setPopupRef(null);
       setConnecting(false);
       setOauthError(urlFetcher.data.error);
     }

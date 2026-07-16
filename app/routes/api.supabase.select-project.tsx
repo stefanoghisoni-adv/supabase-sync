@@ -56,7 +56,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
     return json({ ok: true });
   } catch (e) {
-    console.error('[api.supabase.select-project]', e);
+    console.error('[api.supabase.select-project]', e instanceof Error ? e.message : 'errore sconosciuto');
     await prisma.supabaseConfig
       .update({ where: { shopId: shop.id }, data: { connectionVerifiedAt: null } })
       .catch(() => {});

@@ -20,7 +20,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const projects = await listProjects(token);
     return json({ projects });
   } catch (e) {
-    console.error('[api.supabase.projects]', e);
+    console.error('[api.supabase.projects]', e instanceof Error ? e.message : 'errore sconosciuto');
     return json({ projects: [], error: 'Impossibile recuperare i progetti Supabase.' }, { status: 502 });
   }
 }

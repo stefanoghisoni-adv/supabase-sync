@@ -69,10 +69,16 @@ export async function getValidAccessToken(shopId: string): Promise<string> {
     return decrypt(row.accessToken);
   }
 
+  const clientId = process.env.SUPABASE_OAUTH_CLIENT_ID;
+  const clientSecret = process.env.SUPABASE_OAUTH_CLIENT_SECRET;
+  if (!clientId || !clientSecret) {
+    throw new Error('Integrazione Supabase non configurata');
+  }
+
   const refreshed = await refreshAccessToken({
     refreshToken: decrypt(row.refreshToken),
-    clientId: process.env.SUPABASE_OAUTH_CLIENT_ID || '',
-    clientSecret: process.env.SUPABASE_OAUTH_CLIENT_SECRET || '',
+    clientId,
+    clientSecret,
   });
   await saveTokens(shopId, refreshed);
   return refreshed.access_token;

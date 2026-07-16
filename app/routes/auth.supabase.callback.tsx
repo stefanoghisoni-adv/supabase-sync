@@ -56,17 +56,27 @@ export async function loader({ request }: LoaderFunctionArgs) {
     return closePage({ type: 'supabase-oauth', ok: false, error: 'invalid_state' }, appOrigin);
   }
 
+  const clientId = process.env.SUPABASE_OAUTH_CLIENT_ID;
+  const clientSecret = process.env.SUPABASE_OAUTH_CLIENT_SECRET;
+  if (!clientId || !clientSecret) {
+    console.error('[supabase callback] integrazione non configurata');
+    return closePage({ type: 'supabase-oauth', ok: false, error: 'not_configured' }, appOrigin);
+  }
+
   try {
     const tokens = await exchangeCode({
       code,
-      clientId: process.env.SUPABASE_OAUTH_CLIENT_ID || '',
-      clientSecret: process.env.SUPABASE_OAUTH_CLIENT_SECRET || '',
+      clientId,
+      clientSecret,
       redirectUri: `${appOrigin}/auth/supabase/callback`,
     });
     await saveTokens(verified.shopId, tokens);
     return closePage({ type: 'supabase-oauth', ok: true }, appOrigin);
   } catch (e) {
-    console.error('[supabase callback] exchange fallito:', e);
+    console.error(
+      '[supabase callback] exchange fallito:',
+      e instanceof Error ? e.message : 'errore sconosciuto',
+    );
     return closePage({ type: 'supabase-oauth', ok: false, error: 'exchange_failed' }, appOrigin);
   }
 }
