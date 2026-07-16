@@ -208,3 +208,15 @@ export async function createProject(
   const ref = String(data.id ?? data.ref);
   return { ref };
 }
+
+export async function getProject(
+  accessToken: string,
+  ref: string,
+): Promise<{ status: string }> {
+  const res = await fetch(`${MGMT_BASE}/v1/projects/${ref}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!res.ok) throw new Error(`Supabase get project error: ${res.status}`);
+  const data = (await res.json()) as { status?: unknown };
+  return { status: String(data.status ?? 'UNKNOWN') };
+}

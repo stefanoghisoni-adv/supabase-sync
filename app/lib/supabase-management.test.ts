@@ -8,6 +8,7 @@ import {
   projectUrl,
   listRegions,
   createProject,
+  getProject,
 } from './supabase-management.server';
 
 global.fetch = vi.fn();
@@ -153,5 +154,21 @@ describe('createProject', () => {
     await expect(
       createProject('tok', { name: 'x', organizationId: 'o', region: 'eu-central-1', dbPass: 'p' }),
     ).rejects.toThrow('403');
+  });
+});
+
+describe('getProject', () => {
+  beforeEach(() => (global.fetch as any).mockReset());
+
+  it('GET /v1/projects/{ref} e ritorna lo status', async () => {
+    const mockFetch = global.fetch as any;
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ id: 'r1', status: 'ACTIVE_HEALTHY' }),
+    });
+    const res = await getProject('tok', 'r1');
+    expect(res.status).toBe('ACTIVE_HEALTHY');
+    const [url] = mockFetch.mock.calls[0];
+    expect(url).toBe('https://api.supabase.com/v1/projects/r1');
   });
 });
