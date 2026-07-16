@@ -126,7 +126,13 @@ export default function Dashboard() {
       id: 'connect-supabase',
       title: 'Collega Supabase',
       state: steps.connectSupabase,
-      content: <SupabaseConnect />,
+      content: (
+        <SupabaseConnect
+          connected={supabaseConnected}
+          projectName={shop.supabaseConfig?.supabaseProjectRef ?? undefined}
+          projectUrl={shop.supabaseConfig?.supabaseUrl ?? undefined}
+        />
+      ),
     },
     {
       id: 'sync',

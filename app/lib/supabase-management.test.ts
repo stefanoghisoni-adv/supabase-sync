@@ -4,7 +4,12 @@ import {
   exchangeCode,
   listProjects,
   getProjectApiKeys,
+  listOrganizations,
   projectUrl,
+  listRegions,
+  createProject,
+  getProject,
+  resetDbPassword,
 } from './supabase-management.server';
 
 global.fetch = vi.fn();
@@ -78,8 +83,111 @@ describe('getProjectApiKeys', () => {
   });
 });
 
+describe('listOrganizations', () => {
+  beforeEach(() => (global.fetch as any).mockReset());
+
+  it('GET /v1/organizations e mappa id/name', async () => {
+    const mockFetch = global.fetch as any;
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => [{ id: 'org1', name: 'Stefano Ghisoni', extra: 1 }],
+    });
+    const orgs = await listOrganizations('tok');
+    expect(orgs).toEqual([{ id: 'org1', name: 'Stefano Ghisoni' }]);
+    const [url, init] = mockFetch.mock.calls[0];
+    expect(url).toBe('https://api.supabase.com/v1/organizations');
+    expect(init.headers.Authorization).toBe('Bearer tok');
+  });
+
+  it('lancia in errore su risposta non ok', async () => {
+    (global.fetch as any).mockResolvedValueOnce({ ok: false, status: 500 });
+    await expect(listOrganizations('tok')).rejects.toThrow();
+  });
+});
+
 describe('projectUrl', () => {
   it('derives the project URL from the ref', () => {
     expect(projectUrl('abcd')).toBe('https://abcd.supabase.co');
+  });
+});
+
+describe('listRegions', () => {
+  beforeEach(() => (global.fetch as any).mockReset());
+
+  it('ritorna la lista di fallback se l\'endpoint dinamico fallisce', async () => {
+    (global.fetch as any).mockResolvedValueOnce({ ok: false, status: 404 });
+    const regions = await listRegions('tok');
+    expect(regions.length).toBeGreaterThan(0);
+    expect(regions.every((r) => typeof r.id === 'string' && typeof r.name === 'string')).toBe(true);
+    // deve contenere una region UE di default
+    expect(regions.some((r) => r.id === 'eu-central-1')).toBe(true);
+  });
+});
+
+describe('createProject', () => {
+  beforeEach(() => (global.fetch as any).mockReset());
+
+  it('POST /v1/projects con body corretto e ritorna il ref', async () => {
+    const mockFetch = global.fetch as any;
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ id: 'newref123', name: 'My Project' }),
+    });
+    const res = await createProject('tok', {
+      name: 'My Project',
+      organizationId: 'org1',
+      region: 'eu-central-1',
+      dbPass: 'Secret-123',
+    });
+    expect(res).toEqual({ ref: 'newref123' });
+    const [url, init] = mockFetch.mock.calls[0];
+    expect(url).toBe('https://api.supabase.com/v1/projects');
+    expect(init.method).toBe('POST');
+    const body = JSON.parse(init.body);
+    expect(body.name).toBe('My Project');
+    expect(body.organization_id).toBe('org1');
+    expect(body.region).toBe('eu-central-1');
+    expect(body.db_pass).toBe('Secret-123');
+  });
+
+  it('lancia in errore su risposta non ok (incl. 403 scope insufficiente)', async () => {
+    (global.fetch as any).mockResolvedValueOnce({ ok: false, status: 403 });
+    await expect(
+      createProject('tok', { name: 'x', organizationId: 'o', region: 'eu-central-1', dbPass: 'p' }),
+    ).rejects.toThrow('403');
+  });
+});
+
+describe('getProject', () => {
+  beforeEach(() => (global.fetch as any).mockReset());
+
+  it('GET /v1/projects/{ref} e ritorna lo status', async () => {
+    const mockFetch = global.fetch as any;
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ id: 'r1', status: 'ACTIVE_HEALTHY' }),
+    });
+    const res = await getProject('tok', 'r1');
+    expect(res.status).toBe('ACTIVE_HEALTHY');
+    const [url] = mockFetch.mock.calls[0];
+    expect(url).toBe('https://api.supabase.com/v1/projects/r1');
+  });
+});
+
+describe('resetDbPassword', () => {
+  beforeEach(() => (global.fetch as any).mockReset());
+
+  it('invia la nuova password al progetto e risolve su ok', async () => {
+    const mockFetch = global.fetch as any;
+    mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({}) });
+    await expect(resetDbPassword('tok', 'r1', 'NewPass-9')).resolves.toBeUndefined();
+    const [url, init] = mockFetch.mock.calls[0];
+    expect(url).toContain('https://api.supabase.com/v1/projects/r1');
+    expect(String(init.body)).toContain('NewPass-9');
+  });
+
+  it('segnala unsupported su 404', async () => {
+    (global.fetch as any).mockResolvedValueOnce({ ok: false, status: 404 });
+    await expect(resetDbPassword('tok', 'r1', 'p')).rejects.toThrow('unsupported');
   });
 });

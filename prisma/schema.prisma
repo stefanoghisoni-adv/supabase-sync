@@ -61,6 +61,8 @@ model SupabaseConfig {
   supabaseUrl            String   @map("supabase_url")
   supabasePublicKey      String   @map("supabase_public_key")
   supabaseServiceRoleKey String   @map("supabase_service_role_key")
+  supabaseDbPassword     String?  @map("supabase_db_password")
+  supabaseProjectRef     String?  @map("supabase_project_ref")
   tableNameProducts      String   @default("products") @map("table_name_products")
   tableNameCustomers     String   @default("customers") @map("table_name_customers")
   syncEnabled            Boolean  @default(false) @map("sync_enabled")
