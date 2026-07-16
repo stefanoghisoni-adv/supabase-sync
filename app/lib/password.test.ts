@@ -15,10 +15,17 @@ describe('generateDbPassword', () => {
     expect(generateDbPassword()).not.toBe(generateDbPassword());
   });
 
-  it('contiene almeno una minuscola, una maiuscola e una cifra', () => {
-    const p = generateDbPassword(40);
-    expect(p).toMatch(/[a-z]/);
-    expect(p).toMatch(/[A-Z]/);
-    expect(p).toMatch(/[0-9]/);
+  it('garantisce lowercase, uppercase e cifra anche alla lunghezza minima, su molte iterazioni', () => {
+    for (let i = 0; i < 1000; i++) {
+      const p = generateDbPassword(4);
+      expect(p).toHaveLength(4);
+      expect(p).toMatch(/[a-z]/);
+      expect(p).toMatch(/[A-Z]/);
+      expect(p).toMatch(/[0-9]/);
+    }
+  });
+
+  it('lancia se la lunghezza è inferiore a 4', () => {
+    expect(() => generateDbPassword(3)).toThrow();
   });
 });
