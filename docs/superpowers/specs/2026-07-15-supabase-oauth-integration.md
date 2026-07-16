@@ -141,6 +141,33 @@ model SupabaseOAuthToken {
   restituita al frontend, mai loggata.
 - **Nessun segreto lato client:** `client_secret` solo server-side (env var Vercel).
 
+### 5.1 Modello di minaccia "Account-Linking CSRF" (rischio residuo accettato)
+
+Rilevato da una security review automatica sul callback (`auth.supabase.callback.tsx`),
+che ricava lo `shopId` **esclusivamente dallo `state` firmato** (il callback gira in un
+popup senza sessione Shopify).
+
+- **Scenario grave — MITIGATO.** Un attaccante non può dirottare il collegamento del
+  negozio di una vittima: lo `state` è firmato HMAC (`ENCRYPTION_SECRET`, TTL 10 min,
+  confronto `timingSafeEqual`) ed è coniato **solo** da `POST /api/supabase/oauth-url`, che
+  è autenticato (`authenticate.admin`) e lo emette **unicamente per lo shop del chiamante**.
+  Non essendo forgiabile uno `state` per un altro shop, non è possibile iniettare un `code`
+  Supabase per collegare il proprio account al negozio altrui.
+- **Residuo — ACCETTATO (bassa severità, phishing-gated).** Un merchant malevolo potrebbe
+  attirare una vittima a completare *attivamente* il consenso Supabase partendo da un link
+  con il proprio `state`, collegando così il Supabase della vittima al **proprio** shop.
+  Richiede social engineering e il completamento manuale della schermata di consenso Supabase.
+- **Perché non si applica il fix "da manuale" (cookie-nonce legato alla sessione).** Il
+  callback è un popup senza sessione e l'app è **embedded in Shopify**: un cookie-nonce
+  first-party del nostro dominio impostato/letto dall'iframe dipende dai cookie di terze
+  parti, sempre più bloccati (Safari ITP, Chrome). Introdurrebbe complessità e un falso senso
+  di sicurezza per un beneficio inaffidabile in produzione. Per questo il design resta sullo
+  `state` firmato/stateless.
+- **Hardening futuro (se il residuo diventasse rilevante).** Rafforzare la conferma finale
+  nel contesto pienamente autenticato — `POST /api/supabase/select-project` gira già sotto
+  `authenticate.admin` — e/o rivalutare il cookie-nonce quando i vincoli sui cookie di terze
+  parti nel contesto embedded lo renderanno affidabile.
+
 ---
 
 ## 6. Gestione errori (tutti → banner chiaro nello Step 1 + pulsante riabilitato)
