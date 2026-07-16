@@ -265,9 +265,14 @@ export function SupabaseConnect({ connected, projectName, projectUrl }: Supabase
             activator={
               <Combobox.TextField
                 prefix={<Icon source={SearchIcon} />}
-                onChange={setQuery}
+                onChange={(v) => {
+                  setQuery(v);
+                  // Ricominciare a digitare annulla la selezione, così il
+                  // campo mostra ciò che si sta cercando e la lista si rifiltra.
+                  if (selectedRef) setSelectedRef('');
+                }}
                 label="Progetto Supabase"
-                value={selectedName || query}
+                value={selectedRef ? selectedName : query}
                 placeholder="Seleziona un progetto…"
                 autoComplete="off"
               />
@@ -325,7 +330,7 @@ export function SupabaseConnect({ connected, projectName, projectUrl }: Supabase
                   <Button
                     onClick={regenerate}
                     loading={regenFetcher.state !== 'idle'}
-                    disabled={!creatingRef}
+                    disabled={!creatingRef || provisioning}
                   >
                     Rigenera password
                   </Button>
