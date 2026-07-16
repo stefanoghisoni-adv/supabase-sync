@@ -5,7 +5,7 @@ import { authenticate } from '~/shopify.server';
 import { prisma } from '~/db.server';
 import { encrypt } from '~/utils/crypto.server';
 import { getValidAccessToken } from '~/lib/supabase-oauth.server';
-import { listOrganizations, createProject } from '~/lib/supabase-management.server';
+import { listProjects, listOrganizations, createProject } from '~/lib/supabase-management.server';
 import { generateDbPassword } from '~/lib/password.server';
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -20,14 +20,39 @@ export async function action({ request }: ActionFunctionArgs) {
 
   try {
     const token = await getValidAccessToken(shop.id);
-    const orgs = await listOrganizations(token);
-    if (orgs.length === 0) {
-      return json({ ok: false, error: 'Nessuna organizzazione Supabase trovata' }, { status: 400 });
+
+    // Ricava l'organization_id senza dipendere dallo scope "Organizations"
+    // (non concesso): i progetti esistenti — leggibili con Projects:Read, già
+    // concesso — portano già l'organization_id. Solo per account a zero progetti
+    // si ricade su listOrganizations, che richiede lo scope dedicato.
+    let organizationId: string | undefined;
+    const projects = await listProjects(token);
+    if (projects.length > 0) {
+      organizationId = projects[0].organization_id;
+    } else {
+      try {
+        const orgs = await listOrganizations(token);
+        organizationId = orgs[0]?.id;
+      } catch {
+        return json(
+          {
+            ok: false,
+            error:
+              "Non riesco a determinare l'organizzazione: crea il primo progetto dalla dashboard Supabase, poi ricollega.",
+            code: 'no_org',
+          },
+          { status: 400 },
+        );
+      }
     }
+    if (!organizationId) {
+      return json({ ok: false, error: 'Nessuna organizzazione Supabase trovata.' }, { status: 400 });
+    }
+
     const dbPass = generateDbPassword();
     const { ref } = await createProject(token, {
       name: body.name,
-      organizationId: orgs[0].id,
+      organizationId,
       region: body.region,
       dbPass,
     });
