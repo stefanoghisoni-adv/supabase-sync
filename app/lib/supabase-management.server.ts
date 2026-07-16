@@ -142,3 +142,42 @@ export async function listOrganizations(
 export function projectUrl(ref: string): string {
   return `https://${ref}.supabase.co`;
 }
+
+export interface SupabaseRegion {
+  id: string;
+  name: string;
+}
+
+// Lista ufficiale corrente (fallback). Ordine con UE in cima come default sensato.
+export const SUPABASE_REGIONS: SupabaseRegion[] = [
+  { id: 'eu-central-1', name: 'Central EU (Frankfurt)' },
+  { id: 'eu-west-1', name: 'West EU (Ireland)' },
+  { id: 'eu-west-2', name: 'West EU (London)' },
+  { id: 'eu-west-3', name: 'West EU (Paris)' },
+  { id: 'us-east-1', name: 'East US (North Virginia)' },
+  { id: 'us-west-1', name: 'West US (North California)' },
+  { id: 'us-east-2', name: 'East US (Ohio)' },
+  { id: 'ap-southeast-1', name: 'Southeast Asia (Singapore)' },
+  { id: 'ap-northeast-1', name: 'Northeast Asia (Tokyo)' },
+  { id: 'ap-south-1', name: 'South Asia (Mumbai)' },
+  { id: 'sa-east-1', name: 'South America (São Paulo)' },
+  { id: 'ca-central-1', name: 'Canada (Central)' },
+];
+
+// Tenta un endpoint dinamico; se non disponibile, usa la lista di fallback.
+// NOTA IMPLEMENTAZIONE: verificare se la Management API espone un endpoint
+// "available regions". Se sì, sostituire il path e il parsing qui; il fallback
+// garantisce comunque il funzionamento.
+export async function listRegions(accessToken: string): Promise<SupabaseRegion[]> {
+  try {
+    const res = await fetch(`${MGMT_BASE}/v1/projects/available-regions`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) return SUPABASE_REGIONS;
+    const data = (await res.json()) as Array<Record<string, unknown>>;
+    if (!Array.isArray(data) || data.length === 0) return SUPABASE_REGIONS;
+    return data.map((r) => ({ id: String(r.id ?? r.region), name: String(r.name ?? r.id) }));
+  } catch {
+    return SUPABASE_REGIONS;
+  }
+}

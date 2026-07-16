@@ -6,6 +6,7 @@ import {
   getProjectApiKeys,
   listOrganizations,
   projectUrl,
+  listRegions,
 } from './supabase-management.server';
 
 global.fetch = vi.fn();
@@ -104,5 +105,18 @@ describe('listOrganizations', () => {
 describe('projectUrl', () => {
   it('derives the project URL from the ref', () => {
     expect(projectUrl('abcd')).toBe('https://abcd.supabase.co');
+  });
+});
+
+describe('listRegions', () => {
+  beforeEach(() => (global.fetch as any).mockReset());
+
+  it('ritorna la lista di fallback se l\'endpoint dinamico fallisce', async () => {
+    (global.fetch as any).mockResolvedValueOnce({ ok: false, status: 404 });
+    const regions = await listRegions('tok');
+    expect(regions.length).toBeGreaterThan(0);
+    expect(regions.every((r) => typeof r.id === 'string' && typeof r.name === 'string')).toBe(true);
+    // deve contenere una region UE di default
+    expect(regions.some((r) => r.id === 'eu-central-1')).toBe(true);
   });
 });
