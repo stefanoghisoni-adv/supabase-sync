@@ -7,6 +7,7 @@ import {
   listOrganizations,
   projectUrl,
   listRegions,
+  createProject,
 } from './supabase-management.server';
 
 global.fetch = vi.fn();
@@ -118,5 +119,39 @@ describe('listRegions', () => {
     expect(regions.every((r) => typeof r.id === 'string' && typeof r.name === 'string')).toBe(true);
     // deve contenere una region UE di default
     expect(regions.some((r) => r.id === 'eu-central-1')).toBe(true);
+  });
+});
+
+describe('createProject', () => {
+  beforeEach(() => (global.fetch as any).mockReset());
+
+  it('POST /v1/projects con body corretto e ritorna il ref', async () => {
+    const mockFetch = global.fetch as any;
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ id: 'newref123', name: 'My Project' }),
+    });
+    const res = await createProject('tok', {
+      name: 'My Project',
+      organizationId: 'org1',
+      region: 'eu-central-1',
+      dbPass: 'Secret-123',
+    });
+    expect(res).toEqual({ ref: 'newref123' });
+    const [url, init] = mockFetch.mock.calls[0];
+    expect(url).toBe('https://api.supabase.com/v1/projects');
+    expect(init.method).toBe('POST');
+    const body = JSON.parse(init.body);
+    expect(body.name).toBe('My Project');
+    expect(body.organization_id).toBe('org1');
+    expect(body.region).toBe('eu-central-1');
+    expect(body.db_pass).toBe('Secret-123');
+  });
+
+  it('lancia in errore su risposta non ok (incl. 403 scope insufficiente)', async () => {
+    (global.fetch as any).mockResolvedValueOnce({ ok: false, status: 403 });
+    await expect(
+      createProject('tok', { name: 'x', organizationId: 'o', region: 'eu-central-1', dbPass: 'p' }),
+    ).rejects.toThrow('403');
   });
 });

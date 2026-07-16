@@ -24,6 +24,10 @@ export interface SupabaseOrganization {
   name: string;
 }
 
+export interface SupabaseCreateProjectResult {
+  ref: string;
+}
+
 export function buildAuthorizeUrl(params: {
   clientId: string;
   redirectUri: string;
@@ -180,4 +184,27 @@ export async function listRegions(accessToken: string): Promise<SupabaseRegion[]
   } catch {
     return SUPABASE_REGIONS;
   }
+}
+
+export async function createProject(
+  accessToken: string,
+  params: { name: string; organizationId: string; region: string; dbPass: string },
+): Promise<SupabaseCreateProjectResult> {
+  const res = await fetch(`${MGMT_BASE}/v1/projects`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      name: params.name,
+      organization_id: params.organizationId,
+      region: params.region,
+      db_pass: params.dbPass,
+    }),
+  });
+  if (!res.ok) throw new Error(`Supabase create project error: ${res.status}`);
+  const data = (await res.json()) as { id?: unknown; ref?: unknown };
+  const ref = String(data.id ?? data.ref);
+  return { ref };
 }
