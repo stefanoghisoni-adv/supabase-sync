@@ -18,22 +18,17 @@ import { Stepper, type StepperItem } from '~/components/Dashboard/Stepper';
 import { resolveStepStates } from '~/components/Dashboard/stepper-state';
 import { SupabaseConnect } from '~/components/Dashboard/SupabaseConnect';
 import { prisma } from '~/db.server';
+import { getOrCreateShop } from '~/utils/shop.server';
 import { syncQueue } from '~/lib/queue/queues.server';
 import { authenticate } from '~/shopify.server';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   try {
     const { session } = await authenticate.admin(request);
-    const shopDomain = session.shop;
 
-    const shop = await prisma.shop.findUnique({
-      where: { shopDomain },
-      include: { supabaseConfig: true },
-    });
-
-    if (!shop) {
-      throw new Response('Shop not found', { status: 404 });
-    }
+    // Self-heal: crea il record shop se manca (reinstall, cancellazione manuale,
+    // race durante l'embedded auth) invece di mandare l'app in 404.
+    const shop = await getOrCreateShop(session);
 
     const plan = await prisma.plan.findUnique({
       where: { planName: shop.currentPlan },
@@ -72,23 +67,26 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 export async function action({ request }: ActionFunctionArgs) {
   const { session } = await authenticate.admin(request);
-  const shopDomain = session.shop;
 
-  const shop = await prisma.shop.findUnique({
-    where: { shopDomain },
-  });
+  try {
+    const shop = await getOrCreateShop(session);
 
-  if (!shop) {
-    return json({ error: 'Shop not found' }, { status: 404 });
+    // Trigger manual sync (BullMQ signature: add(jobName, data))
+    await syncQueue.add('manual-sync', {
+      type: 'manual-sync',
+      shopId: shop.id,
+    });
+
+    return json({ ok: true });
+  } catch (err) {
+    // La coda (BullMQ/Redis) può fallire su serverless: non far crashare la
+    // pagina con "Unexpected Server Error", restituisci un errore gestito.
+    console.error('[dashboard action] sync non avviata:', err instanceof Error ? err.message : 'errore sconosciuto');
+    return json(
+      { error: "Impossibile avviare la sincronizzazione. Riprova tra poco." },
+      { status: 502 },
+    );
   }
-
-  // Trigger manual sync (BullMQ signature: add(jobName, data))
-  await syncQueue.add('manual-sync', {
-    type: 'manual-sync',
-    shopId: shop.id,
-  });
-
-  return json({ ok: true });
 }
 
 interface StatsResponse {

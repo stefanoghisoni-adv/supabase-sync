@@ -9,6 +9,7 @@ import {
 import { PrismaSessionStorage } from '@shopify/shopify-app-session-storage-prisma';
 import { prisma } from '~/db.server';
 import { encrypt } from '~/utils/crypto.server';
+import { shopCreateData } from '~/utils/shop.server';
 
 const shopify = shopifyApp({
   apiKey: process.env.SHOPIFY_API_KEY,
@@ -30,15 +31,7 @@ const shopify = shopifyApp({
     afterAuth: async ({ session }) => {
       await prisma.shop.upsert({
         where: { shopDomain: session.shop },
-        create: {
-          shopDomain: session.shop,
-          accessToken: encrypt(session.accessToken ?? ''),
-          scopes: session.scope ?? '',
-          currentPlan: 'free',
-          isInTrial: true,
-          trialEndsAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-          installedAt: new Date(),
-        },
+        create: shopCreateData(session),
         update: {
           accessToken: encrypt(session.accessToken ?? ''),
           scopes: session.scope ?? '',
