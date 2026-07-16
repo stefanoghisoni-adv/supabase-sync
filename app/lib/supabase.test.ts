@@ -18,6 +18,8 @@ describe('Supabase client factory', () => {
       supabaseUrl: 'https://test.supabase.co',
       supabasePublicKey: 'encrypted_public',
       supabaseServiceRoleKey: 'encrypted_service',
+      supabaseDbPassword: null,
+      supabaseProjectRef: null,
       tableNameProducts: 'products',
       tableNameCustomers: 'customers',
       syncEnabled: true,
