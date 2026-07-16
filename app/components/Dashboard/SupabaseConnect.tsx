@@ -194,7 +194,7 @@ export function SupabaseConnect({ connected, projectName, projectUrl }: Supabase
       clearInterval(timer);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [provisioning, creatingRef]);
+  }, [provisioning, creatingRef, selectFetcher]);
 
   const submitCreate = useCallback(() => {
     setCreateError(null);
