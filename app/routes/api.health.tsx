@@ -5,45 +5,56 @@ import { prisma } from '~/db.server';
 // Marcatore di versione: cambia a ogni deploy che tocca questa route, così
 // interrogando /api/health si conferma QUALE build è effettivamente live in
 // produzione (utile per distinguere un deploy vecchio da uno aggiornato).
-const HEALTH_VERSION = 'auth-diag-1';
+const HEALTH_VERSION = 'auth-diag-2';
 
-// Health check pubblico. Ritorna lo stato di connessione al database e alcune
-// informazioni di readiness dello schema — nessuna credenziale, nessun dato
-// per-negozio (solo conteggi aggregati per stato di autorizzazione).
+const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
+
+// Health check pubblico + diagnostica di readiness dello schema. Ogni controllo
+// è isolato: un fallimento in uno step NON maschera gli altri, così si vede
+// esattamente QUALE boundary rompe (connettività / colonna / distribuzione).
 export async function loader(_args: LoaderFunctionArgs) {
+  const result: Record<string, unknown> = {
+    status: 'ok',
+    version: HEALTH_VERSION,
+  };
+
+  // Step 1 — connettività di base.
   try {
     await prisma.$queryRaw`SELECT 1`;
+    result.database = true;
+  } catch (e) {
+    return json(
+      { ...result, status: 'degraded', database: false, dbError: errMsg(e) },
+      { status: 503 },
+    );
+  }
 
-    // La colonna shops.authorization esiste nel DB di produzione? Se una
-    // migrazione non è stata applicata, questo lo rende evidente.
+  // Step 2 — la colonna shops.authorization esiste nel DB di produzione?
+  try {
     const colRows = await prisma.$queryRaw<{ exists: boolean }[]>`
       SELECT EXISTS (
         SELECT 1 FROM information_schema.columns
         WHERE table_name = 'shops' AND column_name = 'authorization'
       ) AS "exists"`;
-    const authorizationColumn = colRows[0]?.exists ?? false;
-
-    // Distribuzione aggregata dei valori di autorizzazione (nessun shop_domain).
-    let authorizationCounts: Record<string, number> | null = null;
-    if (authorizationColumn) {
-      const grouped = await prisma.shop.groupBy({
-        by: ['authorization'],
-        _count: { _all: true },
-      });
-      authorizationCounts = Object.fromEntries(
-        grouped.map((g) => [g.authorization, g._count._all]),
-      );
-    }
-
-    return json({
-      status: 'ok',
-      database: true,
-      version: HEALTH_VERSION,
-      authorizationColumn,
-      authorizationCounts,
-    });
-  } catch (error) {
-    console.error('[health] Database check failed:', error);
-    return json({ status: 'degraded', database: false }, { status: 503 });
+    result.authorizationColumn = colRows[0]?.exists ?? false;
+  } catch (e) {
+    result.authorizationColumn = null;
+    result.columnCheckError = errMsg(e);
   }
+
+  // Step 3 — distribuzione aggregata dei valori (nessun shop_domain).
+  try {
+    const grouped = await prisma.shop.groupBy({
+      by: ['authorization'],
+      _count: { _all: true },
+    });
+    result.authorizationCounts = Object.fromEntries(
+      grouped.map((g) => [g.authorization, g._count._all]),
+    );
+  } catch (e) {
+    result.authorizationCounts = null;
+    result.countsError = errMsg(e);
+  }
+
+  return json(result);
 }
