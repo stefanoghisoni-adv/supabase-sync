@@ -1,4 +1,5 @@
 import type { ShopifyProduct } from '~/types/shopify';
+import { isVariantReady } from './product-readiness';
 
 // Shopify limita a 100 gli id per chiamata a inventory_items.json.
 const BATCH = 100;
@@ -40,4 +41,25 @@ export async function enrichVariantCosts(
     }
   }
   return products;
+}
+
+/**
+ * Re-check mirato: dati gli inventory item id delle varianti che erano
+ * problematiche, ritorna quelli a cui MANCA ANCORA il cost_per_item. Serve al
+ * pulsante "Ricontrolla" per rimuovere dalla tabella le varianti risolte.
+ */
+export async function getMissingCostInventoryIds(
+  client: InventoryReader,
+  ids: number[],
+): Promise<number[]> {
+  if (ids.length === 0) return [];
+  const missing: number[] = [];
+  for (let i = 0; i < ids.length; i += BATCH) {
+    const chunk = ids.slice(i, i + BATCH);
+    const items = await client.getInventoryItems(chunk);
+    for (const it of items) {
+      if (!isVariantReady(it.cost)) missing.push(it.id);
+    }
+  }
+  return missing;
 }

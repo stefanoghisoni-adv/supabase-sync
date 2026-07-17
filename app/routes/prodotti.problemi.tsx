@@ -1,30 +1,37 @@
 // app/routes/prodotti.problemi.tsx
-// Tab dedicata: elenco delle varianti a cui manca cost_per_item, con campo
-// editabile che scrive il costo direttamente su Shopify (via inventory_items).
+// Tab dedicata: varianti a cui manca cost_per_item, con campo editabile che scrive
+// il costo su Shopify E su Supabase; tic verde a riga salvata; pulsante globale
+// "Ricontrolla" che rimuove le varianti risolte e aggiorna il conteggio.
 import type { ActionFunctionArgs, LoaderFunctionArgs } from '@remix-run/node';
 import { json } from '@remix-run/node';
 import { useLoaderData, useFetcher } from '@remix-run/react';
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Page,
   Card,
   Box,
   IndexTable,
   Banner,
+  Button,
   Text,
   Link,
-  Badge,
+  Icon,
   Spinner,
   TextField,
   InlineStack,
   BlockStack,
 } from '@shopify/polaris';
+import { CheckCircleIcon } from '@shopify/polaris-icons';
 import { authenticate } from '~/shopify.server';
 import { prisma } from '~/db.server';
 import { isAuthorized } from '~/utils/authorization.server';
 import { ShopifyAPIClient } from '~/lib/shopify-api.server';
+import { createSupabaseClient } from '~/lib/supabase.server';
 import type { ShopifyProduct } from '~/types/shopify';
-import { enrichVariantCosts } from '~/lib/stats/inventory-cost.server';
+import {
+  enrichVariantCosts,
+  getMissingCostInventoryIds,
+} from '~/lib/stats/inventory-cost.server';
 import {
   collectProblemVariants,
   type ProblemVariant,
@@ -79,11 +86,11 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const shop = await prisma.shop.findUnique({
     where: { shopDomain: session.shop },
+    include: { supabaseConfig: true },
   });
   if (!shop) {
     return json({ ok: false, error: 'Negozio non trovato.' }, { status: 404 });
   }
-  // Enforcement server-side: nessuna scrittura se il negozio non è ENABLED.
   if (!isAuthorized(shop.authorization)) {
     return json(
       { ok: false, error: "L'utilizzo dell'app è sospeso per questo negozio." },
@@ -92,10 +99,34 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   const body = (await request.json()) as {
+    intent?: string;
+    variantId?: number | string;
     inventoryItemId?: number | string;
+    inventoryItemIds?: number[];
     cost?: string;
   };
 
+  const client = new ShopifyAPIClient(shop.shopDomain, shop.accessToken);
+
+  // --- Re-check mirato: quali varianti hanno ANCORA il costo mancante ---
+  if (body.intent === 'recheck') {
+    const ids = (body.inventoryItemIds ?? [])
+      .map((n) => Number(n))
+      .filter((n) => Number.isInteger(n) && n > 0);
+    try {
+      const stillProblematic = await getMissingCostInventoryIds(client, ids);
+      return json({ ok: true, stillProblematic });
+    } catch (err) {
+      console.error('[prodotti.problemi recheck] fallito:', err);
+      return json(
+        { ok: false, error: 'Ricontrollo non riuscito. Riprova.' },
+        { status: 502 },
+      );
+    }
+  }
+
+  // --- Salvataggio del cost_per_item su Shopify + Supabase ---
+  const variantId = Number(body.variantId);
   const inventoryItemId = Number(body.inventoryItemId);
   const cost = String(body.cost ?? '').trim().replace(',', '.');
   const parsed = Number(cost);
@@ -107,17 +138,40 @@ export async function action({ request }: ActionFunctionArgs) {
     return json({ ok: false, error: 'Inserisci un costo valido (≥ 0).' }, { status: 400 });
   }
 
+  // 1) Shopify (fonte di verità del cost_per_item, sull'InventoryItem)
   try {
-    const client = new ShopifyAPIClient(shop.shopDomain, shop.accessToken);
     await client.updateInventoryItemCost(inventoryItemId, cost);
-    return json({ ok: true, inventoryItemId });
   } catch (err) {
-    console.error('[prodotti.problemi action] update cost fallito:', err);
+    console.error('[prodotti.problemi save] update Shopify fallito:', err);
     return json(
       { ok: false, error: 'Salvataggio su Shopify non riuscito. Riprova.' },
       { status: 502 },
     );
   }
+
+  // 2) Supabase (se collegato): allinea subito la riga, senza attendere la sync
+  if (shop.supabaseConfig?.connectionVerifiedAt && Number.isInteger(variantId)) {
+    try {
+      const supabase = createSupabaseClient(shop.supabaseConfig);
+      const { error: sbError } = await supabase
+        .from(shop.supabaseConfig.tableNameProducts)
+        .update({ cost_per_item: parsed })
+        .eq('shopify_variant_id', variantId);
+      if (sbError) throw sbError;
+    } catch (err) {
+      console.error('[prodotti.problemi save] update Supabase fallito:', err);
+      return json(
+        {
+          ok: false,
+          error:
+            'Costo salvato su Shopify ma non su Supabase. Riprova per allineare i dati.',
+        },
+        { status: 502 },
+      );
+    }
+  }
+
+  return json({ ok: true });
 }
 
 function CostRow({
@@ -125,22 +179,35 @@ function CostRow({
   index,
   shopDomain,
   blocked,
+  value,
+  onChangeValue,
+  saved,
+  onSaved,
 }: {
   row: ProblemVariant;
   index: number;
   shopDomain: string;
   blocked: boolean;
+  value: string;
+  onChangeValue: (variantId: number, value: string) => void;
+  saved: boolean;
+  onSaved: (variantId: number) => void;
 }) {
   const fetcher = useFetcher<{ ok?: boolean; error?: string }>();
-  const [value, setValue] = useState('');
   const [localError, setLocalError] = useState<string | null>(null);
 
   const saving = fetcher.state !== 'idle';
-  const saved = fetcher.data?.ok === true;
   const serverError =
     fetcher.data && fetcher.data.ok === false ? fetcher.data.error : null;
 
+  // Notifica il parent quando il salvataggio va a buon fine (tic verde + stato).
+  useEffect(() => {
+    if (fetcher.data?.ok === true) onSaved(row.variantId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetcher.data]);
+
   const trySave = () => {
+    if (saved) return;
     const normalized = value.trim().replace(',', '.');
     if (normalized === '') return; // campo vuoto: non salvare
     const n = Number(normalized);
@@ -154,7 +221,11 @@ function CostRow({
     }
     setLocalError(null);
     fetcher.submit(
-      { inventoryItemId: row.inventoryItemId, cost: normalized },
+      {
+        variantId: row.variantId,
+        inventoryItemId: row.inventoryItemId,
+        cost: normalized,
+      },
       { method: 'post', encType: 'application/json' },
     );
   };
@@ -172,48 +243,44 @@ function CostRow({
       <IndexTable.Cell>{row.variantTitle}</IndexTable.Cell>
       <IndexTable.Cell>{row.sku ?? '—'}</IndexTable.Cell>
       <IndexTable.Cell>
-        {saved ? (
-          <InlineStack gap="200" blockAlign="center">
-            <Text as="span" fontWeight="semibold">
-              {value}
-            </Text>
-            <Badge tone="success">Salvato</Badge>
-          </InlineStack>
-        ) : (
-          // onKeyDown a livello di wrapper: Invio conferma il salvataggio
-          // (Polaris TextField non espone direttamente l'evento tastiera).
-          <div
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                trySave();
-              }
+        <div
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              trySave();
+            }
+          }}
+        >
+          <TextField
+            label="cost_per_item"
+            labelHidden
+            type="number"
+            inputMode="decimal"
+            min={0}
+            step={0.01}
+            value={value}
+            onChange={(v) => {
+              onChangeValue(row.variantId, v);
+              setLocalError(null);
             }}
-          >
-            <TextField
-              label="cost_per_item"
-              labelHidden
-              type="number"
-              inputMode="decimal"
-              min={0}
-              step={0.01}
-              value={value}
-              onChange={(v) => {
-                setValue(v);
-                setLocalError(null);
-              }}
-              onBlur={trySave}
-              placeholder="0.00"
-              autoComplete="off"
-              disabled={saving || blocked}
-              error={localError ?? serverError ?? undefined}
-              connectedRight={
-                saving ? (
-                  <Spinner accessibilityLabel="Salvataggio" size="small" />
-                ) : undefined
-              }
-            />
-          </div>
+            onBlur={trySave}
+            placeholder="0.00"
+            autoComplete="off"
+            disabled={saving || blocked || saved}
+            error={localError ?? serverError ?? undefined}
+            connectedRight={
+              saving ? (
+                <Spinner accessibilityLabel="Salvataggio" size="small" />
+              ) : undefined
+            }
+          />
+        </div>
+      </IndexTable.Cell>
+      <IndexTable.Cell>
+        {saved && (
+          <span aria-label="Salvato" title="Salvato su Shopify e Supabase">
+            <Icon source={CheckCircleIcon} tone="success" />
+          </span>
         )}
       </IndexTable.Cell>
     </IndexTable.Row>
@@ -221,7 +288,74 @@ function CostRow({
 }
 
 export default function ProblemProducts() {
-  const { rows, error, shopDomain, blocked } = useLoaderData<typeof loader>();
+  const loaderData = useLoaderData<typeof loader>();
+  const { error, shopDomain, blocked } = loaderData;
+
+  const [rows, setRows] = useState<ProblemVariant[]>(loaderData.rows);
+  const [values, setValues] = useState<Record<number, string>>({});
+  const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
+  const [removedCount, setRemovedCount] = useState(0);
+
+  const recheckFetcher = useFetcher<{
+    ok?: boolean;
+    stillProblematic?: number[];
+    error?: string;
+  }>();
+  const rechecking = recheckFetcher.state !== 'idle';
+
+  const onChangeValue = useCallback((variantId: number, value: string) => {
+    setValues((prev) => ({ ...prev, [variantId]: value }));
+  }, []);
+
+  const onSaved = useCallback((variantId: number) => {
+    setSavedIds((prev) => {
+      if (prev.has(variantId)) return prev;
+      const next = new Set(prev);
+      next.add(variantId);
+      return next;
+    });
+  }, []);
+
+  // Il pulsante globale è attivo solo se almeno un valore differisce dall'iniziale
+  // (le righe partono vuote) — o è già stato salvato qualcosa.
+  const hasChanges =
+    savedIds.size > 0 ||
+    Object.values(values).some((v) => v.trim() !== '');
+
+  const runRecheck = () => {
+    setRemovedCount(0);
+    const inventoryItemIds = rows
+      .map((r) => r.inventoryItemId)
+      .filter((x): x is number => x != null);
+    recheckFetcher.submit(
+      { intent: 'recheck', inventoryItemIds },
+      { method: 'post', encType: 'application/json' },
+    );
+  };
+
+  // Esito re-check: tieni solo le varianti ancora problematiche; le risolte
+  // spariscono dalla tabella (e il conteggio in Dashboard si aggiorna al ritorno).
+  useEffect(() => {
+    const data = recheckFetcher.data;
+    if (!data?.ok || !data.stillProblematic) return;
+    const still = new Set(data.stillProblematic);
+    setRows((prev) => {
+      const kept = prev.filter(
+        (r) => r.inventoryItemId == null || still.has(r.inventoryItemId),
+      );
+      setRemovedCount(prev.length - kept.length);
+      const keptIds = new Set(kept.map((r) => r.variantId));
+      // Ripulisci gli stati collegati alle righe rimosse.
+      setValues((v) => {
+        const next: Record<number, string> = {};
+        for (const id of keptIds) if (v[id] !== undefined) next[id] = v[id];
+        return next;
+      });
+      setSavedIds((s) => new Set([...s].filter((id) => keptIds.has(id))));
+      return kept;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recheckFetcher.data]);
 
   return (
     <Page title="Prodotti con problemi" backAction={{ url: '/' }}>
@@ -235,6 +369,18 @@ export default function ProblemProducts() {
           </Banner>
         )}
 
+        {recheckFetcher.data?.ok === false && (
+          <Banner tone="critical">{recheckFetcher.data.error}</Banner>
+        )}
+
+        {removedCount > 0 && (
+          <Banner tone="success" onDismiss={() => setRemovedCount(0)}>
+            {removedCount}{' '}
+            {removedCount === 1 ? 'variante risolta e rimossa' : 'varianti risolte e rimosse'}{' '}
+            dall'elenco. Il conteggio in Dashboard si aggiorna al prossimo accesso.
+          </Banner>
+        )}
+
         {!error && rows.length === 0 && (
           <Banner tone="success">
             Nessun prodotto con problemi: tutte le varianti hanno il valore{' '}
@@ -245,12 +391,22 @@ export default function ProblemProducts() {
         {rows.length > 0 && (
           <Card padding="0">
             <Box padding="400">
-              <Text as="p" tone="subdued">
-                {rows.length}{' '}
-                {rows.length === 1 ? 'variante' : 'varianti'} a cui manca il valore{' '}
-                <code>cost_per_item</code>. Inserisci il costo e premi Invio (o
-                esci dal campo): viene salvato direttamente su Shopify.
-              </Text>
+              <InlineStack align="space-between" blockAlign="center" gap="400">
+                <Text as="p" tone="subdued">
+                  {rows.length}{' '}
+                  {rows.length === 1 ? 'variante' : 'varianti'} a cui manca il valore{' '}
+                  <code>cost_per_item</code>. Inserisci il costo e premi Invio (o
+                  esci dal campo): viene salvato su Shopify e Supabase.
+                </Text>
+                <Button
+                  variant="primary"
+                  onClick={runRecheck}
+                  loading={rechecking}
+                  disabled={!hasChanges || blocked}
+                >
+                  Ricontrolla e aggiorna
+                </Button>
+              </InlineStack>
             </Box>
             <IndexTable
               resourceName={{ singular: 'variante', plural: 'varianti' }}
@@ -261,6 +417,7 @@ export default function ProblemProducts() {
                 { title: 'Variante' },
                 { title: 'SKU' },
                 { title: 'cost_per_item' },
+                { title: '' },
               ]}
             >
               {rows.map((r, i) => (
@@ -270,6 +427,10 @@ export default function ProblemProducts() {
                   index={i}
                   shopDomain={shopDomain}
                   blocked={blocked}
+                  value={values[r.variantId] ?? ''}
+                  onChangeValue={onChangeValue}
+                  saved={savedIds.has(r.variantId)}
+                  onSaved={onSaved}
                 />
               ))}
             </IndexTable>

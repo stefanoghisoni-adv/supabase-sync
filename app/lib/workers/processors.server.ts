@@ -9,6 +9,7 @@ import { createSupabaseClient } from '../supabase.server';
 import { prisma } from '../../db.server';
 import { isAuthorized } from '../../utils/authorization.server';
 import { limitProducts, isProductLimitReached } from '../limits/product-limit';
+import { enrichVariantCosts } from '../stats/inventory-cost.server';
 import type { ShopifyCustomer, ShopifyProduct } from '~/types/shopify';
 
 /**
@@ -175,6 +176,10 @@ export async function processPeriodicSyncCheck(shopId: string): Promise<void> {
       });
 
       if (products.length === 0) break;
+
+      // Il cost_per_item vive sull'InventoryItem: senza questo la sync scriverebbe
+      // sempre cost_per_item null, azzerando anche i valori inseriti a mano.
+      await enrichVariantCosts(shopifyClient, products);
 
       // Process each product individually for delta detection
       for (const product of products) {
@@ -367,6 +372,10 @@ export async function processInitialBulkSync(shopId: string, job: Job<any>): Pro
       });
 
       if (products.length === 0) break;
+
+      // Il cost_per_item vive sull'InventoryItem: popolalo prima di trasformare,
+      // altrimenti verrebbe scritto sempre null su Supabase.
+      await enrichVariantCosts(shopifyClient, products);
 
       // Tetto del piano: processa al massimo `maxProducts` prodotti totali.
       // I prodotti oltre il limite non vengono sincronizzati (upgrade richiesto).
