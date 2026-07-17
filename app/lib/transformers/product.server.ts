@@ -33,7 +33,10 @@ export function transformProduct(product: ShopifyProduct): SupabaseProductRow[] 
       compare_at_price: variant.compare_at_price ? parseFloat(variant.compare_at_price) : null,
       cost_per_item: variant.cost ? parseFloat(variant.cost) : null,
       position: variant.position,
-      inventory_quantity: variant.inventory_quantity,
+      inventory_quantity:
+        variant.inventory_management != null ? variant.inventory_quantity : null,
+      inventory_tracked: variant.inventory_management != null,
+      inventory_policy: variant.inventory_policy ?? null,
       weight: variant.weight,
       weight_unit: variant.weight_unit,
       requires_shipping: variant.requires_shipping,
@@ -73,7 +76,10 @@ export function transformProduct(product: ShopifyProduct): SupabaseProductRow[] 
       compare_at_price: variant.compare_at_price ? parseFloat(variant.compare_at_price) : null,
       cost_per_item: variant.cost ? parseFloat(variant.cost) : null,
       position: variant.position,
-      inventory_quantity: variant.inventory_quantity,
+      inventory_quantity:
+        variant.inventory_management != null ? variant.inventory_quantity : null,
+      inventory_tracked: variant.inventory_management != null,
+      inventory_policy: variant.inventory_policy ?? null,
       weight: variant.weight,
       weight_unit: variant.weight_unit,
       requires_shipping: variant.requires_shipping,

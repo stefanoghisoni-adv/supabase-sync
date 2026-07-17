@@ -20,6 +20,8 @@ CREATE TABLE IF NOT EXISTS products (
   cost_per_item NUMERIC(10, 2),
   position INTEGER,
   inventory_quantity INTEGER,
+  inventory_tracked BOOLEAN,
+  inventory_policy TEXT,
   weight NUMERIC(10, 3),
   weight_unit TEXT,
   requires_shipping BOOLEAN,

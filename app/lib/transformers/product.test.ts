@@ -125,4 +125,54 @@ describe('Product transformer', () => {
       cost_per_item: null,
     });
   });
+
+  it('distingue scorte monitorate da non monitorate', () => {
+    const base = {
+      id: 1,
+      title: 'P',
+      body_html: '',
+      vendor: '',
+      product_type: '',
+      handle: 'p',
+      status: 'active',
+      tags: '',
+      published_at: null,
+    };
+    const variantBase = {
+      product_id: 1,
+      title: 'Default Title',
+      sku: 'S',
+      barcode: null,
+      price: '5.00',
+      compare_at_price: null,
+      cost: null,
+      position: 1,
+      inventory_quantity: 7,
+      weight: 0,
+      weight_unit: 'kg',
+      requires_shipping: true,
+      taxable: true,
+      image_id: null,
+      option1: 'Default Title',
+      option2: null,
+      option3: null,
+    };
+
+    // Monitorata (inventory_management valorizzato) → quantità reale + tracked=true
+    const tracked = transformProduct({
+      ...base,
+      variants: [{ ...variantBase, id: 10, inventory_management: 'shopify', inventory_policy: 'deny' }],
+    } as ShopifyProduct)[0];
+    expect(tracked.inventory_tracked).toBe(true);
+    expect(tracked.inventory_quantity).toBe(7);
+    expect(tracked.inventory_policy).toBe('deny');
+
+    // Non monitorata (inventory_management null) → quantità NULL + tracked=false
+    const untracked = transformProduct({
+      ...base,
+      variants: [{ ...variantBase, id: 11, inventory_management: null }],
+    } as ShopifyProduct)[0];
+    expect(untracked.inventory_tracked).toBe(false);
+    expect(untracked.inventory_quantity).toBeNull();
+  });
 });

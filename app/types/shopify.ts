@@ -23,6 +23,9 @@ export interface ShopifyVariant {
   cost: string | null;
   position: number;
   inventory_quantity: number;
+  // null quando le scorte NON sono monitorate (inventory_management assente).
+  inventory_management?: string | null;
+  inventory_policy?: string | null;
   weight: number;
   weight_unit: string;
   requires_shipping: boolean;
@@ -102,6 +105,8 @@ export interface SupabaseProductRow {
   cost_per_item: number | null;
   position: number | null;
   inventory_quantity: number | null;
+  inventory_tracked: boolean;
+  inventory_policy: string | null;
   weight: number | null;
   weight_unit: string | null;
   requires_shipping: boolean | null;
