@@ -5,6 +5,7 @@ import { authenticate } from '~/shopify.server';
 import { prisma } from '~/db.server';
 import { ShopifyAPIClient } from '~/lib/shopify-api.server';
 import { computeProductReadiness } from '~/lib/stats/product-readiness';
+import { enrichVariantCosts } from '~/lib/stats/inventory-cost.server';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const { session } = await authenticate.admin(request);
@@ -33,7 +34,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
       pageInfo,
       fields: 'id,variants',
     });
-    const counts = computeProductReadiness(products ?? []);
+    // Il cost_per_item vive sull'InventoryItem: lo popoliamo prima di classificare,
+    // altrimenti variant.cost sarebbe sempre vuoto e tutto risulterebbe "problema".
+    const enriched = await enrichVariantCosts(client, products ?? []);
+    const counts = computeProductReadiness(enriched);
     totalProducts += counts.totalProducts;
     readyCount += counts.readyCount;
     problemCount += counts.problemCount;

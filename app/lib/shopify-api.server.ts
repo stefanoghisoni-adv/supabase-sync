@@ -13,7 +13,11 @@ export class ShopifyAPIClient {
     this.apiVersion = process.env.SHOPIFY_API_VERSION || '2025-01';
   }
 
-  private async makeRequest(endpoint: string, params?: Record<string, string | number | boolean | undefined>) {
+  private async makeRequest(
+    endpoint: string,
+    params?: Record<string, string | number | boolean | undefined>,
+    options?: { method?: string; body?: unknown },
+  ) {
     const url = new URL(`https://${this.shopDomain}/admin/api/${this.apiVersion}/${endpoint}`);
 
     if (params) {
@@ -25,10 +29,12 @@ export class ShopifyAPIClient {
     }
 
     const response = await fetch(url.toString(), {
+      method: options?.method ?? 'GET',
       headers: {
         'X-Shopify-Access-Token': this.accessToken,
         'Content-Type': 'application/json',
       },
+      body: options?.body !== undefined ? JSON.stringify(options.body) : undefined,
     });
 
     // Check rate limit
@@ -106,6 +112,33 @@ export class ShopifyAPIClient {
   async getProductsCount(): Promise<number> {
     const { data } = await this.makeRequest('products/count.json');
     return typeof data.count === 'number' ? data.count : 0;
+  }
+
+  // Il cost_per_item vive sull'InventoryItem, non sulla variante: products.json NON
+  // lo restituisce. Va letto (e scritto) tramite l'API inventory_items.
+  async getInventoryItems(
+    ids: number[],
+  ): Promise<{ id: number; cost: string | null }[]> {
+    if (ids.length === 0) return [];
+    const { data } = await this.makeRequest('inventory_items.json', {
+      ids: ids.join(','),
+      limit: 250,
+    });
+    return (data.inventory_items ?? []).map(
+      (it: { id: number; cost: string | null }) => ({ id: it.id, cost: it.cost ?? null }),
+    );
+  }
+
+  async updateInventoryItemCost(
+    inventoryItemId: number,
+    cost: string,
+  ): Promise<{ id: number; cost: string | null }> {
+    const { data } = await this.makeRequest(
+      `inventory_items/${inventoryItemId}.json`,
+      undefined,
+      { method: 'PUT', body: { inventory_item: { id: inventoryItemId, cost } } },
+    );
+    return data.inventory_item;
   }
 
   async getCustomers(options: {

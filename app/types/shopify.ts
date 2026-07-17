@@ -23,6 +23,8 @@ export interface ShopifyVariant {
   cost: string | null;
   position: number;
   inventory_quantity: number;
+  // Riferimento all'InventoryItem: il cost_per_item vive lì, non sulla variante.
+  inventory_item_id?: number;
   // null quando le scorte NON sono monitorate (inventory_management assente).
   inventory_management?: string | null;
   inventory_policy?: string | null;

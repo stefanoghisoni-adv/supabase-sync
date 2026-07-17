@@ -61,6 +61,8 @@ describe('collectProblemVariants', () => {
     products[0].variants[1].sku = 'SKU-2';
     products[0].variants[1].title = 'Rossa / M';
 
+    products[0].variants[1].inventory_item_id = 999;
+
     const rows = collectProblemVariants(products);
     expect(rows).toEqual([
       {
@@ -69,6 +71,7 @@ describe('collectProblemVariants', () => {
         variantId: 2,
         variantTitle: 'Rossa / M',
         sku: 'SKU-2',
+        inventoryItemId: 999,
         missingField: 'cost_per_item',
       },
     ]);

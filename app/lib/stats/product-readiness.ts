@@ -32,6 +32,8 @@ export interface ProblemVariant {
   variantId: number;
   variantTitle: string;
   sku: string | null;
+  // Serve per scrivere il costo: il cost_per_item si aggiorna sull'InventoryItem.
+  inventoryItemId: number | null;
   missingField: 'cost_per_item';
 }
 
@@ -48,6 +50,7 @@ export function collectProblemVariants(
         variantId: variant.id,
         variantTitle: variant.title,
         sku: variant.sku ? variant.sku : null,
+        inventoryItemId: variant.inventory_item_id ?? null,
         missingField: 'cost_per_item',
       });
     }

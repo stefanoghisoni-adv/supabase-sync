@@ -138,6 +138,50 @@ describe('Shopify API Client', () => {
     expect(calledUrl.searchParams.get('fields')).toBe('id,variants');
   });
 
+  it('should fetch inventory item costs by ids', async () => {
+    const mockFetch = global.fetch as any;
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        inventory_items: [
+          { id: 111, cost: '3.50' },
+          { id: 222, cost: null },
+        ],
+      }),
+      headers: new Map(),
+    });
+
+    const client = new ShopifyAPIClient('test.myshopify.com', 'token');
+    const items = await client.getInventoryItems([111, 222]);
+
+    const calledUrl = new URL(mockFetch.mock.calls[0][0]);
+    expect(calledUrl.pathname).toContain('inventory_items.json');
+    expect(calledUrl.searchParams.get('ids')).toBe('111,222');
+    expect(items).toEqual([
+      { id: 111, cost: '3.50' },
+      { id: 222, cost: null },
+    ]);
+  });
+
+  it('should update an inventory item cost via PUT', async () => {
+    const mockFetch = global.fetch as any;
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ inventory_item: { id: 111, cost: '9.99' } }),
+      headers: new Map(),
+    });
+
+    const client = new ShopifyAPIClient('test.myshopify.com', 'token');
+    await client.updateInventoryItemCost(111, '9.99');
+
+    const [url, init] = mockFetch.mock.calls[0];
+    expect(new URL(url).pathname).toContain('inventory_items/111.json');
+    expect(init.method).toBe('PUT');
+    expect(JSON.parse(init.body)).toEqual({
+      inventory_item: { id: 111, cost: '9.99' },
+    });
+  });
+
   it('should return the customers count from customers/count.json', async () => {
     const mockFetch = global.fetch as any;
     mockFetch.mockResolvedValueOnce({
