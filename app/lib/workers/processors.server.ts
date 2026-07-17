@@ -121,31 +121,28 @@ export async function processPeriodicSyncCheck(shopId: string): Promise<void> {
 
       // Process each product individually for delta detection
       for (const product of products) {
+        // Righe correnti: ogni riga ha un shopify_variant_id reale (anche i
+        // prodotti a variante singola).
+        const currentRows = transformProduct(product);
+        const currentVariantIds = new Set(
+          currentRows.map(r => r.shopify_variant_id).filter((id): id is number => id != null)
+        );
+
         // Fetch existing rows from Supabase for this product
         const { data: existingRows } = await supabase
           .from(shop.supabaseConfig.tableNameProducts)
           .select('shopify_variant_id')
           .eq('shopify_product_id', product.id);
 
-        const existingVariantIds = new Set(
-          existingRows?.map(row => row.shopify_variant_id).filter(Boolean) || []
-        );
+        // Riconcilia: elimina le righe del prodotto il cui variant_id non è più
+        // presente in Shopify. Copre sia le varianti rimosse sia le transizioni
+        // multi→single (le vecchie righe variante diventano orfane). Include
+        // eventuali righe legacy con variant_id NULL create prima di questo fix.
+        const orphanedVariantIds = (existingRows || [])
+          .map(row => row.shopify_variant_id as number | null)
+          .filter((id): id is number => id != null && !currentVariantIds.has(id));
+        const hasLegacyNullRows = (existingRows || []).some(row => row.shopify_variant_id == null);
 
-        // Transform current product
-        const currentRows = transformProduct(product);
-        const currentVariantIds = new Set(
-          currentRows
-            .filter(r => r.is_variant)
-            .map(r => r.shopify_variant_id)
-            .filter(Boolean)
-        );
-
-        // Find orphaned variants (exist in Supabase but not in Shopify anymore)
-        const orphanedVariantIds = [...existingVariantIds].filter(
-          id => !currentVariantIds.has(id)
-        );
-
-        // Delete orphaned variants (scoped by product to prevent cross-product deletes)
         if (orphanedVariantIds.length > 0) {
           const { error: deleteError } = await supabase
             .from(shop.supabaseConfig.tableNameProducts)
@@ -157,44 +154,7 @@ export async function processPeriodicSyncCheck(shopId: string): Promise<void> {
             console.warn(`Could not delete orphaned variants for product ${product.id}:`, deleteError);
           }
         }
-
-        // Separate variant rows from non-variant rows (CRITICAL for NULL handling)
-        const variantRows = currentRows.filter(r => r.is_variant);
-        const nonVariantRows = currentRows.filter(r => !r.is_variant);
-
-        // Upsert variant rows
-        if (variantRows.length > 0) {
-          const { error } = await supabase
-            .from(shop.supabaseConfig.tableNameProducts)
-            .upsert(variantRows, {
-              onConflict: 'shopify_variant_id',
-              ignoreDuplicates: false,
-            });
-
-          if (error) {
-            console.error(`Periodic sync variant upsert error for product ${product.id}:`, error);
-            continue;
-          }
-        }
-
-        // Upsert non-variant rows
-        if (nonVariantRows.length > 0) {
-          const { error } = await supabase
-            .from(shop.supabaseConfig.tableNameProducts)
-            .upsert(nonVariantRows, {
-              onConflict: 'shopify_product_id',
-              ignoreDuplicates: false,
-            });
-
-          if (error) {
-            console.error(`Periodic sync non-variant upsert error for product ${product.id}:`, error);
-            continue;
-          }
-        }
-
-        // Handle single↔multi variant transitions (mirroring Part 1 webhook pattern)
-        // Clean up non-variant rows if product now has variants (multi-variant product)
-        if (variantRows.length > 0) {
+        if (hasLegacyNullRows) {
           const { error: deleteError } = await supabase
             .from(shop.supabaseConfig.tableNameProducts)
             .delete()
@@ -202,19 +162,21 @@ export async function processPeriodicSyncCheck(shopId: string): Promise<void> {
             .is('shopify_variant_id', null);
 
           if (deleteError) {
-            console.warn(`Could not clean old non-variant row for product ${product.id}:`, deleteError);
+            console.warn(`Could not delete legacy null-variant row for product ${product.id}:`, deleteError);
           }
-        } else if (nonVariantRows.length > 0) {
-          // Conversely, if product is now single-variant, delete old variant rows
-          const { error: deleteError } = await supabase
-            .from(shop.supabaseConfig.tableNameProducts)
-            .delete()
-            .eq('shopify_product_id', product.id)
-            .not('shopify_variant_id', 'is', null);
+        }
 
-          if (deleteError) {
-            console.warn(`Could not clean old variant rows for product ${product.id}:`, deleteError);
-          }
+        // Upsert di tutte le righe correnti con la chiave univoca.
+        const { error } = await supabase
+          .from(shop.supabaseConfig.tableNameProducts)
+          .upsert(currentRows, {
+            onConflict: 'shopify_variant_id',
+            ignoreDuplicates: false,
+          });
+
+        if (error) {
+          console.error(`Periodic sync upsert error for product ${product.id}:`, error);
+          continue;
         }
 
         totalProducts++;
@@ -326,45 +288,22 @@ export async function processInitialBulkSync(shopId: string, job: Job<any>): Pro
         totalVariants += rows.length;
       }
 
-      // Separate variant rows from non-variant rows (CRITICAL for NULL handling)
-      const variantRows = allRows.filter(r => r.is_variant);
-      const nonVariantRows = allRows.filter(r => !r.is_variant);
+      // Ogni riga ha ora un shopify_variant_id reale (anche i prodotti a
+      // variante singola) → un solo upsert con la chiave univoca, senza
+      // separare variant/non-variant.
+      const chunkSize = 1000;
+      for (let i = 0; i < allRows.length; i += chunkSize) {
+        const chunk = allRows.slice(i, i + chunkSize);
 
-      // Batch upsert variant rows (chunks of 1000)
-      if (variantRows.length > 0) {
-        const chunkSize = 1000;
-        for (let i = 0; i < variantRows.length; i += chunkSize) {
-          const chunk = variantRows.slice(i, i + chunkSize);
+        const { error } = await supabase
+          .from(shop.supabaseConfig.tableNameProducts)
+          .upsert(chunk, {
+            onConflict: 'shopify_variant_id',
+            ignoreDuplicates: false,
+          });
 
-          const { error } = await supabase
-            .from(shop.supabaseConfig.tableNameProducts)
-            .upsert(chunk, {
-              onConflict: 'shopify_variant_id',
-              ignoreDuplicates: false,
-            });
-
-          if (error) {
-            throw new Error(`Supabase variant upsert failed: ${error.message}`);
-          }
-        }
-      }
-
-      // Batch upsert non-variant rows (chunks of 1000)
-      if (nonVariantRows.length > 0) {
-        const chunkSize = 1000;
-        for (let i = 0; i < nonVariantRows.length; i += chunkSize) {
-          const chunk = nonVariantRows.slice(i, i + chunkSize);
-
-          const { error } = await supabase
-            .from(shop.supabaseConfig.tableNameProducts)
-            .upsert(chunk, {
-              onConflict: 'shopify_product_id',
-              ignoreDuplicates: false,
-            });
-
-          if (error) {
-            throw new Error(`Supabase non-variant upsert failed: ${error.message}`);
-          }
+        if (error) {
+          throw new Error(`Supabase products upsert failed: ${error.message}`);
         }
       }
 

@@ -148,20 +148,20 @@ describe('Initial bulk sync processor', () => {
     // Verify transformProduct called for each product (3 products total)
     expect(transformProduct).toHaveBeenCalledTimes(3);
 
-    // Verify SEPARATED upserts: variant rows and non-variant rows
+    // Verify products upsert usa SEMPRE la chiave univoca shopify_variant_id
+    // (anche i prodotti a variante singola ora hanno un id reale).
     expect(mockUpsert).toHaveBeenCalled();
 
-    // Verify at least one upsert with 'shopify_variant_id' conflict (variant rows)
-    const variantUpsertCalls = mockUpsert.mock.calls.filter(
+    const productUpsertCalls = mockUpsert.mock.calls.filter(
       call => call[1]?.onConflict === 'shopify_variant_id'
     );
-    expect(variantUpsertCalls.length).toBeGreaterThan(0);
+    expect(productUpsertCalls.length).toBeGreaterThan(0);
 
-    // Verify at least one upsert with 'shopify_product_id' conflict (non-variant rows)
+    // Nessun upsert deve più usare shopify_product_id (non ha vincolo UNIQUE).
     const nonVariantUpsertCalls = mockUpsert.mock.calls.filter(
       call => call[1]?.onConflict === 'shopify_product_id'
     );
-    expect(nonVariantUpsertCalls.length).toBeGreaterThan(0);
+    expect(nonVariantUpsertCalls.length).toBe(0);
 
     // Verify job progress was updated
     expect(mockJob.updateProgress).toHaveBeenCalled();

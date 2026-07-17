@@ -46,12 +46,15 @@ export function transformProduct(product: ShopifyProduct): SupabaseProductRow[] 
       synced_at: new Date().toISOString(),
     }));
   } else {
-    // Product without variants → single row
+    // Product without "real" variants → single row. In Shopify anche questi
+    // hanno UNA variante ("Default Title") con un id reale: lo usiamo come
+    // shopify_variant_id così ogni riga ha una chiave univoca (evita l'upsert
+    // su shopify_product_id, che non ha vincolo UNIQUE). is_variant resta false.
     const variant = product.variants[0];
 
     return [{
       shopify_product_id: product.id,
-      shopify_variant_id: null,
+      shopify_variant_id: variant.id,
       is_variant: false,
 
       product_title: product.title,

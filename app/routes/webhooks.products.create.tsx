@@ -52,62 +52,33 @@ export async function action({ request }: ActionFunctionArgs) {
     const supabase = createSupabaseClient(shop.supabaseConfig);
     const tableName = shop.supabaseConfig.tableNameProducts;
 
-    // Separate variant rows from non-variant row
-    const variantRows = rows.filter(r => r.is_variant);
-    const nonVariantRows = rows.filter(r => !r.is_variant);
+    // Ogni riga ha ora un shopify_variant_id reale (anche i single-variant) →
+    // un solo upsert con la chiave univoca.
+    const { error } = await supabase
+      .from(tableName)
+      .upsert(rows, {
+        onConflict: 'shopify_variant_id',
+        ignoreDuplicates: false,
+      });
 
-    // Upsert variant rows with variant-specific conflict resolution
-    if (variantRows.length > 0) {
-      const { error } = await supabase
-        .from(tableName)
-        .upsert(variantRows, {
-          onConflict: 'shopify_variant_id',
-          ignoreDuplicates: false,
-        });
-
-      if (error) {
-        console.error('Supabase variant upsert error:', error);
-        await prisma.syncJob.create({
-          data: {
-            shopId: shop.id,
-            jobType: 'webhook',
-            status: 'failed',
-            productsSynced: 0,
-            variantsSynced: 0,
-            errors: { message: error.message, code: error.code },
-          },
-        });
-        return json({ ok: true }, { status: 200 });
-      }
+    if (error) {
+      console.error('Supabase products upsert error:', error);
+      await prisma.syncJob.create({
+        data: {
+          shopId: shop.id,
+          jobType: 'webhook',
+          status: 'failed',
+          productsSynced: 0,
+          variantsSynced: 0,
+          errors: { message: error.message, code: error.code },
+        },
+      });
+      return json({ ok: true }, { status: 200 });
     }
 
-    // Upsert non-variant row with product-specific conflict resolution
-    if (nonVariantRows.length > 0) {
-      const { error } = await supabase
-        .from(tableName)
-        .upsert(nonVariantRows, {
-          onConflict: 'shopify_product_id',
-          ignoreDuplicates: false,
-        });
-
-      if (error) {
-        console.error('Supabase non-variant upsert error:', error);
-        await prisma.syncJob.create({
-          data: {
-            shopId: shop.id,
-            jobType: 'webhook',
-            status: 'failed',
-            productsSynced: 0,
-            variantsSynced: 0,
-            errors: { message: error.message, code: error.code },
-          },
-        });
-        return json({ ok: true }, { status: 200 });
-      }
-    }
-
-    // Clean up stale variants: delete any rows for this product not in current payload
-    const currentVariantIds = variantRows.map(r => r.shopify_variant_id);
+    // Riconcilia: elimina le righe del prodotto il cui variant_id non è più nel
+    // payload (varianti rimosse / transizione multi→single).
+    const currentVariantIds = rows.map(r => r.shopify_variant_id).filter(Boolean);
     if (currentVariantIds.length > 0) {
       const { error: deleteError } = await supabase
         .from(tableName)
@@ -120,28 +91,15 @@ export async function action({ request }: ActionFunctionArgs) {
       }
     }
 
-    // Clean up non-variant rows if product now has variants
-    if (variantRows.length > 0) {
-      const { error: deleteError } = await supabase
-        .from(tableName)
-        .delete()
-        .eq('shopify_product_id', product.id)
-        .is('shopify_variant_id', null);
+    // Righe legacy con variant_id NULL (create prima dell'id reale): rimuovile.
+    const { error: legacyDeleteError } = await supabase
+      .from(tableName)
+      .delete()
+      .eq('shopify_product_id', product.id)
+      .is('shopify_variant_id', null);
 
-      if (deleteError) {
-        console.warn('Could not clean old non-variant row:', deleteError);
-      }
-    } else if (nonVariantRows.length > 0) {
-      // Conversely, if product is now single-variant, delete old variant rows
-      const { error: deleteError } = await supabase
-        .from(tableName)
-        .delete()
-        .eq('shopify_product_id', product.id)
-        .not('shopify_variant_id', 'is', null);
-
-      if (deleteError) {
-        console.warn('Could not clean old variant rows:', deleteError);
-      }
+    if (legacyDeleteError) {
+      console.warn('Could not clean legacy null-variant row:', legacyDeleteError);
     }
 
     // Log successful sync

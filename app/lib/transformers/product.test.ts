@@ -115,7 +115,9 @@ describe('Product transformer', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
       shopify_product_id: 999,
-      shopify_variant_id: null,
+      // Anche i prodotti a variante singola usano l'id reale della loro unica
+      // variante ("Default Title") come chiave univoca.
+      shopify_variant_id: 111,
       is_variant: false,
       product_title: 'Simple Product',
       variant_title: null,
