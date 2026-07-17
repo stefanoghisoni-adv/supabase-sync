@@ -12,6 +12,8 @@ export interface StepperItem {
   // (es. "Collegato" invece del generico "Completato").
   completeLabel?: string;
   activeLabel?: string;
+  // Se true, non mostra alcun badge (es. lo step sync una volta completato).
+  hideBadge?: boolean;
 }
 
 const BADGE: Record<StepState, { tone?: 'success' | 'info'; label: string }> = {
@@ -40,9 +42,11 @@ export function Stepper({ steps }: { steps: StepperItem[] }) {
               >
                 {index + 1}. {step.title}
               </Text>
-              <Badge tone={BADGE[step.state].tone}>
-                {badgeLabel(step)}
-              </Badge>
+              {!step.hideBadge && (
+                <Badge tone={BADGE[step.state].tone}>
+                  {badgeLabel(step)}
+                </Badge>
+              )}
             </InlineStack>
 
             {(step.state === 'active' || step.state === 'complete') && step.content}

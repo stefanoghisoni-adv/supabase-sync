@@ -25,6 +25,7 @@ import { SupabaseConnect } from '~/components/Dashboard/SupabaseConnect';
 import { prisma } from '~/db.server';
 import { getOrCreateShop } from '~/utils/shop.server';
 import { normalizeAuthorization, isAuthorized } from '~/utils/authorization.server';
+import { resolveSyncState } from '~/components/Dashboard/sync-state';
 import { enqueueManualSync, triggerSyncDrain } from '~/lib/queue/trigger.server';
 import { authenticate } from '~/shopify.server';
 
@@ -63,16 +64,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const supabaseConnected = !!shop.supabaseConfig?.connectionVerifiedAt;
     const customersEnabled = plan?.customersSyncEnabled ?? false;
 
-    // Stato della sync iniziale/manuale, dal job initial_bulk più recente:
-    // 'in_progress' (in corso, drain avviato), 'completed' (già fatta, una
-    // tantum), 'idle' (mai avviata). Guida lo stato del pulsante in Home.
-    const latestBulk = recentJobs.find((j) => j.jobType === 'initial_bulk');
-    const syncState: 'idle' | 'in_progress' | 'completed' =
-      latestBulk?.status === 'running'
-        ? 'in_progress'
-        : latestBulk?.status === 'completed'
-          ? 'completed'
-          : 'idle';
+    // Stato della sync iniziale/manuale, legato alla connessione CORRENTE
+    // (job avviati dopo connectionVerifiedAt): così una riconnessione — anche a
+    // un progetto diverso o vuoto — riabilita il pulsante e non eredita lo stato
+    // "completato" della connessione precedente. Guida lo stato del pulsante.
+    const syncState = resolveSyncState(
+      recentJobs,
+      shop.supabaseConfig?.connectionVerifiedAt,
+    );
 
     return json({
       shop,
@@ -203,11 +202,16 @@ export default function Dashboard() {
       state: steps.connectSupabase,
       completeLabel: 'Collegato',
       content: (
+        // key sullo stato di connessione: rimonta il componente quando ci si
+        // collega/scollega, azzerando lo state locale (evita il modal disconnetti
+        // che riappare da solo e il flow rimasto "sporco" dopo un disconnect).
         <SupabaseConnect
+          key={supabaseConnected ? 'connected' : 'disconnected'}
           connected={supabaseConnected}
           projectName={shop.supabaseConfig?.supabaseProjectRef ?? undefined}
           projectUrl={shop.supabaseConfig?.supabaseUrl ?? undefined}
           disabled={blocked}
+          authorization={authorization}
         />
       ),
     },
@@ -215,6 +219,8 @@ export default function Dashboard() {
       id: 'sync',
       title: syncTitle,
       state: steps.sync,
+      // A sync completata: nessun badge sullo step (né "In corso" né altro).
+      hideBadge: syncCompleted,
       lockedHint:
         'Completa il collegamento a Supabase per sbloccare la sincronizzazione.',
       content: (
@@ -351,11 +357,13 @@ export default function Dashboard() {
               title="Clienti"
               value=""
               action={
-                <Tooltip content="Presto disponibile">
-                  <Button variant="primary" disabled>
-                    Aggiorna piano
-                  </Button>
-                </Tooltip>
+                <Box paddingBlockStart="200">
+                  <Tooltip content="Presto disponibile">
+                    <Button variant="primary" disabled>
+                      Aggiorna piano
+                    </Button>
+                  </Tooltip>
+                </Box>
               }
             />
           )}

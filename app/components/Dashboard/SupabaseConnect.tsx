@@ -31,9 +31,11 @@ interface SupabaseConnectProps {
   projectUrl?: string;
   // Se true (negozio non ENABLED) tutti i pulsanti d'azione sono disabilitati.
   disabled?: boolean;
+  // Stato di autorizzazione: guida il banner nello stato "collegato".
+  authorization?: 'ENABLED' | 'PENDING' | 'DISABLED';
 }
 
-export function SupabaseConnect({ connected, projectName, projectUrl, disabled }: SupabaseConnectProps) {
+export function SupabaseConnect({ connected, projectName, projectUrl, disabled, authorization = 'ENABLED' }: SupabaseConnectProps) {
   const revalidator = useRevalidator();
   const urlFetcher = useFetcher<{ url?: string; error?: string }>();
   const projectsFetcher = useFetcher<{ projects: SupabaseProject[]; error?: string }>();
@@ -222,9 +224,15 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled }
   if (connected) {
     return (
       <BlockStack gap="300">
-        <Banner tone="success">
-          Supabase collegato{projectName ? ` — progetto ${projectName}` : ''}.
-        </Banner>
+        {authorization === 'DISABLED' ? (
+          <Banner tone="critical">Sincronizzazione disabilitata.</Banner>
+        ) : authorization === 'PENDING' ? (
+          <Banner tone="warning">Sincronizzazione sospesa.</Banner>
+        ) : (
+          <Banner tone="success">
+            Supabase collegato{projectName ? ` — progetto ${projectName}` : ''}.
+          </Banner>
+        )}
         {projectUrl && (
           <Text as="p" tone="subdued">
             URL: <code>{projectUrl}</code>
