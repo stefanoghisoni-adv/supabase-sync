@@ -5,7 +5,7 @@ import { prisma } from '~/db.server';
 // Marcatore di versione: cambia a ogni deploy che tocca questa route, così
 // interrogando /api/health si conferma QUALE build è effettivamente live in
 // produzione (utile per distinguere un deploy vecchio da uno aggiornato).
-const HEALTH_VERSION = 'auth-diag-2';
+const HEALTH_VERSION = 'auth-diag-3';
 
 const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 

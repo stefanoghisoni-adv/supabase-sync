@@ -6,7 +6,8 @@
   "type": "module",
   "scripts": {
     "dev": "shopify app dev",
-    "build": "remix vite:build",
+    "build": "prisma generate && remix vite:build",
+    "postinstall": "prisma generate",
     "start": "remix-serve ./build/server/index.js",
     "typecheck": "tsc",
     "db:seed": "tsx prisma/seed.ts",
