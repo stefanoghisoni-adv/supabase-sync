@@ -111,8 +111,12 @@ describe('Initial bulk sync processor', () => {
       error: null,
     });
 
+    // Il clear dei prodotti prima del ripopolamento: .delete().gte(...) → { error: null }
+    const mockGte = vi.fn().mockReturnValue({ error: null });
+    const mockDelete = vi.fn().mockReturnValue({ gte: mockGte });
     const mockFrom = vi.fn().mockReturnValue({
       upsert: mockUpsert,
+      delete: mockDelete,
     });
 
     vi.mocked(createSupabaseClient).mockReturnValue({
@@ -205,6 +209,15 @@ describe('Initial bulk sync processor', () => {
     const mockSyncJob = { id: 'sync-job-2' };
     vi.mocked(prisma.syncJob.create).mockResolvedValue(mockSyncJob as any);
     vi.mocked(prisma.syncJob.update).mockResolvedValue({} as any);
+
+    // Supabase mock (il clear prodotti gira prima di getProducts).
+    const mockGte = vi.fn().mockReturnValue({ error: null });
+    vi.mocked(createSupabaseClient).mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        delete: vi.fn().mockReturnValue({ gte: mockGte }),
+        upsert: vi.fn().mockReturnValue({ error: null }),
+      }),
+    } as any);
 
     // Mock Shopify API to throw error
     vi.mocked(ShopifyAPIClient).mockImplementation(() => ({

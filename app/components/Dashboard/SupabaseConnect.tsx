@@ -14,6 +14,7 @@ import {
   Select,
   TextField,
   Spinner,
+  Modal,
 } from '@shopify/polaris';
 import { SearchIcon } from '@shopify/polaris-icons';
 
@@ -42,6 +43,7 @@ export function SupabaseConnect({ connected, projectName, projectUrl }: Supabase
   const [selectedRef, setSelectedRef] = useState<string>('');
   const [query, setQuery] = useState('');
   const [popupRef, setPopupRef] = useState<Window | null>(null);
+  const [showDisconnect, setShowDisconnect] = useState(false);
 
   // State for create-project form
   const regionsFetcher = useFetcher<{ regions: { id: string; name: string }[] }>();
@@ -109,9 +111,15 @@ export function SupabaseConnect({ connected, projectName, projectUrl }: Supabase
     );
   }, [selectFetcher, selectedRef]);
 
-  const disconnect = useCallback(() => {
-    disconnectFetcher.submit(null, { method: 'post', action: '/api/supabase/disconnect' });
-  }, [disconnectFetcher]);
+  const disconnect = useCallback(
+    (deleteData: boolean) => {
+      disconnectFetcher.submit(
+        { deleteData },
+        { method: 'post', action: '/api/supabase/disconnect', encType: 'application/json' },
+      );
+    },
+    [disconnectFetcher],
+  );
 
   // Al successo di selezione o disconnessione, ricarica il loader.
   useEffect(() => {
@@ -226,12 +234,40 @@ export function SupabaseConnect({ connected, projectName, projectUrl }: Supabase
           </Button>
           <Button
             tone="critical"
-            onClick={disconnect}
+            onClick={() => setShowDisconnect(true)}
             loading={disconnectFetcher.state !== 'idle'}
           >
             Disconnetti
           </Button>
         </InlineStack>
+
+        <Modal
+          open={showDisconnect}
+          onClose={() => setShowDisconnect(false)}
+          title="Scollegare Supabase?"
+          primaryAction={{
+            content: 'Elimina tabelle e dati',
+            destructive: true,
+            onAction: () => disconnect(true),
+            loading: disconnectFetcher.state !== 'idle',
+          }}
+          secondaryActions={[
+            {
+              content: 'Mantieni i dati',
+              onAction: () => disconnect(false),
+              loading: disconnectFetcher.state !== 'idle',
+            },
+            { content: 'Annulla', onAction: () => setShowDisconnect(false) },
+          ]}
+        >
+          <Modal.Section>
+            <Text as="p">
+              Puoi <strong>eliminare</strong> le tabelle e i dati sincronizzati dal tuo
+              progetto Supabase, oppure <strong>mantenerli</strong> (verrà interrotta solo la
+              sincronizzazione). In entrambi i casi il collegamento verrà rimosso.
+            </Text>
+          </Modal.Section>
+        </Modal>
       </BlockStack>
     );
   }

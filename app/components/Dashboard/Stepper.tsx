@@ -45,7 +45,7 @@ export function Stepper({ steps }: { steps: StepperItem[] }) {
               </Badge>
             </InlineStack>
 
-            {step.state === 'active' && step.content}
+            {(step.state === 'active' || step.state === 'complete') && step.content}
 
             {step.state === 'locked' && step.lockedHint && (
               <Text as="p" tone="subdued">

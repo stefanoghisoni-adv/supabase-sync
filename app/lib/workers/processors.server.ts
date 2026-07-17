@@ -270,6 +270,18 @@ export async function processInitialBulkSync(shopId: string, job: Job<any>): Pro
   let nextPageInfo: string | null = null;
 
   try {
+    // Ripopolamento "da 0" dei prodotti: azzeriamo la tabella prima di
+    // ripopolarla, così riflette esattamente il catalogo Shopify corrente
+    // (nessun prodotto obsoleto). I CLIENTI non vengono azzerati: la loro sync
+    // è upsert accumulativo (LTV storico preservato, nuovi clienti aggiunti).
+    const { error: clearError } = await supabase
+      .from(shop.supabaseConfig.tableNameProducts)
+      .delete()
+      .gte('shopify_product_id', 0);
+    if (clearError) {
+      throw new Error(`Supabase products clear failed: ${clearError.message}`);
+    }
+
     do {
       // Fetch products batch (250 per page)
       const { products, nextPageInfo: nextPage } = await shopifyClient.getProducts({
