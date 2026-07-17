@@ -48,6 +48,9 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
   const [query, setQuery] = useState('');
   const [popupRef, setPopupRef] = useState<Window | null>(null);
   const [showDisconnect, setShowDisconnect] = useState(false);
+  // Quale azione di disconnessione è in corso: così il loader appare SOLO sul
+  // bottone cliccato ("Elimina" o "Mantieni"), mentre entrambi restano disabilitati.
+  const [disconnectMode, setDisconnectMode] = useState<'delete' | 'keep' | null>(null);
 
   // State for create-project form
   const regionsFetcher = useFetcher<{ regions: { id: string; name: string }[] }>();
@@ -117,6 +120,7 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
 
   const disconnect = useCallback(
     (deleteData: boolean) => {
+      setDisconnectMode(deleteData ? 'delete' : 'keep');
       disconnectFetcher.submit(
         { deleteData },
         { method: 'post', action: '/api/supabase/disconnect', encType: 'application/json' },
@@ -260,15 +264,21 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
             content: 'Elimina tabelle e dati',
             destructive: true,
             onAction: () => disconnect(true),
-            loading: disconnectFetcher.state !== 'idle',
+            loading: disconnectFetcher.state !== 'idle' && disconnectMode === 'delete',
+            disabled: disconnectFetcher.state !== 'idle',
           }}
           secondaryActions={[
             {
               content: 'Mantieni i dati',
               onAction: () => disconnect(false),
-              loading: disconnectFetcher.state !== 'idle',
+              loading: disconnectFetcher.state !== 'idle' && disconnectMode === 'keep',
+              disabled: disconnectFetcher.state !== 'idle',
             },
-            { content: 'Annulla', onAction: () => setShowDisconnect(false) },
+            {
+              content: 'Annulla',
+              onAction: () => setShowDisconnect(false),
+              disabled: disconnectFetcher.state !== 'idle',
+            },
           ]}
         >
           <Modal.Section>
