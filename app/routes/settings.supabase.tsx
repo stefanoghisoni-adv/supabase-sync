@@ -106,7 +106,6 @@ export default function SupabaseSettings() {
   ]);
 
   const testFetcher = useFetcher<{ ok: boolean; message: string }>();
-  const createTablesFetcher = useFetcher<{ ok?: boolean; message?: string; error?: string }>();
 
   const testConnection = () => {
     testFetcher.submit(
@@ -119,15 +118,7 @@ export default function SupabaseSettings() {
     );
   };
 
-  const createTables = () => {
-    createTablesFetcher.submit(
-      {},
-      { method: 'post', action: '/api/supabase/create-tables' }
-    );
-  };
-
   const testResult = testFetcher.data;
-  const createResult = createTablesFetcher.data;
 
   return (
     <Page title="Supabase Configuration" backAction={{ url: '/' }}>
@@ -136,22 +127,6 @@ export default function SupabaseSettings() {
           <BlockStack gap="400">
             {successMessage && <Banner tone="success">{successMessage}</Banner>}
             {errorMessage && <Banner tone="critical">{errorMessage}</Banner>}
-
-            <Card>
-              <BlockStack gap="300">
-                <Text as="h2" variant="headingMd">
-                  Non hai un account Supabase?
-                </Text>
-                <Text as="p" tone="subdued">
-                  Iscriviti gratuitamente e crea un progetto per sincronizzare i tuoi dati.
-                </Text>
-                <InlineStack align="end">
-                  <Button url="https://supabase.com/sign-up" target="_blank">
-                    Crea account Supabase
-                  </Button>
-                </InlineStack>
-              </BlockStack>
-            </Card>
 
             <Card>
               <Form method="post">
@@ -232,30 +207,6 @@ export default function SupabaseSettings() {
                   </BlockStack>
                 </FormLayout>
               </Form>
-            </Card>
-
-            <Card>
-              <BlockStack gap="300">
-                <Text as="h2" variant="headingMd">
-                  Create Tables
-                </Text>
-                <Text as="p" tone="subdued">
-                  After saving your configuration, create the required tables in your Supabase database.
-                </Text>
-                <InlineStack align="end">
-                  <Button
-                    onClick={createTables}
-                    loading={createTablesFetcher.state !== 'idle'}
-                  >
-                    Create Tables in Supabase
-                  </Button>
-                </InlineStack>
-                {createResult && (
-                  <Banner tone={createResult.error ? 'critical' : 'success'}>
-                    {createResult.error || createResult.message || 'Done'}
-                  </Banner>
-                )}
-              </BlockStack>
             </Card>
           </BlockStack>
         </Layout.Section>

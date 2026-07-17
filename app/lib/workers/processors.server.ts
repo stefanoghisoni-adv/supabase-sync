@@ -8,7 +8,8 @@ import { transformCustomer } from '../transformers/customer.server';
 import { createSupabaseClient } from '../supabase.server';
 import { prisma } from '../../db.server';
 import { isAuthorized } from '../../utils/authorization.server';
-import type { ShopifyCustomer } from '~/types/shopify';
+import { limitProducts, isProductLimitReached } from '../limits/product-limit';
+import type { ShopifyCustomer, ShopifyProduct } from '~/types/shopify';
 
 /**
  * Syncs customers from Shopify into the merchant's Supabase `customers` table.
@@ -60,6 +61,41 @@ async function syncCustomers(
 }
 
 /**
+ * Legge tutti gli shopify_product_id già presenti nella tabella prodotti del
+ * merchant, in pagine da 1000 (limite PostgREST). Serve a conoscere quanti
+ * prodotti distinti esistono per far rispettare il tetto del piano anche nella
+ * sync incrementale.
+ */
+async function fetchExistingProductIds(
+  supabase: SupabaseClient,
+  tableName: string,
+): Promise<Set<number>> {
+  const ids = new Set<number>();
+  const pageSize = 1000;
+  let from = 0;
+
+  for (;;) {
+    const { data, error } = await supabase
+      .from(tableName)
+      .select('shopify_product_id')
+      .range(from, from + pageSize - 1);
+
+    if (error) {
+      throw new Error(`Impossibile leggere i product id esistenti: ${error.message}`);
+    }
+    if (!data || data.length === 0) break;
+
+    for (const row of data) {
+      if (row.shopify_product_id != null) ids.add(row.shopify_product_id as number);
+    }
+    if (data.length < pageSize) break;
+    from += pageSize;
+  }
+
+  return ids;
+}
+
+/**
  * Process periodic sync check for a shop
  * Task 11: Implements incremental sync with delta detection
  *
@@ -87,6 +123,13 @@ export async function processPeriodicSyncCheck(shopId: string): Promise<void> {
 
   const shopifyClient = new ShopifyAPIClient(shop.shopDomain, shop.accessToken);
   const supabase = createSupabaseClient(shop.supabaseConfig);
+
+  // Piano del negozio: tetto prodotti (maxProducts, null = illimitato) e
+  // abilitazione sync clienti. Riusato più sotto per la sync dei clienti.
+  const plan = await prisma.plan.findUnique({
+    where: { planName: shop.currentPlan },
+  });
+  const maxProducts = plan?.maxProducts ?? null;
 
   // Get last periodic sync timestamp
   const lastSyncJob = await prisma.syncJob.findFirst({
@@ -116,6 +159,13 @@ export async function processPeriodicSyncCheck(shopId: string): Promise<void> {
     let totalVariants = 0;
     let nextPageInfo: string | null = null;
 
+    // Per far rispettare il tetto del piano anche in delta: insieme dei prodotti
+    // già presenti. I prodotti nuovi oltre il limite non vengono aggiunti; quelli
+    // già presenti continuano ad aggiornarsi. null = piano illimitato (nessun cap).
+    const existingProductIds = maxProducts == null
+      ? null
+      : await fetchExistingProductIds(supabase, shop.supabaseConfig.tableNameProducts);
+
     do {
       // Fetch updated products since last sync (delta)
       const { products, nextPageInfo: nextPage } = await shopifyClient.getProducts({
@@ -128,6 +178,16 @@ export async function processPeriodicSyncCheck(shopId: string): Promise<void> {
 
       // Process each product individually for delta detection
       for (const product of products) {
+        // Tetto del piano: se il prodotto è nuovo e il limite è già saturo,
+        // non aggiungerlo (gli aggiornamenti ai prodotti esistenti passano).
+        if (
+          existingProductIds != null &&
+          !existingProductIds.has(product.id) &&
+          existingProductIds.size >= (maxProducts as number)
+        ) {
+          continue;
+        }
+
         // Righe correnti: ogni riga ha un shopify_variant_id reale (anche i
         // prodotti a variante singola).
         const currentRows = transformProduct(product);
@@ -188,6 +248,8 @@ export async function processPeriodicSyncCheck(shopId: string): Promise<void> {
 
         totalProducts++;
         totalVariants += currentRows.length;
+        // Aggiorna il conteggio prodotti distinti (no-op se già presente).
+        if (existingProductIds != null) existingProductIds.add(product.id);
       }
 
       nextPageInfo = nextPage;
@@ -196,9 +258,6 @@ export async function processPeriodicSyncCheck(shopId: string): Promise<void> {
 
     // Incremental customer sync (delta) if the shop's plan includes customer sync
     let totalCustomers = 0;
-    const plan = await prisma.plan.findUnique({
-      where: { planName: shop.currentPlan },
-    });
     if (plan?.customersSyncEnabled) {
       totalCustomers = await syncCustomers(
         shopifyClient,
@@ -276,6 +335,13 @@ export async function processInitialBulkSync(shopId: string, job: Job<any>): Pro
     },
   });
 
+  // Piano del negozio: definisce il tetto di prodotti sincronizzabili
+  // (maxProducts) e se la sync dei clienti è inclusa. null = illimitato.
+  const plan = await prisma.plan.findUnique({
+    where: { planName: shop.currentPlan },
+  });
+  const maxProducts = plan?.maxProducts ?? null;
+
   let totalProducts = 0;
   let totalVariants = 0;
   let nextPageInfo: string | null = null;
@@ -302,9 +368,13 @@ export async function processInitialBulkSync(shopId: string, job: Job<any>): Pro
 
       if (products.length === 0) break;
 
-      // Transform all products to Supabase rows
+      // Tetto del piano: processa al massimo `maxProducts` prodotti totali.
+      // I prodotti oltre il limite non vengono sincronizzati (upgrade richiesto).
+      const pageProducts = limitProducts<ShopifyProduct>(products, totalProducts, maxProducts);
+
+      // Transform products to Supabase rows
       const allRows = [];
-      for (const product of products) {
+      for (const product of pageProducts) {
         const rows = transformProduct(product);
         allRows.push(...rows);
         totalProducts++;
@@ -314,19 +384,21 @@ export async function processInitialBulkSync(shopId: string, job: Job<any>): Pro
       // Ogni riga ha ora un shopify_variant_id reale (anche i prodotti a
       // variante singola) → un solo upsert con la chiave univoca, senza
       // separare variant/non-variant.
-      const chunkSize = 1000;
-      for (let i = 0; i < allRows.length; i += chunkSize) {
-        const chunk = allRows.slice(i, i + chunkSize);
+      if (allRows.length > 0) {
+        const chunkSize = 1000;
+        for (let i = 0; i < allRows.length; i += chunkSize) {
+          const chunk = allRows.slice(i, i + chunkSize);
 
-        const { error } = await supabase
-          .from(shop.supabaseConfig.tableNameProducts)
-          .upsert(chunk, {
-            onConflict: 'shopify_variant_id',
-            ignoreDuplicates: false,
-          });
+          const { error } = await supabase
+            .from(shop.supabaseConfig.tableNameProducts)
+            .upsert(chunk, {
+              onConflict: 'shopify_variant_id',
+              ignoreDuplicates: false,
+            });
 
-        if (error) {
-          throw new Error(`Supabase products upsert failed: ${error.message}`);
+          if (error) {
+            throw new Error(`Supabase products upsert failed: ${error.message}`);
+          }
         }
       }
 
@@ -344,15 +416,15 @@ export async function processInitialBulkSync(shopId: string, job: Job<any>): Pro
         },
       });
 
+      // Limite del piano raggiunto: interrompi la paginazione.
+      if (isProductLimitReached(totalProducts, maxProducts)) break;
+
       nextPageInfo = nextPage;
 
     } while (nextPageInfo);
 
     // Sync customers if the shop's plan includes customer sync
     let totalCustomers = 0;
-    const plan = await prisma.plan.findUnique({
-      where: { planName: shop.currentPlan },
-    });
     if (plan?.customersSyncEnabled) {
       totalCustomers = await syncCustomers(
         shopifyClient,

@@ -1,17 +1,20 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from '@remix-run/node';
 import { json } from '@remix-run/node';
-import { useLoaderData, Form, useFetcher } from '@remix-run/react';
+import { useLoaderData, useFetcher } from '@remix-run/react';
 import { useEffect } from 'react';
 import {
   Page,
   Layout,
+  Box,
   BlockStack,
   InlineGrid,
   InlineStack,
   Button,
   Text,
+  Icon,
   Banner,
 } from '@shopify/polaris';
+import { ProductIcon, PersonIcon } from '@shopify/polaris-icons';
 import { StatsCard } from '~/components/Dashboard/StatsCard';
 import { ActivityLog } from '~/components/Dashboard/ActivityLog';
 import { PlanBanner } from '~/components/Dashboard/PlanBanner';
@@ -142,6 +145,16 @@ export default function Dashboard() {
   const stats = statsFetcher.data;
   const statsLoading = statsFetcher.state === 'loading' || !stats;
 
+  // Sync manuale/iniziale eseguita via fetcher: mostra il loader interno al
+  // pulsante durante l'esecuzione e resta disabilitato dopo il successo (le
+  // sincronizzazioni successive sono automatiche via cron).
+  const syncFetcher = useFetcher<{ ok?: boolean; error?: string }>();
+  const syncing = syncFetcher.state !== 'idle';
+  const hasCompletedSync =
+    recentJobs.some((j) => j.jobType === 'initial_bulk' && j.status === 'completed') ||
+    syncFetcher.data?.ok === true;
+  const syncDisabled = blocked || syncing || hasCompletedSync;
+
   const steps = resolveStepStates(supabaseConnected);
   const syncTitle = customersEnabled
     ? 'Sincronizza prodotti e clienti'
@@ -172,22 +185,64 @@ export default function Dashboard() {
       lockedHint:
         'Completa il collegamento a Supabase per sbloccare la sincronizzazione.',
       content: (
-        <BlockStack gap="300">
-          <Text as="p" tone="subdued">
-            Sincronizzerai {previewProducts} prodotti da Shopify → tabella{' '}
-            <code>products</code> su Supabase
-            {customersEnabled
-              ? ` e ${previewCustomers} clienti → tabella customers`
-              : ''}
-            .
-          </Text>
-          <Form method="post">
-            <InlineStack>
-              <Button submit variant="primary" disabled={blocked}>
-                Avvia sincronizzazione
+        <BlockStack gap="400">
+          <Box background="bg-surface-secondary" borderRadius="200" padding="400">
+            <BlockStack gap="300">
+              <Text as="h3" variant="headingSm">
+                Cosa verrà sincronizzato
+              </Text>
+              <BlockStack gap="200">
+                <InlineStack align="space-between" blockAlign="center">
+                  <InlineStack gap="200" blockAlign="center">
+                    <Icon source={ProductIcon} tone="subdued" />
+                    <Text as="span">
+                      Prodotti → tabella <code>products</code>
+                    </Text>
+                  </InlineStack>
+                  <Text as="span" variant="headingMd">
+                    {previewProducts}
+                  </Text>
+                </InlineStack>
+                {customersEnabled && (
+                  <InlineStack align="space-between" blockAlign="center">
+                    <InlineStack gap="200" blockAlign="center">
+                      <Icon source={PersonIcon} tone="subdued" />
+                      <Text as="span">
+                        Clienti → tabella <code>customers</code>
+                      </Text>
+                    </InlineStack>
+                    <Text as="span" variant="headingMd">
+                      {previewCustomers}
+                    </Text>
+                  </InlineStack>
+                )}
+              </BlockStack>
+            </BlockStack>
+          </Box>
+
+          <syncFetcher.Form method="post">
+            <InlineStack gap="300" blockAlign="center">
+              <Button
+                submit
+                variant="primary"
+                disabled={syncDisabled}
+                loading={syncing}
+              >
+                {hasCompletedSync
+                  ? 'Sincronizzazione completata'
+                  : 'Avvia sincronizzazione'}
               </Button>
+              {hasCompletedSync && !syncing && (
+                <Text as="span" tone="success">
+                  Le sincronizzazioni successive avvengono in automatico.
+                </Text>
+              )}
             </InlineStack>
-          </Form>
+          </syncFetcher.Form>
+
+          {syncFetcher.data?.error && (
+            <Banner tone="critical">{syncFetcher.data.error}</Banner>
+          )}
         </BlockStack>
       ),
     },
@@ -226,7 +281,7 @@ export default function Dashboard() {
           />
         )}
 
-        <InlineGrid columns={{ xs: 1, sm: 2, md: customersEnabled ? 4 : 3 }} gap="400">
+        <InlineGrid columns={{ xs: 1, sm: 2, md: 4 }} gap="400">
           <StatsCard
             title="Prodotti totali"
             value={stats?.totalProducts ?? 0}
@@ -244,11 +299,23 @@ export default function Dashboard() {
             status="critical"
             loading={statsLoading}
           />
-          {customersEnabled && (
+          {/* Card Clienti sempre presente: se il piano non include i clienti,
+              al posto del numero mostra il pulsante di upgrade. */}
+          {customersEnabled ? (
             <StatsCard
               title="Clienti"
               value={stats?.customerCount ?? 0}
               loading={statsLoading}
+            />
+          ) : (
+            <StatsCard
+              title="Clienti"
+              value=""
+              action={
+                <Button url="/billing" variant="primary">
+                  Aggiorna piano
+                </Button>
+              }
             />
           )}
         </InlineGrid>

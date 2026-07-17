@@ -245,6 +245,72 @@ describe('Initial bulk sync processor', () => {
     });
   });
 
+  it('should cap synced products to the plan maxProducts limit', async () => {
+    const mockShop = {
+      id: 'shop-free',
+      shopDomain: 'test-shop.myshopify.com',
+      accessToken: 'encrypted-token',
+      currentPlan: 'free',
+      supabaseConfig: {
+        syncEnabled: true,
+        tableNameProducts: 'products',
+        supabaseUrl: 'https://test.supabase.co',
+        supabasePublicKey: 'encrypted-key',
+        supabaseServiceRoleKey: 'encrypted-service',
+      },
+    };
+
+    vi.mocked(prisma.shop.findUnique).mockResolvedValue(mockShop as any);
+    // Piano con tetto di 2 prodotti.
+    vi.mocked(prisma.plan.findUnique).mockResolvedValue({ maxProducts: 2 } as any);
+    vi.mocked(prisma.syncJob.create).mockResolvedValue({ id: 'sync-free' } as any);
+    vi.mocked(prisma.syncJob.update).mockResolvedValue({} as any);
+
+    // Una sola pagina con 3 prodotti (più del limite) e un cursore successivo:
+    // il cap deve fermare la paginazione senza chiedere la pagina 2.
+    const page = [
+      { id: 1, title: 'P1', variants: [{ id: 101 }] },
+      { id: 2, title: 'P2', variants: [{ id: 201 }] },
+      { id: 3, title: 'P3', variants: [{ id: 301 }] },
+    ];
+    const mockGetProducts = vi.fn().mockResolvedValue({ products: page, nextPageInfo: 'page-2' });
+    vi.mocked(ShopifyAPIClient).mockImplementation(() => ({
+      getProducts: mockGetProducts,
+    } as any));
+
+    vi.mocked(transformProduct).mockImplementation((p: any) => [
+      { shopify_product_id: p.id, shopify_variant_id: p.variants[0].id, is_variant: true } as any,
+    ]);
+
+    const mockGte = vi.fn().mockReturnValue({ error: null });
+    const mockUpsert = vi.fn().mockReturnValue({ error: null });
+    vi.mocked(createSupabaseClient).mockReturnValue({
+      from: vi.fn().mockReturnValue({
+        delete: vi.fn().mockReturnValue({ gte: mockGte }),
+        upsert: mockUpsert,
+      }),
+    } as any);
+
+    const mockJob = { updateProgress: vi.fn().mockResolvedValue(undefined) } as unknown as Job;
+
+    await processInitialBulkSync('shop-free', mockJob);
+
+    // Solo 2 prodotti trasformati (cap), e paginazione fermata dopo la pagina 1.
+    expect(transformProduct).toHaveBeenCalledTimes(2);
+    expect(mockGetProducts).toHaveBeenCalledTimes(1);
+
+    // Job completato con productsSynced = 2.
+    const completedCall = vi.mocked(prisma.syncJob.update).mock.calls.find(
+      (call: any) => call[0].data?.status === 'completed'
+    );
+    expect(completedCall).toBeDefined();
+
+    const progressCall = vi.mocked(prisma.syncJob.update).mock.calls.find(
+      (call: any) => call[0].data?.productsSynced === 2
+    );
+    expect(progressCall).toBeDefined();
+  });
+
   it('should throw error if shop not configured for sync', async () => {
     const mockShop = {
       id: 'shop-3',
