@@ -7,6 +7,7 @@ import { transformProduct } from '../transformers/product.server';
 import { transformCustomer } from '../transformers/customer.server';
 import { createSupabaseClient } from '../supabase.server';
 import { prisma } from '../../db.server';
+import { isAuthorized } from '../../utils/authorization.server';
 import type { ShopifyCustomer } from '~/types/shopify';
 
 /**
@@ -75,6 +76,12 @@ export async function processPeriodicSyncCheck(shopId: string): Promise<void> {
 
   if (!shop || !shop.supabaseConfig || !shop.supabaseConfig.syncEnabled) {
     console.log(`Shop ${shopId} not configured for periodic sync`);
+    return;
+  }
+  // Gate autorizzazione (vale per la sync automatica): nessuna comunicazione se
+  // il negozio non è ENABLED (ban o trial scaduto).
+  if (!isAuthorized(shop.authorization)) {
+    console.log(`Shop ${shopId} non autorizzato: sync automatica sospesa`);
     return;
   }
 
@@ -251,6 +258,10 @@ export async function processInitialBulkSync(shopId: string, job: Job<any>): Pro
 
   if (!shop || !shop.supabaseConfig || !shop.supabaseConfig.syncEnabled) {
     throw new Error(`Shop ${shopId} not configured for sync`);
+  }
+  // Gate autorizzazione (vale per manuale e automatico): blocca se non ENABLED.
+  if (!isAuthorized(shop.authorization)) {
+    throw new Error(`Shop ${shopId} non autorizzato all'uso dell'app`);
   }
 
   const shopifyClient = new ShopifyAPIClient(shop.shopDomain, shop.accessToken);

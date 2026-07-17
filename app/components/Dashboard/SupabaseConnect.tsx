@@ -29,9 +29,11 @@ interface SupabaseConnectProps {
   connected: boolean;
   projectName?: string;
   projectUrl?: string;
+  // Se true (negozio non ENABLED) tutti i pulsanti d'azione sono disabilitati.
+  disabled?: boolean;
 }
 
-export function SupabaseConnect({ connected, projectName, projectUrl }: SupabaseConnectProps) {
+export function SupabaseConnect({ connected, projectName, projectUrl, disabled }: SupabaseConnectProps) {
   const revalidator = useRevalidator();
   const urlFetcher = useFetcher<{ url?: string; error?: string }>();
   const projectsFetcher = useFetcher<{ projects: SupabaseProject[]; error?: string }>();
@@ -236,6 +238,7 @@ export function SupabaseConnect({ connected, projectName, projectUrl }: Supabase
             tone="critical"
             onClick={() => setShowDisconnect(true)}
             loading={disconnectFetcher.state !== 'idle'}
+            disabled={disabled}
           >
             Disconnetti
           </Button>
@@ -283,7 +286,7 @@ export function SupabaseConnect({ connected, projectName, projectUrl }: Supabase
 
       {!projectsLoaded && (
         <InlineStack>
-          <Button variant="primary" onClick={startConnect} loading={connecting}>
+          <Button variant="primary" onClick={startConnect} loading={connecting} disabled={disabled}>
             Collega Supabase
           </Button>
         </InlineStack>
@@ -334,7 +337,7 @@ export function SupabaseConnect({ connected, projectName, projectUrl }: Supabase
 
       {projectsLoaded && projects && !showCreate && (
         <InlineStack>
-          <Button onClick={() => setShowCreate(true)}>➕ Crea nuovo progetto</Button>
+          <Button onClick={() => setShowCreate(true)} disabled={disabled}>➕ Crea nuovo progetto</Button>
         </InlineStack>
       )}
 
@@ -388,7 +391,7 @@ export function SupabaseConnect({ connected, projectName, projectUrl }: Supabase
                   variant="primary"
                   onClick={submitCreate}
                   loading={createFetcher.state !== 'idle'}
-                  disabled={!newName}
+                  disabled={!newName || disabled}
                 >
                   Crea progetto
                 </Button>
@@ -412,6 +415,7 @@ export function SupabaseConnect({ connected, projectName, projectUrl }: Supabase
               variant="primary"
               onClick={confirmSelection}
               loading={selectFetcher.state !== 'idle'}
+              disabled={disabled}
             >
               Conferma e crea tabelle
             </Button>

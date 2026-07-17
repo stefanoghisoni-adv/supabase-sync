@@ -43,6 +43,10 @@ model Shop {
   billingCycle      String?            @map("billing_cycle")
   installedAt       DateTime           @default(now()) @map("installed_at")
   uninstalledAt     DateTime?          @map("uninstalled_at")
+  // Autorizzazione all'uso dell'app, gestita manualmente dall'owner su Supabase:
+  // ENABLED (uso normale), PENDING (trial scaduto: tutto sospeso, banner warning),
+  // DISABLED (ban: tutto bloccato, banner danger, fatturazione sospesa).
+  authorization     String             @default("ENABLED")
 
   supabaseConfig    SupabaseConfig?
   supabaseOAuthToken SupabaseOAuthToken?
@@ -87,6 +91,8 @@ model Plan {
   customFieldsLimit      Int?     @map("custom_fields_limit")
   supportLevel           String   @map("support_level")
   customersSyncEnabled   Boolean  @default(false) @map("customers_sync_enabled")
+  // Giorni di prova prima che l'app passi automaticamente in PENDING (null = nessun limite).
+  trialDays              Int?     @map("trial_days")
   createdAt              DateTime @default(now()) @map("created_at")
 
   @@map("plans")

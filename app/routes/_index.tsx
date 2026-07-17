@@ -10,6 +10,7 @@ import {
   InlineStack,
   Button,
   Text,
+  Banner,
 } from '@shopify/polaris';
 import { StatsCard } from '~/components/Dashboard/StatsCard';
 import { ActivityLog } from '~/components/Dashboard/ActivityLog';
@@ -19,6 +20,7 @@ import { resolveStepStates } from '~/components/Dashboard/stepper-state';
 import { SupabaseConnect } from '~/components/Dashboard/SupabaseConnect';
 import { prisma } from '~/db.server';
 import { getOrCreateShop } from '~/utils/shop.server';
+import { normalizeAuthorization, isAuthorized } from '~/utils/authorization.server';
 import { processManualSync } from '~/lib/workers/processors.server';
 import { authenticate } from '~/shopify.server';
 
@@ -33,6 +35,20 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const plan = await prisma.plan.findUnique({
       where: { planName: shop.currentPlan },
     });
+
+    // Autorizzazione: se il trial (giorni definiti nel piano) è scaduto e il
+    // negozio è ancora ENABLED, lo portiamo automaticamente in PENDING (persistente).
+    let authorization = normalizeAuthorization(shop.authorization);
+    if (authorization === 'ENABLED' && shop.isInTrial && plan?.trialDays) {
+      const trialEnd = shop.installedAt.getTime() + plan.trialDays * 86_400_000;
+      if (Date.now() > trialEnd) {
+        authorization = 'PENDING';
+        await prisma.shop.update({
+          where: { id: shop.id },
+          data: { authorization: 'PENDING' },
+        });
+      }
+    }
 
     const recentJobs = await prisma.syncJob.findMany({
       where: { shopId: shop.id },
@@ -49,6 +65,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       recentJobs,
       supabaseConnected,
       customersEnabled,
+      authorization,
     });
   } catch (err) {
     // Le Response (redirect di auth, 404) devono passare intatte.
@@ -70,6 +87,16 @@ export async function action({ request }: ActionFunctionArgs) {
 
   try {
     const shop = await getOrCreateShop(session);
+
+    // Gate autorizzazione: nessuna azione se il negozio non è ENABLED (ban o
+    // trial scaduto). Enforcement server-side: vale anche se l'utente riabilita
+    // i pulsanti nell'HTML.
+    if (!isAuthorized(shop.authorization)) {
+      return json(
+        { error: "L'utilizzo dell'app è sospeso per questo negozio.", code: 'not_authorized' },
+        { status: 403 },
+      );
+    }
 
     // Sincronizzazione manuale eseguita SUBITO, in modo sincrono: la prima
     // popolazione delle tabelle è immediata (niente attesa del cron). Le
@@ -101,8 +128,9 @@ interface StatsResponse {
 }
 
 export default function Dashboard() {
-  const { shop, plan, recentJobs, supabaseConnected, customersEnabled } =
+  const { shop, plan, recentJobs, supabaseConnected, customersEnabled, authorization } =
     useLoaderData<typeof loader>();
+  const blocked = authorization !== 'ENABLED';
 
   const statsFetcher = useFetcher<StatsResponse>();
 
@@ -133,6 +161,7 @@ export default function Dashboard() {
           connected={supabaseConnected}
           projectName={shop.supabaseConfig?.supabaseProjectRef ?? undefined}
           projectUrl={shop.supabaseConfig?.supabaseUrl ?? undefined}
+          disabled={blocked}
         />
       ),
     },
@@ -154,7 +183,7 @@ export default function Dashboard() {
           </Text>
           <Form method="post">
             <InlineStack>
-              <Button submit variant="primary">
+              <Button submit variant="primary" disabled={blocked}>
                 Avvia sincronizzazione
               </Button>
             </InlineStack>
@@ -167,6 +196,24 @@ export default function Dashboard() {
   return (
     <Page title="Dashboard">
       <BlockStack gap="500">
+        {/* Banner di blocco (non chiudibile): danger se DISABLED, warning se PENDING. */}
+        {authorization === 'DISABLED' && (
+          <Banner tone="critical" title="App disabilitata">
+            <Text as="p">
+              L'utilizzo dell'app è stato disabilitato per questo negozio. Tutte le funzioni e
+              le sincronizzazioni sono sospese.
+            </Text>
+          </Banner>
+        )}
+        {authorization === 'PENDING' && (
+          <Banner tone="warning" title="Periodo di prova terminato">
+            <Text as="p">
+              Il periodo di prova è terminato: il tracciamento che utilizza le tabelle Supabase
+              è sospeso. Aggiorna il piano per riattivarlo.
+            </Text>
+          </Banner>
+        )}
+
         {plan && (
           <PlanBanner
             shop={shop}

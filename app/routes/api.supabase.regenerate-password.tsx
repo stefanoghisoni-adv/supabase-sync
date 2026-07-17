@@ -7,11 +7,18 @@ import { encrypt } from '~/utils/crypto.server';
 import { getValidAccessToken } from '~/lib/supabase-oauth.server';
 import { resetDbPassword } from '~/lib/supabase-management.server';
 import { generateDbPassword } from '~/lib/password.server';
+import { isAuthorized } from '~/utils/authorization.server';
 
 export async function action({ request }: ActionFunctionArgs) {
   const { session } = await authenticate.admin(request);
   const shop = await prisma.shop.findUnique({ where: { shopDomain: session.shop } });
   if (!shop) return json({ ok: false, error: 'Shop non trovato' }, { status: 404 });
+  if (!isAuthorized(shop.authorization)) {
+    return json(
+      { ok: false, error: "L'utilizzo dell'app è sospeso per questo negozio.", code: 'not_authorized' },
+      { status: 403 },
+    );
+  }
 
   const config = await prisma.supabaseConfig.findUnique({ where: { shopId: shop.id } });
   if (!config?.supabaseProjectRef) {

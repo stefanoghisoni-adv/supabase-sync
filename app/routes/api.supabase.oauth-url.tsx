@@ -4,6 +4,7 @@ import { authenticate } from '~/shopify.server';
 import { prisma } from '~/db.server';
 import { signState } from '~/lib/supabase-oauth.server';
 import { buildAuthorizeUrl } from '~/lib/supabase-management.server';
+import { isAuthorized } from '~/utils/authorization.server';
 
 export async function action({ request }: ActionFunctionArgs) {
   const { session } = await authenticate.admin(request);
@@ -13,6 +14,12 @@ export async function action({ request }: ActionFunctionArgs) {
   });
   if (!shop) {
     return json({ error: 'Shop non trovato' }, { status: 404 });
+  }
+  if (!isAuthorized(shop.authorization)) {
+    return json(
+      { error: "L'utilizzo dell'app è sospeso per questo negozio.", code: 'not_authorized' },
+      { status: 403 },
+    );
   }
 
   const clientId = process.env.SUPABASE_OAUTH_CLIENT_ID;
