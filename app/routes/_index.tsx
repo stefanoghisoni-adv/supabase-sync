@@ -1,7 +1,7 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from '@remix-run/node';
 import { json } from '@remix-run/node';
-import { useLoaderData, useFetcher } from '@remix-run/react';
-import { useEffect } from 'react';
+import { useLoaderData, useFetcher, useRevalidator } from '@remix-run/react';
+import { useEffect, useState } from 'react';
 import {
   Page,
   Layout,
@@ -12,6 +12,7 @@ import {
   Button,
   Text,
   Icon,
+  Tooltip,
   Banner,
 } from '@shopify/polaris';
 import { ProductIcon, PersonIcon } from '@shopify/polaris-icons';
@@ -24,7 +25,7 @@ import { SupabaseConnect } from '~/components/Dashboard/SupabaseConnect';
 import { prisma } from '~/db.server';
 import { getOrCreateShop } from '~/utils/shop.server';
 import { normalizeAuthorization, isAuthorized } from '~/utils/authorization.server';
-import { processManualSync } from '~/lib/workers/processors.server';
+import { enqueueManualSync, triggerSyncDrain } from '~/lib/queue/trigger.server';
 import { authenticate } from '~/shopify.server';
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -62,12 +63,24 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const supabaseConnected = !!shop.supabaseConfig?.connectionVerifiedAt;
     const customersEnabled = plan?.customersSyncEnabled ?? false;
 
+    // Stato della sync iniziale/manuale, dal job initial_bulk più recente:
+    // 'in_progress' (in corso, drain avviato), 'completed' (già fatta, una
+    // tantum), 'idle' (mai avviata). Guida lo stato del pulsante in Home.
+    const latestBulk = recentJobs.find((j) => j.jobType === 'initial_bulk');
+    const syncState: 'idle' | 'in_progress' | 'completed' =
+      latestBulk?.status === 'running'
+        ? 'in_progress'
+        : latestBulk?.status === 'completed'
+          ? 'completed'
+          : 'idle';
+
     return json({
       shop,
       plan,
       recentJobs,
       supabaseConnected,
       customersEnabled,
+      syncState,
       authorization,
     });
   } catch (err) {
@@ -101,22 +114,20 @@ export async function action({ request }: ActionFunctionArgs) {
       );
     }
 
-    // Sincronizzazione manuale eseguita SUBITO, in modo sincrono: la prima
-    // popolazione delle tabelle è immediata (niente attesa del cron). Le
-    // sync automatiche periodiche restano gestite dal cron secondo l'intervallo
-    // configurato in Impostazioni. Lo stub `job` copre updateProgress, usato
-    // solo per il tracking di coda (qui non serve).
-    const stubJob = {
-      updateProgress: async () => {},
-    } as unknown as Parameters<typeof processManualSync>[1];
-    await processManualSync(shop.id, stubJob);
+    // Sync in background durabile: mettiamo il job in coda (sopravvive a browser
+    // chiuso / timeout) e inneschiamo SUBITO il drain in un'invocazione separata,
+    // così la prima sync parte immediatamente senza attendere il cron. Se il
+    // trigger fallisce, il cron ogni 30 min drena comunque la coda. Le sync
+    // periodiche restano gestite dal cron secondo l'intervallo in Impostazioni.
+    await enqueueManualSync(shop.id);
+    triggerSyncDrain();
 
-    return json({ ok: true });
+    return json({ queued: true });
   } catch (err) {
     // Non far crashare la pagina con "Unexpected Server Error": errore gestito.
     console.error('[dashboard action] sync fallita:', err instanceof Error ? err.message : 'errore sconosciuto');
     return json(
-      { error: 'Sincronizzazione non riuscita. Verifica il collegamento a Supabase e riprova.' },
+      { error: 'Avvio sincronizzazione non riuscito. Verifica il collegamento a Supabase e riprova.' },
       { status: 502 },
     );
   }
@@ -131,7 +142,7 @@ interface StatsResponse {
 }
 
 export default function Dashboard() {
-  const { shop, plan, recentJobs, supabaseConnected, customersEnabled, authorization } =
+  const { shop, plan, supabaseConnected, customersEnabled, authorization, syncState, recentJobs } =
     useLoaderData<typeof loader>();
   const blocked = authorization !== 'ENABLED';
 
@@ -145,15 +156,37 @@ export default function Dashboard() {
   const stats = statsFetcher.data;
   const statsLoading = statsFetcher.state === 'loading' || !stats;
 
-  // Sync manuale/iniziale eseguita via fetcher: mostra il loader interno al
-  // pulsante durante l'esecuzione e resta disabilitato dopo il successo (le
-  // sincronizzazioni successive sono automatiche via cron).
-  const syncFetcher = useFetcher<{ ok?: boolean; error?: string }>();
-  const syncing = syncFetcher.state !== 'idle';
-  const hasCompletedSync =
-    recentJobs.some((j) => j.jobType === 'initial_bulk' && j.status === 'completed') ||
-    syncFetcher.data?.ok === true;
-  const syncDisabled = blocked || syncing || hasCompletedSync;
+  // Sync in background durabile (coda + drain). Il pulsante mostra il loader
+  // mentre la sync è in corso — anche se prosegue in background a pagina chiusa —
+  // e resta disabilitato dopo il completamento (le successive sono automatiche).
+  const revalidator = useRevalidator();
+  const syncFetcher = useFetcher<{ queued?: boolean; error?: string }>();
+  const [justQueued, setJustQueued] = useState(false);
+
+  // Appena il job è in coda: mostra subito "in corso" e avvia il polling finché
+  // il loader non riflette lo stato running/completed dal DB.
+  useEffect(() => {
+    if (syncFetcher.data?.queued) {
+      setJustQueued(true);
+      revalidator.revalidate();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [syncFetcher.data]);
+
+  const syncCompleted = syncState === 'completed';
+  const submitting = syncFetcher.state !== 'idle';
+  const inProgress =
+    submitting || syncState === 'in_progress' || (justQueued && !syncCompleted);
+
+  // Polling mentre la sync è in corso: rileva il passaggio a "completed".
+  useEffect(() => {
+    if (!inProgress || syncCompleted) return;
+    const id = setInterval(() => revalidator.revalidate(), 4000);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inProgress, syncCompleted]);
+
+  const syncDisabled = blocked || inProgress || syncCompleted;
 
   const steps = resolveStepStates(supabaseConnected);
   const syncTitle = customersEnabled
@@ -226,17 +259,23 @@ export default function Dashboard() {
                 submit
                 variant="primary"
                 disabled={syncDisabled}
-                loading={syncing}
+                loading={inProgress}
               >
-                {hasCompletedSync
+                {syncCompleted
                   ? 'Sincronizzazione completata'
-                  : 'Avvia sincronizzazione'}
+                  : inProgress
+                    ? 'Sincronizzazione in corso…'
+                    : 'Avvia sincronizzazione'}
               </Button>
-              {hasCompletedSync && !syncing && (
+              {syncCompleted ? (
                 <Text as="span" tone="success">
                   Le sincronizzazioni successive avvengono in automatico.
                 </Text>
-              )}
+              ) : inProgress ? (
+                <Text as="span" tone="subdued">
+                  Prosegue in background: puoi chiudere questa pagina.
+                </Text>
+              ) : null}
             </InlineStack>
           </syncFetcher.Form>
 
@@ -312,9 +351,11 @@ export default function Dashboard() {
               title="Clienti"
               value=""
               action={
-                <Button url="/billing" variant="primary">
-                  Aggiorna piano
-                </Button>
+                <Tooltip content="Presto disponibile">
+                  <Button variant="primary" disabled>
+                    Aggiorna piano
+                  </Button>
+                </Tooltip>
               }
             />
           )}
