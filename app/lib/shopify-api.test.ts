@@ -91,6 +91,53 @@ describe('Shopify API Client', () => {
     expect(mockFetch).toHaveBeenCalled();
   });
 
+  it('should return the products count from products/count.json', async () => {
+    const mockFetch = global.fetch as any;
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ count: 4820 }),
+      headers: new Map(),
+    });
+
+    const client = new ShopifyAPIClient('test.myshopify.com', 'token');
+    const count = await client.getProductsCount();
+
+    const calledUrl = new URL(mockFetch.mock.calls[0][0]);
+    expect(calledUrl.pathname).toContain('products/count.json');
+    expect(count).toBe(4820);
+  });
+
+  it('should restrict the payload via the fields param when provided', async () => {
+    const mockFetch = global.fetch as any;
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ products: [] }),
+      headers: new Map(),
+    });
+
+    const client = new ShopifyAPIClient('test.myshopify.com', 'token');
+    await client.getProducts({ limit: 250, fields: 'id,variants' });
+
+    const calledUrl = new URL(mockFetch.mock.calls[0][0]);
+    expect(calledUrl.searchParams.get('fields')).toBe('id,variants');
+  });
+
+  it('should keep the fields param together with page_info (cursor allows it)', async () => {
+    const mockFetch = global.fetch as any;
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ products: [] }),
+      headers: new Map(),
+    });
+
+    const client = new ShopifyAPIClient('test.myshopify.com', 'token');
+    await client.getProducts({ limit: 250, pageInfo: 'cursor123', fields: 'id,variants' });
+
+    const calledUrl = new URL(mockFetch.mock.calls[0][0]);
+    expect(calledUrl.searchParams.get('page_info')).toBe('cursor123');
+    expect(calledUrl.searchParams.get('fields')).toBe('id,variants');
+  });
+
   it('should return the customers count from customers/count.json', async () => {
     const mockFetch = global.fetch as any;
     mockFetch.mockResolvedValueOnce({

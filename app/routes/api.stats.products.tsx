@@ -16,11 +16,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
     throw new Response('Shop not found', { status: 404 });
   }
 
-  const plan = await prisma.plan.findUnique({
-    where: { planName: shop.currentPlan },
-  });
-  const customersEnabled = plan?.customersSyncEnabled ?? false;
-
   const client = new ShopifyAPIClient(shop.shopDomain, shop.accessToken);
 
   let totalProducts = 0;
@@ -28,10 +23,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
   let problemCount = 0;
   let pageInfo: string | undefined;
 
+  // Scomposizione pronti/problemi: richiede il dato per-variante, quindi la
+  // paginazione completa è inevitabile. La alleggeriamo però al minimo indispensabile
+  // (`fields=id,variants`): la readiness legge solo variants.cost, non serve scaricare
+  // immagini, tag, descrizioni. I conteggi totali stanno nell'endpoint /api/stats/counts.
   do {
     const { products, nextPageInfo } = await client.getProducts({
       limit: 250,
       pageInfo,
+      fields: 'id,variants',
     });
     const counts = computeProductReadiness(products ?? []);
     totalProducts += counts.totalProducts;
@@ -40,15 +40,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
     pageInfo = nextPageInfo ?? undefined;
   } while (pageInfo);
 
-  const customerCount = customersEnabled
-    ? await client.getCustomersCount()
-    : null;
-
   return json({
     totalProducts,
     readyCount,
     problemCount,
-    customersEnabled,
-    customerCount,
   });
 }

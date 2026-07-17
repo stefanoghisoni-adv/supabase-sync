@@ -132,12 +132,16 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 }
 
-interface StatsResponse {
+interface CountsResponse {
+  totalProducts: number;
+  customersEnabled: boolean;
+  customerCount: number | null;
+}
+
+interface ReadinessResponse {
   totalProducts: number;
   readyCount: number;
   problemCount: number;
-  customersEnabled: boolean;
-  customerCount: number | null;
 }
 
 export default function Dashboard() {
@@ -145,15 +149,23 @@ export default function Dashboard() {
     useLoaderData<typeof loader>();
   const blocked = authorization !== 'ENABLED';
 
-  const statsFetcher = useFetcher<StatsResponse>();
+  // Due fetcher separati: i conteggi (totale prodotti/clienti) sono chiamate
+  // "count" istantanee e alimentano subito PlanBanner, card totali e anteprima;
+  // la readiness (pronti/problemi) richiede la paginazione completa e riempie solo
+  // le sue due card in un secondo momento, senza bloccare il resto.
+  const countsFetcher = useFetcher<CountsResponse>();
+  const readinessFetcher = useFetcher<ReadinessResponse>();
 
   useEffect(() => {
-    statsFetcher.load('/api/stats/products');
+    countsFetcher.load('/api/stats/counts');
+    readinessFetcher.load('/api/stats/products');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const stats = statsFetcher.data;
-  const statsLoading = statsFetcher.state === 'loading' || !stats;
+  const counts = countsFetcher.data;
+  const readiness = readinessFetcher.data;
+  const countsLoading = countsFetcher.state === 'loading' || !counts;
+  const readinessLoading = readinessFetcher.state === 'loading' || !readiness;
 
   // Sync in background durabile (coda + drain). Il pulsante mostra il loader
   // mentre la sync è in corso — anche se prosegue in background a pagina chiusa —
@@ -192,8 +204,8 @@ export default function Dashboard() {
     ? 'Sincronizza prodotti e clienti'
     : 'Sincronizza prodotti';
 
-  const previewProducts = stats?.totalProducts ?? '…';
-  const previewCustomers = stats?.customerCount ?? '…';
+  const previewProducts = counts?.totalProducts ?? '…';
+  const previewCustomers = counts?.customerCount ?? '…';
 
   const stepperItems: StepperItem[] = [
     {
@@ -319,8 +331,8 @@ export default function Dashboard() {
             shop={shop}
             plan={plan}
             currentUsage={{
-              products: stats?.totalProducts ?? 0,
-              customers: stats?.customerCount ?? 0,
+              products: counts?.totalProducts ?? 0,
+              customers: counts?.customerCount ?? 0,
               customFields: 0,
             }}
           />
@@ -329,28 +341,28 @@ export default function Dashboard() {
         <InlineGrid columns={{ xs: 1, sm: 2, md: 4 }} gap="400">
           <StatsCard
             title="Prodotti totali"
-            value={stats?.totalProducts ?? 0}
-            loading={statsLoading}
+            value={counts?.totalProducts ?? 0}
+            loading={countsLoading}
           />
           <StatsCard
             title="Prodotti pronti"
-            value={stats?.readyCount ?? 0}
+            value={readiness?.readyCount ?? 0}
             status="success"
-            loading={statsLoading}
+            loading={readinessLoading}
           />
           <StatsCard
             title="Prodotti con problemi"
-            value={stats?.problemCount ?? 0}
+            value={readiness?.problemCount ?? 0}
             status="critical"
-            loading={statsLoading}
+            loading={readinessLoading}
           />
           {/* Card Clienti sempre presente: se il piano non include i clienti,
               al posto del numero mostra il pulsante di upgrade. */}
           {customersEnabled ? (
             <StatsCard
               title="Clienti"
-              value={stats?.customerCount ?? 0}
-              loading={statsLoading}
+              value={counts?.customerCount ?? 0}
+              loading={countsLoading}
             />
           ) : (
             <StatsCard

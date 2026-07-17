@@ -69,6 +69,7 @@ export class ShopifyAPIClient {
     limit?: number;
     pageInfo?: string;
     updatedAtMin?: string;
+    fields?: string;
   } = {}) {
     const params: Record<string, string | number | boolean | undefined> = {
       limit: options.limit || 250,
@@ -83,6 +84,12 @@ export class ShopifyAPIClient {
       params.updated_at_min = options.updatedAtMin;
     }
 
+    // `fields` restringe il payload (compatibile anche con page_info): utile per la
+    // sola readiness, che legge esclusivamente variants.cost e non serve il resto.
+    if (options.fields) {
+      params.fields = options.fields;
+    }
+
     const { data, nextPageInfo } = await this.makeRequest('products.json', params);
 
     return {
@@ -94,6 +101,11 @@ export class ShopifyAPIClient {
   async getProductById(productId: number) {
     const { data } = await this.makeRequest(`products/${productId}.json`);
     return data.product;
+  }
+
+  async getProductsCount(): Promise<number> {
+    const { data } = await this.makeRequest('products/count.json');
+    return typeof data.count === 'number' ? data.count : 0;
   }
 
   async getCustomers(options: {
