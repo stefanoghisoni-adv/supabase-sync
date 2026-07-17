@@ -42,6 +42,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_products_variant
 CREATE INDEX IF NOT EXISTS idx_products_product_id ON products(shopify_product_id);
 CREATE INDEX IF NOT EXISTS idx_products_sku ON products(sku);
 CREATE INDEX IF NOT EXISTS idx_products_status ON products(product_status);
+
+-- RLS attiva (senza policy pubbliche): la tabella NON è accessibile via Data API
+-- con la anon key. L'app scrive/legge con la service_role key, che bypassa RLS.
+ALTER TABLE products ENABLE ROW LEVEL SECURITY;
 `;
 
 export const CUSTOMERS_TABLE_SQL = `
@@ -69,6 +73,10 @@ CREATE TABLE IF NOT EXISTS customers (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_customers_shopify_id ON customers(shopify_customer_id);
 CREATE INDEX IF NOT EXISTS idx_customers_email ON customers(email) WHERE email IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_customers_phone ON customers(phone) WHERE phone IS NOT NULL;
+
+-- RLS attiva (senza policy pubbliche): la tabella NON è accessibile via Data API
+-- con la anon key. L'app scrive/legge con la service_role key, che bypassa RLS.
+ALTER TABLE customers ENABLE ROW LEVEL SECURITY;
 `;
 
 export const MERCHANT_TABLES_SQL = PRODUCTS_TABLE_SQL + CUSTOMERS_TABLE_SQL;
