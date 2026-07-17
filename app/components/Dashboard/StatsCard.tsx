@@ -1,4 +1,13 @@
-import { Card, Text, BlockStack, SkeletonBodyText } from '@shopify/polaris';
+import {
+  Card,
+  Text,
+  BlockStack,
+  InlineStack,
+  Icon,
+  Tooltip,
+  SkeletonBodyText,
+} from '@shopify/polaris';
+import { InfoIcon } from '@shopify/polaris-icons';
 
 type StatsStatus = 'success' | 'warning' | 'critical';
 
@@ -11,6 +20,10 @@ interface StatsCardProps {
   // Se presente, viene mostrato al posto del valore numerico (es. un pulsante
   // "Aggiorna piano" nella card Clienti quando il piano non include i clienti).
   action?: React.ReactNode;
+  // Testo mostrato in un tooltip accanto al titolo tramite un'icona "i".
+  info?: string;
+  // Contenuto opzionale sotto il valore (es. un pulsante "Vedi dettagli").
+  footer?: React.ReactNode;
 }
 
 // Polaris <Text> uses "caution" rather than "warning" for its tone scale.
@@ -20,14 +33,33 @@ const TONE_BY_STATUS: Record<StatsStatus, 'success' | 'caution' | 'critical'> = 
   critical: 'critical',
 };
 
-export function StatsCard({ title, value, icon, status, loading, action }: StatsCardProps) {
+export function StatsCard({
+  title,
+  value,
+  icon,
+  status,
+  loading,
+  action,
+  info,
+  footer,
+}: StatsCardProps) {
   return (
     <Card>
       <BlockStack gap="200">
         {icon}
-        <Text as="h2" variant="headingMd">
-          {title}
-        </Text>
+        <InlineStack gap="100" blockAlign="center">
+          <Text as="h2" variant="headingMd">
+            {title}
+          </Text>
+          {info && (
+            <Tooltip content={info}>
+              {/* span necessario: il Tooltip ha bisogno di un elemento focusabile/hoverabile */}
+              <span style={{ display: 'inline-flex', cursor: 'help' }} tabIndex={0}>
+                <Icon source={InfoIcon} tone="subdued" />
+              </span>
+            </Tooltip>
+          )}
+        </InlineStack>
         {action ? (
           action
         ) : loading ? (
@@ -41,6 +73,7 @@ export function StatsCard({ title, value, icon, status, loading, action }: Stats
             {String(value)}
           </Text>
         )}
+        {footer}
       </BlockStack>
     </Card>
   );

@@ -1,8 +1,15 @@
 import { describe, it, expect } from 'vitest';
-import { isVariantReady, computeProductReadiness } from './product-readiness';
+import {
+  isVariantReady,
+  computeProductReadiness,
+  collectProblemVariants,
+} from './product-readiness';
 import type { ShopifyProduct } from '~/types/shopify';
 
-function makeProduct(costs: (string | null)[]): ShopifyProduct {
+function makeProduct(
+  costs: (string | null)[],
+  overrides: Partial<ShopifyProduct> = {},
+): ShopifyProduct {
   return {
     id: 1, title: 't', body_html: '', vendor: '', product_type: '', handle: 'h',
     status: 'active', tags: '', published_at: null,
@@ -13,6 +20,7 @@ function makeProduct(costs: (string | null)[]): ShopifyProduct {
       requires_shipping: true, taxable: true, image_id: null,
       option1: null, option2: null, option3: null,
     })),
+    ...overrides,
   };
 }
 
@@ -41,5 +49,39 @@ describe('computeProductReadiness', () => {
     expect(computeProductReadiness([])).toEqual({
       totalProducts: 0, readyCount: 0, problemCount: 0,
     });
+  });
+});
+
+describe('collectProblemVariants', () => {
+  it('returns one row per variant missing cost_per_item, with product/variant details', () => {
+    const products = [
+      makeProduct(['5.00', null], { id: 10, title: 'Maglietta' }),
+    ];
+    // La seconda variante (index 1) ha cost null → è quella problematica.
+    products[0].variants[1].sku = 'SKU-2';
+    products[0].variants[1].title = 'Rossa / M';
+
+    const rows = collectProblemVariants(products);
+    expect(rows).toEqual([
+      {
+        productId: 10,
+        productTitle: 'Maglietta',
+        variantId: 2,
+        variantTitle: 'Rossa / M',
+        sku: 'SKU-2',
+        missingField: 'cost_per_item',
+      },
+    ]);
+  });
+
+  it('normalizes an empty sku to null and skips ready variants', () => {
+    const rows = collectProblemVariants([makeProduct(['3.00', '   '])]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].sku).toBeNull();
+    expect(rows[0].variantId).toBe(2);
+  });
+
+  it('returns an empty list when every variant is ready', () => {
+    expect(collectProblemVariants([makeProduct(['1.00', '2.00'])])).toEqual([]);
   });
 });

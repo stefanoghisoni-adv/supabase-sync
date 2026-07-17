@@ -1,6 +1,6 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from '@remix-run/node';
 import { json } from '@remix-run/node';
-import { useLoaderData, useFetcher, useRevalidator } from '@remix-run/react';
+import { useLoaderData, useFetcher, useRevalidator, useNavigate } from '@remix-run/react';
 import { useEffect, useState } from 'react';
 import {
   Page,
@@ -148,6 +148,7 @@ export default function Dashboard() {
   const { shop, plan, supabaseConnected, customersEnabled, authorization, syncState, recentJobs } =
     useLoaderData<typeof loader>();
   const blocked = authorization !== 'ENABLED';
+  const navigate = useNavigate();
 
   // Due fetcher separati: i conteggi (totale prodotti/clienti) sono chiamate
   // "count" istantanee e alimentano subito PlanBanner, card totali e anteprima;
@@ -355,6 +356,17 @@ export default function Dashboard() {
             value={readiness?.problemCount ?? 0}
             status="critical"
             loading={readinessLoading}
+            info="Prodotti in cui manca il valore per cost_per_item."
+            footer={
+              <Box paddingBlockStart="100">
+                <Button
+                  variant="plain"
+                  onClick={() => navigate('/prodotti/problemi')}
+                >
+                  Vedi dettagli
+                </Button>
+              </Box>
+            }
           />
           {/* Card Clienti sempre presente: se il piano non include i clienti,
               al posto del numero mostra il pulsante di upgrade. */}
