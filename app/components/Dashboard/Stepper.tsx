@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { Card, BlockStack, InlineStack, Text, Badge } from '@shopify/polaris';
+import type { BadgeProps } from '@shopify/polaris';
 import type { StepState } from './stepper-state';
 
 export interface StepperItem {
@@ -14,6 +15,9 @@ export interface StepperItem {
   activeLabel?: string;
   // Se true, non mostra alcun badge (es. lo step sync una volta completato).
   hideBadge?: boolean;
+  // Badge completamente personalizzato: sovrascrive tone/label derivati da state.
+  // Serve al primo step per distinguere "Non collegato"/"In corso"/"Collegato".
+  badge?: { tone?: BadgeProps['tone']; label: string };
 }
 
 const BADGE: Record<StepState, { tone?: 'success' | 'info'; label: string }> = {
@@ -43,8 +47,8 @@ export function Stepper({ steps }: { steps: StepperItem[] }) {
                 {index + 1}. {step.title}
               </Text>
               {!step.hideBadge && (
-                <Badge tone={BADGE[step.state].tone}>
-                  {badgeLabel(step)}
+                <Badge tone={step.badge ? step.badge.tone : BADGE[step.state].tone}>
+                  {step.badge ? step.badge.label : badgeLabel(step)}
                 </Badge>
               )}
             </InlineStack>

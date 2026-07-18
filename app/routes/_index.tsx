@@ -150,6 +150,15 @@ export default function Dashboard() {
   const blocked = authorization !== 'ENABLED';
   const navigate = useNavigate();
 
+  // Stato del collegamento Supabase per il badge del primo step:
+  // Non collegato (grigio) → In corso (arancione) → Collegato (verde).
+  const [connectInProgress, setConnectInProgress] = useState(false);
+  const connectBadge = supabaseConnected
+    ? { tone: 'success' as const, label: 'Collegato' }
+    : connectInProgress
+      ? { tone: 'attention' as const, label: 'In corso' }
+      : { tone: undefined, label: 'Non collegato' };
+
   // Due fetcher separati: i conteggi (totale prodotti/clienti) sono chiamate
   // "count" istantanee e alimentano subito PlanBanner, card totali e anteprima;
   // la readiness (pronti/problemi) richiede la paginazione completa e riempie solo
@@ -214,6 +223,7 @@ export default function Dashboard() {
       title: 'Collega Supabase',
       state: steps.connectSupabase,
       completeLabel: 'Collegato',
+      badge: connectBadge,
       content: (
         // key sullo stato di connessione: rimonta il componente quando ci si
         // collega/scollega, azzerando lo state locale (evita il modal disconnetti
@@ -225,6 +235,7 @@ export default function Dashboard() {
           projectUrl={shop.supabaseConfig?.supabaseUrl ?? undefined}
           disabled={blocked}
           authorization={authorization}
+          onConnectingChange={setConnectInProgress}
         />
       ),
     },

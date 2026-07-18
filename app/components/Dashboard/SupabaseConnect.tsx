@@ -33,9 +33,11 @@ interface SupabaseConnectProps {
   disabled?: boolean;
   // Stato di autorizzazione: guida il banner nello stato "collegato".
   authorization?: 'ENABLED' | 'PENDING' | 'DISABLED';
+  // Notifica il parent quando il flusso di collegamento è in corso (badge "In corso").
+  onConnectingChange?: (inProgress: boolean) => void;
 }
 
-export function SupabaseConnect({ connected, projectName, projectUrl, disabled, authorization = 'ENABLED' }: SupabaseConnectProps) {
+export function SupabaseConnect({ connected, projectName, projectUrl, disabled, authorization = 'ENABLED', onConnectingChange }: SupabaseConnectProps) {
   const revalidator = useRevalidator();
   const urlFetcher = useFetcher<{ url?: string; error?: string }>();
   const projectsFetcher = useFetcher<{ projects: SupabaseProject[]; error?: string }>();
@@ -140,6 +142,21 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
   const projects = projectsFetcher.data?.projects;
   const projectsLoaded = projectsFetcher.state === 'idle' && projects !== undefined;
 
+  // "In corso": il flusso di collegamento è partito ma non ancora completato
+  // (OAuth, caricamento/scelta progetto, creazione tabelle). Guida il badge del
+  // primo step nel parent: Non collegato → In corso → Collegato.
+  const flowActive =
+    !connected &&
+    (connecting ||
+      projectsFetcher.state === 'loading' ||
+      projectsLoaded ||
+      provisioning ||
+      selectFetcher.state !== 'idle' ||
+      createFetcher.state !== 'idle');
+  useEffect(() => {
+    onConnectingChange?.(flowActive);
+  }, [flowActive, onConnectingChange]);
+
   const filtered = useMemo(() => {
     if (!projects) return [];
     const q = query.toLowerCase();
@@ -232,11 +249,7 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
           <Banner tone="critical">Sincronizzazione disabilitata.</Banner>
         ) : authorization === 'PENDING' ? (
           <Banner tone="warning">Sincronizzazione sospesa.</Banner>
-        ) : (
-          <Banner tone="success">
-            Supabase collegato{projectName ? ` — progetto ${projectName}` : ''}.
-          </Banner>
-        )}
+        ) : null}
         {projectUrl && (
           <Text as="p" tone="subdued">
             URL: <code>{projectUrl}</code>
