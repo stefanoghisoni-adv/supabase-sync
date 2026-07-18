@@ -317,7 +317,14 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
 
       {!projectsLoaded && (
         <InlineStack>
-          <Button variant="primary" onClick={startConnect} loading={connecting} disabled={disabled}>
+          <Button
+            variant="primary"
+            onClick={startConnect}
+            // Resta in loading da quando parte OAuth fino al caricamento dei
+            // progetti: torna attivo solo se il collegamento fallisce (oauthError).
+            loading={connecting || projectsFetcher.state === 'loading'}
+            disabled={disabled || connecting || projectsFetcher.state === 'loading'}
+          >
             Collega Supabase
           </Button>
         </InlineStack>

@@ -15,7 +15,7 @@ import {
   Tooltip,
   Banner,
 } from '@shopify/polaris';
-import { ProductIcon, PersonIcon } from '@shopify/polaris-icons';
+import { ProductIcon, PersonIcon, SettingsIcon } from '@shopify/polaris-icons';
 import { StatsCard } from '~/components/Dashboard/StatsCard';
 import { ActivityLog } from '~/components/Dashboard/ActivityLog';
 import { PlanBanner } from '~/components/Dashboard/PlanBanner';
@@ -318,7 +318,17 @@ export default function Dashboard() {
   ];
 
   return (
-    <Page title="Dashboard">
+    <Page
+      title="Dashboard"
+      secondaryActions={[
+        {
+          content: 'Impostazioni',
+          icon: SettingsIcon,
+          url: '/settings/supabase',
+          accessibilityLabel: 'Impostazioni',
+        },
+      ]}
+    >
       <BlockStack gap="500">
         {/* Banner di blocco (non chiudibile): danger se DISABLED, warning se PENDING. */}
         {authorization === 'DISABLED' && (

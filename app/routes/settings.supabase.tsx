@@ -1,91 +1,116 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from '@remix-run/node';
 import { json } from '@remix-run/node';
-import { useLoaderData, useActionData, useFetcher, Form } from '@remix-run/react';
+import { useLoaderData, useActionData, Form } from '@remix-run/react';
 import {
   Page,
   Layout,
   Card,
-  FormLayout,
-  TextField,
   Checkbox,
   Button,
   Banner,
   BlockStack,
-  ChoiceList,
-  Text,
   InlineStack,
+  Box,
+  Text,
 } from '@shopify/polaris';
 import { useState } from 'react';
 import { authenticate } from '~/shopify.server';
 import { prisma } from '~/db.server';
-import { encrypt } from '~/utils/crypto.server';
-import { validateSupabaseUrl } from '~/utils/supabase-url.server';
+import { decrypt } from '~/utils/crypto.server';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const { session } = await authenticate.admin(request);
-  const shopDomain = session.shop;
 
   const shop = await prisma.shop.findUnique({
-    where: { shopDomain },
+    where: { shopDomain: session.shop },
     include: { supabaseConfig: true },
   });
 
-  return json({ config: shop?.supabaseConfig ?? null });
+  const config = shop?.supabaseConfig;
+  if (!config) {
+    return json({ config: null });
+  }
+
+  // Public key (anon) e URL sono informazioni pubbliche: le mostriamo in chiaro.
+  // La service_role key NON viene mai restituita al client (troppo sensibile).
+  let publicKey = '';
+  try {
+    publicKey = decrypt(config.supabasePublicKey);
+  } catch {
+    publicKey = '';
+  }
+
+  return json({
+    config: {
+      url: config.supabaseUrl,
+      publicKey,
+      projectRef: config.supabaseProjectRef ?? null,
+      syncEnabled: config.syncEnabled,
+      syncIntervalHours: config.syncIntervalHours,
+    },
+  });
 }
 
 export async function action({ request }: ActionFunctionArgs) {
   const { session } = await authenticate.admin(request);
-  const shopDomain = session.shop;
-
-  const formData = await request.formData();
-  const intent = formData.get('_action');
 
   const shop = await prisma.shop.findUnique({
-    where: { shopDomain },
+    where: { shopDomain: session.shop },
+    include: { supabaseConfig: true },
   });
 
-  if (!shop) {
-    return json({ error: 'Shop not found' }, { status: 404 });
+  if (!shop?.supabaseConfig) {
+    return json(
+      { error: 'Nessun progetto Supabase collegato. Collega Supabase dalla Dashboard.' },
+      { status: 400 },
+    );
   }
 
-  if (intent === 'save') {
-    const rawUrl = formData.get('url') as string;
-    const urlCheck = validateSupabaseUrl(rawUrl);
-    if (!urlCheck.ok) {
-      return json({ error: urlCheck.error }, { status: 400 });
-    }
-    const url = urlCheck.url!;
-    const publicKey = formData.get('publicKey') as string;
-    const serviceKey = formData.get('serviceKey') as string;
-    const syncEnabled = formData.get('syncEnabled') === 'on';
-    const parsedInterval = parseInt(formData.get('syncInterval') as string, 10);
-    const syncInterval = Number.isFinite(parsedInterval) && parsedInterval > 0
-      ? parsedInterval
-      : 24;
+  const formData = await request.formData();
+  const syncEnabled = formData.get('syncEnabled') === 'on';
 
-    await prisma.supabaseConfig.upsert({
-      where: { shopId: shop.id },
-      create: {
-        shopId: shop.id,
-        supabaseUrl: url,
-        supabasePublicKey: encrypt(publicKey),
-        supabaseServiceRoleKey: encrypt(serviceKey),
-        syncEnabled,
-        syncIntervalHours: syncInterval,
-      },
-      update: {
-        supabaseUrl: url,
-        supabasePublicKey: encrypt(publicKey),
-        supabaseServiceRoleKey: encrypt(serviceKey),
-        syncEnabled,
-        syncIntervalHours: syncInterval,
-      },
+  // Aggiorniamo SOLO le preferenze di sync: le chiavi restano quelle salvate
+  // durante il collegamento OAuth e non vengono mai sovrascritte da qui.
+  await prisma.supabaseConfig.update({
+    where: { shopId: shop.id },
+    data: { syncEnabled },
+  });
+
+  return json({ success: 'Impostazioni salvate.' });
+}
+
+function CopyableField({ label, value }: { label: string; value: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    navigator.clipboard?.writeText(value).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
     });
-
-    return json({ success: 'Configuration saved' });
-  }
-
-  return json({ error: 'Invalid action' }, { status: 400 });
+  };
+  return (
+    <BlockStack gap="100">
+      <Text as="span" variant="headingSm">
+        {label}
+      </Text>
+      <InlineStack gap="200" blockAlign="center" wrap={false}>
+        <Box
+          background="bg-surface-secondary"
+          borderRadius="200"
+          padding="200"
+          minWidth="0"
+        >
+          <div style={{ overflowX: 'auto', maxWidth: '100%' }}>
+            <Text as="span" tone="subdued" breakWord={false}>
+              <code>{value}</code>
+            </Text>
+          </div>
+        </Box>
+        <Button onClick={copy} disabled={!value}>
+          {copied ? 'Copiato' : 'Copia'}
+        </Button>
+      </InlineStack>
+    </BlockStack>
+  );
 }
 
 export default function SupabaseSettings() {
@@ -97,117 +122,71 @@ export default function SupabaseSettings() {
   const errorMessage =
     actionData && 'error' in actionData ? actionData.error : undefined;
 
-  const [url, setUrl] = useState(config?.supabaseUrl || '');
-  const [publicKey, setPublicKey] = useState('');
-  const [serviceKey, setServiceKey] = useState('');
-  const [syncEnabled, setSyncEnabled] = useState(config?.syncEnabled || false);
-  const [syncInterval, setSyncInterval] = useState<string[]>([
-    String(config?.syncIntervalHours || 24),
-  ]);
-
-  const testFetcher = useFetcher<{ ok: boolean; message: string }>();
-
-  const testConnection = () => {
-    testFetcher.submit(
-      { url, serviceRoleKey: serviceKey },
-      {
-        method: 'post',
-        action: '/api/supabase/test-connection',
-        encType: 'application/json',
-      }
-    );
-  };
-
-  const testResult = testFetcher.data;
+  const [syncEnabled, setSyncEnabled] = useState(config?.syncEnabled ?? false);
 
   return (
-    <Page title="Supabase Configuration" backAction={{ url: '/' }}>
+    <Page title="Impostazioni Supabase" backAction={{ url: '/' }}>
       <Layout>
         <Layout.Section>
           <BlockStack gap="400">
             {successMessage && <Banner tone="success">{successMessage}</Banner>}
             {errorMessage && <Banner tone="critical">{errorMessage}</Banner>}
 
-            <Card>
-              <Form method="post">
-                <input type="hidden" name="_action" value="save" />
-
-                <FormLayout>
-                  <TextField
-                    label="Supabase Project URL"
-                    value={url}
-                    onChange={setUrl}
-                    name="url"
-                    placeholder="https://xxxxx.supabase.co"
-                    autoComplete="off"
-                    requiredIndicator
-                  />
-
-                  <TextField
-                    label="Supabase Public Key (anon)"
-                    value={publicKey}
-                    onChange={setPublicKey}
-                    name="publicKey"
-                    type="password"
-                    autoComplete="off"
-                    requiredIndicator
-                  />
-
-                  <TextField
-                    label="Supabase Service Role Key"
-                    value={serviceKey}
-                    onChange={setServiceKey}
-                    name="serviceKey"
-                    type="password"
-                    autoComplete="off"
-                    helpText="This key grants full database access. We encrypt it before saving."
-                    requiredIndicator
-                  />
-
-                  <Checkbox
-                    label="Enable automatic sync"
-                    checked={syncEnabled}
-                    onChange={setSyncEnabled}
-                    name="syncEnabled"
-                  />
-
-                  <ChoiceList
-                    title="Sync interval"
-                    choices={[
-                      { label: 'Every 24 hours', value: '24' },
-                      { label: 'Every 6 hours (Pro+)', value: '6', disabled: true },
-                      { label: 'Every 1 hour (Business+)', value: '1', disabled: true },
-                      { label: 'Every 30 minutes (Enterprise)', value: '0.5', disabled: true },
-                    ]}
-                    selected={syncInterval}
-                    onChange={setSyncInterval}
-                    name="syncInterval"
-                  />
-
-                  <BlockStack gap="300">
-                    <InlineStack align="end">
-                      <BlockStack gap="200" inlineAlign="end">
-                        <Button variant="primary" submit>
-                          Save Configuration
-                        </Button>
-                        <Button
-                          onClick={testConnection}
-                          loading={testFetcher.state !== 'idle'}
-                          disabled={!url || !serviceKey}
-                        >
-                          Test Connection
-                        </Button>
-                      </BlockStack>
-                    </InlineStack>
-                    {testResult && (
-                      <Banner tone={testResult.ok ? 'success' : 'critical'}>
-                        {testResult.message}
-                      </Banner>
+            {!config ? (
+              <Banner tone="info">
+                Nessun progetto Supabase collegato. Vai nella Dashboard per collegare
+                Supabase.
+              </Banner>
+            ) : (
+              <>
+                <Card>
+                  <BlockStack gap="400">
+                    <Text as="h2" variant="headingMd">
+                      Progetto collegato
+                    </Text>
+                    {config.projectRef && (
+                      <Text as="p" tone="subdued">
+                        Riferimento progetto: <code>{config.projectRef}</code>
+                      </Text>
                     )}
+                    <CopyableField label="URL del progetto" value={config.url} />
+                    <CopyableField label="Public key (anon)" value={config.publicKey} />
+                    <Box
+                      background="bg-surface-secondary"
+                      borderRadius="200"
+                      padding="300"
+                    >
+                      <Text as="p" tone="subdued">
+                        🔒 La <strong>service role key</strong> è salvata cifrata e
+                        gestita in modo sicuro dall'app: per motivi di sicurezza non
+                        viene mostrata.
+                      </Text>
+                    </Box>
                   </BlockStack>
-                </FormLayout>
-              </Form>
-            </Card>
+                </Card>
+
+                <Card>
+                  <Form method="post">
+                    <BlockStack gap="400">
+                      <Text as="h2" variant="headingMd">
+                        Sincronizzazione
+                      </Text>
+                      <Checkbox
+                        label="Sincronizzazione automatica attiva"
+                        checked={syncEnabled}
+                        onChange={setSyncEnabled}
+                        name="syncEnabled"
+                      />
+                      <InlineStack align="end">
+                        <Button variant="primary" submit>
+                          Salva impostazioni
+                        </Button>
+                      </InlineStack>
+                    </BlockStack>
+                  </Form>
+                </Card>
+              </>
+            )}
           </BlockStack>
         </Layout.Section>
       </Layout>
