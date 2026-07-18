@@ -14,6 +14,7 @@ import {
   Icon,
   Tooltip,
   Banner,
+  SkeletonDisplayText,
 } from '@shopify/polaris';
 import { ProductIcon, PersonIcon, SettingsIcon } from '@shopify/polaris-icons';
 import { StatsCard } from '~/components/Dashboard/StatsCard';
@@ -216,8 +217,26 @@ export default function Dashboard() {
     ? 'Sincronizza prodotti e clienti'
     : 'Sincronizza prodotti';
 
-  const previewProducts = counts?.totalProducts ?? '…';
-  const previewCustomers = counts?.customerCount ?? '…';
+  // Skeleton per i numeri di anteprima finché i conteggi non sono pronti.
+  const numberSkeleton = (
+    <Box minWidth="44px">
+      <SkeletonDisplayText size="small" />
+    </Box>
+  );
+  const previewProducts = countsLoading ? (
+    numberSkeleton
+  ) : (
+    <Text as="span" variant="headingMd">
+      {counts?.totalProducts ?? 0}
+    </Text>
+  );
+  const previewCustomers = countsLoading ? (
+    numberSkeleton
+  ) : (
+    <Text as="span" variant="headingMd">
+      {counts?.customerCount ?? 0}
+    </Text>
+  );
 
   const stepperItems: StepperItem[] = [
     {
@@ -264,9 +283,7 @@ export default function Dashboard() {
                       Prodotti → tabella <code>products</code>
                     </Text>
                   </InlineStack>
-                  <Text as="span" variant="headingMd">
-                    {previewProducts}
-                  </Text>
+                  {previewProducts}
                 </InlineStack>
                 {customersEnabled && (
                   <InlineStack align="space-between" blockAlign="center">
@@ -276,9 +293,7 @@ export default function Dashboard() {
                         Clienti → tabella <code>customers</code>
                       </Text>
                     </InlineStack>
-                    <Text as="span" variant="headingMd">
-                      {previewCustomers}
-                    </Text>
+                    {previewCustomers}
                   </InlineStack>
                 )}
               </BlockStack>

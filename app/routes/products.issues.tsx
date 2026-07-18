@@ -142,9 +142,18 @@ export async function action({ request }: ActionFunctionArgs) {
   try {
     await client.updateInventoryItemCost(inventoryItemId, cost);
   } catch (err) {
+    const msg = err instanceof Error ? err.message : '';
     console.error('[products.issues save] update Shopify fallito:', err);
+    // 401/403 = permesso mancante: lo scope write_inventory non è stato ancora
+    // concesso dal merchant (serve riautorizzare l'app dopo l'aggiunta dello scope).
+    const permission = /\b(401|403)\b/.test(msg);
     return json(
-      { ok: false, error: 'Salvataggio su Shopify non riuscito. Riprova.' },
+      {
+        ok: false,
+        error: permission
+          ? "L'app non ha il permesso di modificare i costi su Shopify. Riapri/reinstalla l'app per concedere l'autorizzazione, poi riprova."
+          : 'Salvataggio su Shopify non riuscito. Riprova.',
+      },
       { status: 502 },
     );
   }
@@ -244,6 +253,7 @@ function CostRow({
       <IndexTable.Cell>{row.sku ?? '—'}</IndexTable.Cell>
       <IndexTable.Cell>
         <div
+          style={{ maxWidth: 120 }}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
               e.preventDefault();
