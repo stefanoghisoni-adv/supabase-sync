@@ -1,4 +1,4 @@
-// app/routes/prodotti.problemi.tsx
+// app/routes/products.issues.tsx
 // Tab dedicata: varianti a cui manca cost_per_item, con campo editabile che scrive
 // il costo su Shopify E su Supabase; tic verde a riga salvata; pulsante globale
 // "Ricontrolla" che rimuove le varianti risolte e aggiorna il conteggio.
@@ -67,7 +67,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     // Popola il costo reale dagli InventoryItem prima di individuare i "problemi".
     await enrichVariantCosts(client, allProducts);
   } catch (err) {
-    console.error('[prodotti.problemi loader] fetch prodotti fallito:', err);
+    console.error('[products.issues loader] fetch prodotti fallito:', err);
     error = 'Impossibile recuperare i prodotti da Shopify. Riprova tra poco.';
   }
 
@@ -117,7 +117,7 @@ export async function action({ request }: ActionFunctionArgs) {
       const stillProblematic = await getMissingCostInventoryIds(client, ids);
       return json({ ok: true, stillProblematic });
     } catch (err) {
-      console.error('[prodotti.problemi recheck] fallito:', err);
+      console.error('[products.issues recheck] fallito:', err);
       return json(
         { ok: false, error: 'Ricontrollo non riuscito. Riprova.' },
         { status: 502 },
@@ -142,7 +142,7 @@ export async function action({ request }: ActionFunctionArgs) {
   try {
     await client.updateInventoryItemCost(inventoryItemId, cost);
   } catch (err) {
-    console.error('[prodotti.problemi save] update Shopify fallito:', err);
+    console.error('[products.issues save] update Shopify fallito:', err);
     return json(
       { ok: false, error: 'Salvataggio su Shopify non riuscito. Riprova.' },
       { status: 502 },
@@ -159,7 +159,7 @@ export async function action({ request }: ActionFunctionArgs) {
         .eq('shopify_variant_id', variantId);
       if (sbError) throw sbError;
     } catch (err) {
-      console.error('[prodotti.problemi save] update Supabase fallito:', err);
+      console.error('[products.issues save] update Supabase fallito:', err);
       return json(
         {
           ok: false,

@@ -156,7 +156,7 @@ export default function Dashboard() {
   const connectBadge = supabaseConnected
     ? { tone: 'success' as const, label: 'Collegato' }
     : connectInProgress
-      ? { tone: 'attention' as const, label: 'In corso' }
+      ? { tone: 'warning' as const, label: 'In corso' }
       : { tone: undefined, label: 'Non collegato' };
 
   // Due fetcher separati: i conteggi (totale prodotti/clienti) sono chiamate
@@ -382,7 +382,7 @@ export default function Dashboard() {
               <Box paddingBlockStart="100">
                 <Button
                   variant="plain"
-                  onClick={() => navigate('/prodotti/problemi')}
+                  onClick={() => navigate('/products/issues')}
                 >
                   Vedi dettagli
                 </Button>
