@@ -6,6 +6,7 @@ import { prisma } from '~/db.server';
 import { ShopifyAPIClient } from '~/lib/shopify-api.server';
 import { computeProductReadiness } from '~/lib/stats/product-readiness';
 import { enrichVariantCosts } from '~/lib/stats/inventory-cost.server';
+import { getReadinessCache, setReadinessCache } from '~/lib/cache/stats-cache.server';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const { session } = await authenticate.admin(request);
@@ -15,6 +16,22 @@ export async function loader({ request }: LoaderFunctionArgs) {
   });
   if (!shop) {
     throw new Response('Shop not found', { status: 404 });
+  }
+
+  // Cache-then-refresh: senza ?refresh=1 restituiamo SUBITO l'ultimo valore in
+  // cache (riapertura istantanea). Il client, vedendo cached:true, richiama poi
+  // l'endpoint con ?refresh=1 per il ricalcolo live in background.
+  const refresh = new URL(request.url).searchParams.get('refresh') === '1';
+  if (!refresh) {
+    const cached = await getReadinessCache(shop.id);
+    if (cached) {
+      return json({
+        totalProducts: cached.totalProducts,
+        readyCount: cached.readyCount,
+        problemCount: cached.problemCount,
+        cached: true,
+      });
+    }
   }
 
   const client = new ShopifyAPIClient(shop.shopDomain, shop.accessToken);
@@ -44,9 +61,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
     pageInfo = nextPageInfo ?? undefined;
   } while (pageInfo);
 
-  return json({
-    totalProducts,
-    readyCount,
-    problemCount,
-  });
+  const result = { totalProducts, readyCount, problemCount };
+  await setReadinessCache(shop.id, result);
+
+  return json({ ...result, cached: false });
 }

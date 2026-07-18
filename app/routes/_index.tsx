@@ -143,6 +143,8 @@ interface ReadinessResponse {
   totalProducts: number;
   readyCount: number;
   problemCount: number;
+  // true se il risultato arriva dalla cache: il client innesca poi il refresh live.
+  cached?: boolean;
 }
 
 export default function Dashboard() {
@@ -168,6 +170,7 @@ export default function Dashboard() {
   // le sue due card in un secondo momento, senza bloccare il resto.
   const countsFetcher = useFetcher<CountsResponse>();
   const readinessFetcher = useFetcher<ReadinessResponse>();
+  const readinessRefreshFetcher = useFetcher<ReadinessResponse>();
 
   useEffect(() => {
     countsFetcher.load('/api/stats/counts');
@@ -175,10 +178,20 @@ export default function Dashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Se il primo risultato arriva dalla cache, ricalcola live in background:
+  // la card resta piena con i numeri cache e si aggiorna quando il fresco è pronto.
+  useEffect(() => {
+    if (readinessFetcher.data?.cached) {
+      readinessRefreshFetcher.load('/api/stats/products?refresh=1');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [readinessFetcher.data]);
+
   const counts = countsFetcher.data;
-  const readiness = readinessFetcher.data;
+  // Il valore live (refresh) vince appena disponibile, altrimenti la cache/primo calcolo.
+  const readiness = readinessRefreshFetcher.data ?? readinessFetcher.data;
   const countsLoading = countsFetcher.state === 'loading' || !counts;
-  const readinessLoading = readinessFetcher.state === 'loading' || !readiness;
+  const readinessLoading = !readiness;
 
   // Sync in background durabile (coda + drain). Il pulsante mostra il loader
   // mentre la sync è in corso — anche se prosegue in background a pagina chiusa —
