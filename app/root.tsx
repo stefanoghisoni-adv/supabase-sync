@@ -39,7 +39,8 @@ export default function App() {
         <meta name="color-scheme" content="light" />
         <style
           dangerouslySetInnerHTML={{
-            __html: ':root{color-scheme:light}html,body{background:#f1f1f1}',
+            __html:
+              ':root,html,body{color-scheme:light !important}html,body{background:#f1f1f1 !important}',
           }}
         />
         <Meta />
@@ -91,7 +92,8 @@ export function ErrorBoundary() {
         <meta name="color-scheme" content="light" />
         <style
           dangerouslySetInnerHTML={{
-            __html: ':root{color-scheme:light}html,body{background:#f1f1f1}',
+            __html:
+              ':root,html,body{color-scheme:light !important}html,body{background:#f1f1f1 !important}',
           }}
         />
         <Meta />

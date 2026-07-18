@@ -30,9 +30,16 @@ import { resolveSyncState } from '~/components/Dashboard/sync-state';
 import { enqueueManualSync, triggerSyncDrain } from '~/lib/queue/trigger.server';
 import { authenticate } from '~/shopify.server';
 
+// Solo per questo store mostriamo il messaggio d'errore reale (utile in debug),
+// invece del generico "Errore interno": gli altri merchant non devono vedere
+// dettagli tecnici. In produzione Remix maschererebbe altrimenti tutto.
+const DEBUG_SHOP_DOMAIN = 'test-negozio-11.myshopify.com';
+
 export async function loader({ request }: LoaderFunctionArgs) {
+  let sessionShop: string | undefined;
   try {
     const { session } = await authenticate.admin(request);
+    sessionShop = session.shop;
 
     // Self-heal: crea il record shop se manca (reinstall, cancellazione manuale,
     // race durante l'embedded auth) invece di mandare l'app in 404.
@@ -87,12 +94,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
     // Le Response (redirect di auth, 404) devono passare intatte.
     if (err instanceof Response) throw err;
     // Il dettaglio completo va SOLO nei log del server: rilanciare il testo
-    // grezzo al browser esporrebbe dettagli interni (info-disclosure).
+    // grezzo al browser esporrebbe dettagli interni (info-disclosure). Eccezione:
+    // il nostro store di test, per diagnosticare in produzione.
     console.error('[dashboard loader] errore non gestito:', err);
     const isDev = process.env.NODE_ENV !== 'production';
+    const showDetail = isDev || sessionShop === DEBUG_SHOP_DOMAIN;
     const detail =
-      isDev && err instanceof Error
-        ? err.message
+      showDetail && err instanceof Error
+        ? `[debug] ${err.message}`
         : "Errore interno del server. Controlla i log dell'app per il dettaglio.";
     throw new Response(detail, { status: 500, statusText: 'Errore dashboard' });
   }

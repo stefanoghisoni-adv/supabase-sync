@@ -29,15 +29,24 @@ const shopify = shopifyApp({
     // Product/customer/GDPR webhooks are app-managed (declared in
     // shopify.app.toml), so no runtime webhook registration is needed here.
     afterAuth: async ({ session }) => {
-      await prisma.shop.upsert({
-        where: { shopDomain: session.shop },
-        create: shopCreateData(session),
-        update: {
-          accessToken: encrypt(session.accessToken ?? ''),
-          scopes: session.scope ?? '',
-          uninstalledAt: null,
-        },
-      });
+      // NON deve bloccare l'installazione: se l'upsert fallisce (es. problema DB
+      // transitorio), il self-heal `getOrCreateShop` nei loader materializza
+      // comunque lo shop. Un throw qui, non gestito, farebbe fallire l'intero
+      // OAuth callback con un generico "Unexpected Server Error". Logghiamo lo
+      // stack completo per la diagnosi.
+      try {
+        await prisma.shop.upsert({
+          where: { shopDomain: session.shop },
+          create: shopCreateData(session),
+          update: {
+            accessToken: encrypt(session.accessToken ?? ''),
+            scopes: session.scope ?? '',
+            uninstalledAt: null,
+          },
+        });
+      } catch (err) {
+        console.error('[afterAuth] upsert shop fallito:', err);
+      }
     },
   },
   ...(process.env.SHOP_CUSTOM_DOMAIN
