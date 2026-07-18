@@ -33,11 +33,14 @@ interface SupabaseConnectProps {
   disabled?: boolean;
   // Stato di autorizzazione: guida il banner nello stato "collegato".
   authorization?: 'ENABLED' | 'PENDING' | 'DISABLED';
-  // Notifica il parent quando il flusso di collegamento è in corso (badge "In corso").
-  onConnectingChange?: (inProgress: boolean) => void;
+  // Notifica il parent lo stato del flusso di collegamento (guida il badge del
+  // primo step: In corso / Fallito / Non collegato).
+  onConnectStatusChange?: (status: SupabaseConnectStatus) => void;
 }
 
-export function SupabaseConnect({ connected, projectName, projectUrl, disabled, authorization = 'ENABLED', onConnectingChange }: SupabaseConnectProps) {
+export type SupabaseConnectStatus = 'idle' | 'in_progress' | 'failed';
+
+export function SupabaseConnect({ connected, projectName, projectUrl, disabled, authorization = 'ENABLED', onConnectStatusChange }: SupabaseConnectProps) {
   const revalidator = useRevalidator();
   const urlFetcher = useFetcher<{ url?: string; error?: string }>();
   const projectsFetcher = useFetcher<{ projects: SupabaseProject[]; error?: string }>();
@@ -50,6 +53,9 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
   const [query, setQuery] = useState('');
   const [popupRef, setPopupRef] = useState<Window | null>(null);
   const [showDisconnect, setShowDisconnect] = useState(false);
+  // True se l'ultimo tentativo di collegamento è fallito (popup chiuso senza
+  // confermare l'integrazione, o errore OAuth): guida il badge "Fallito".
+  const [connectFailed, setConnectFailed] = useState(false);
   // Quale azione di disconnessione è in corso: così il loader appare SOLO sul
   // bottone cliccato ("Elimina" o "Mantieni"), mentre entrambi restano disabilitati.
   const [disconnectMode, setDisconnectMode] = useState<'delete' | 'keep' | null>(null);
@@ -78,8 +84,10 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
       setPopupRef(null);
       if (data.ok) {
         setOauthError(null);
+        setConnectFailed(false);
         projectsFetcher.load('/api/supabase/projects');
       } else {
+        setConnectFailed(true);
         setOauthError('Collegamento a Supabase non riuscito. Riprova.');
       }
     }
@@ -96,13 +104,33 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
       popupRef.close();
       setPopupRef(null);
       setConnecting(false);
+      setConnectFailed(true);
       setOauthError(urlFetcher.data.error);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlFetcher.data]);
 
+  // Rileva la chiusura del popup senza esito: se l'utente chiude la finestra
+  // OAuth senza confermare l'integrazione, nessun messaggio arriva → il flusso
+  // è fallito. (Alla connessione riuscita `connecting` è già false: niente fallito.)
+  useEffect(() => {
+    if (!popupRef) return;
+    const timer = setInterval(() => {
+      if (popupRef.closed) {
+        clearInterval(timer);
+        setConnecting((isConnecting) => {
+          if (isConnecting) setConnectFailed(true);
+          return false;
+        });
+        setPopupRef(null);
+      }
+    }, 500);
+    return () => clearInterval(timer);
+  }, [popupRef]);
+
   const startConnect = useCallback(() => {
     setOauthError(null);
+    setConnectFailed(false);
     const popup = window.open('', 'supabase-oauth', 'width=600,height=760');
     if (!popup) {
       setOauthError('Consenti i popup per collegare Supabase.');
@@ -143,8 +171,7 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
   const projectsLoaded = projectsFetcher.state === 'idle' && projects !== undefined;
 
   // "In corso": il flusso di collegamento è partito ma non ancora completato
-  // (OAuth, caricamento/scelta progetto, creazione tabelle). Guida il badge del
-  // primo step nel parent: Non collegato → In corso → Collegato.
+  // (OAuth, caricamento/scelta progetto, creazione tabelle).
   const flowActive =
     !connected &&
     (connecting ||
@@ -153,9 +180,17 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
       provisioning ||
       selectFetcher.state !== 'idle' ||
       createFetcher.state !== 'idle');
+
+  // Stato notificato al parent per il badge del primo step:
+  // Non collegato (idle) → In corso → Fallito → (Collegato lo decide il parent).
+  const connectStatus: SupabaseConnectStatus = connectFailed
+    ? 'failed'
+    : flowActive
+      ? 'in_progress'
+      : 'idle';
   useEffect(() => {
-    onConnectingChange?.(flowActive);
-  }, [flowActive, onConnectingChange]);
+    onConnectStatusChange?.(connectStatus);
+  }, [connectStatus, onConnectStatusChange]);
 
   const filtered = useMemo(() => {
     if (!projects) return [];

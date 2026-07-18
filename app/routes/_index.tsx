@@ -150,14 +150,16 @@ export default function Dashboard() {
   const blocked = authorization !== 'ENABLED';
   const navigate = useNavigate();
 
-  // Stato del collegamento Supabase per il badge del primo step:
-  // Non collegato (grigio) → In corso (arancione) → Collegato (verde).
-  const [connectInProgress, setConnectInProgress] = useState(false);
+  // Stato del collegamento Supabase per il badge del primo step: Non collegato
+  // (grigio) → In corso (arancione) → Fallito (rosso) / Collegato (verde).
+  const [connectStatus, setConnectStatus] = useState<'idle' | 'in_progress' | 'failed'>('idle');
   const connectBadge = supabaseConnected
     ? { tone: 'success' as const, label: 'Collegato' }
-    : connectInProgress
-      ? { tone: 'warning' as const, label: 'In corso' }
-      : { tone: undefined, label: 'Non collegato' };
+    : connectStatus === 'failed'
+      ? { tone: 'critical' as const, label: 'Fallito' }
+      : connectStatus === 'in_progress'
+        ? { tone: 'warning' as const, label: 'In corso' }
+        : { tone: undefined, label: 'Non collegato' };
 
   // Due fetcher separati: i conteggi (totale prodotti/clienti) sono chiamate
   // "count" istantanee e alimentano subito PlanBanner, card totali e anteprima;
@@ -235,7 +237,7 @@ export default function Dashboard() {
           projectUrl={shop.supabaseConfig?.supabaseUrl ?? undefined}
           disabled={blocked}
           authorization={authorization}
-          onConnectingChange={setConnectInProgress}
+          onConnectStatusChange={setConnectStatus}
         />
       ),
     },
