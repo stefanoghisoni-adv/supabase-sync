@@ -92,23 +92,33 @@ function CopyableField({ label, value }: { label: string; value: string }) {
       <Text as="span" variant="headingSm">
         {label}
       </Text>
-      <InlineStack gap="200" blockAlign="center" wrap={false}>
-        <Box
-          background="bg-surface-secondary"
-          borderRadius="200"
-          padding="200"
-          minWidth="0"
+      {/* flex:1 + minWidth:0 + ellipsis: i due campi hanno la STESSA larghezza; i
+          valori lunghi (anon key) sono troncati con "…" a fine riga, ma il pulsante
+          copia sempre il valore intero. */}
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <div
+          title={value}
+          style={{
+            flex: 1,
+            minWidth: 0,
+            background: 'var(--p-color-bg-surface-secondary)',
+            border: '1px solid var(--p-color-border)',
+            borderRadius: 8,
+            padding: '6px 10px',
+            fontFamily: 'var(--p-font-family-mono, monospace)',
+            fontSize: 13,
+            color: 'var(--p-color-text-secondary)',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
         >
-          <div style={{ overflowX: 'auto', maxWidth: '100%' }}>
-            <Text as="span" tone="subdued" breakWord={false}>
-              <code>{value}</code>
-            </Text>
-          </div>
-        </Box>
+          {value}
+        </div>
         <Button onClick={copy} disabled={!value}>
           {copied ? 'Copiato' : 'Copia'}
         </Button>
-      </InlineStack>
+      </div>
     </BlockStack>
   );
 }

@@ -32,6 +32,7 @@ import {
   enrichVariantCosts,
   getMissingCostInventoryIds,
 } from '~/lib/stats/inventory-cost.server';
+import { getReadinessCache, setReadinessCache } from '~/lib/cache/stats-cache.server';
 import {
   collectProblemVariants,
   type ProblemVariant,
@@ -115,6 +116,22 @@ export async function action({ request }: ActionFunctionArgs) {
       .filter((n) => Number.isInteger(n) && n > 0);
     try {
       const stillProblematic = await getMissingCostInventoryIds(client, ids);
+
+      // Aggiorna SUBITO la cache readiness della Dashboard: ogni variante risolta
+      // passa da "problema" a "pronta". Così, tornando in Dashboard, il conteggio
+      // è già corretto senza attendere il ricalcolo live.
+      const resolved = ids.length - stillProblematic.length;
+      if (resolved > 0) {
+        const cached = await getReadinessCache(shop.id);
+        if (cached) {
+          await setReadinessCache(shop.id, {
+            totalProducts: cached.totalProducts,
+            readyCount: cached.readyCount + resolved,
+            problemCount: Math.max(0, cached.problemCount - resolved),
+          });
+        }
+      }
+
       return json({ ok: true, stillProblematic });
     } catch (err) {
       console.error('[products.issues recheck] fallito:', err);
@@ -387,7 +404,7 @@ export default function ProblemProducts() {
           <Banner tone="success" onDismiss={() => setRemovedCount(0)}>
             {removedCount}{' '}
             {removedCount === 1 ? 'variante risolta e rimossa' : 'varianti risolte e rimosse'}{' '}
-            dall'elenco. Il conteggio in Dashboard si aggiorna al prossimo accesso.
+            dall'elenco. Il conteggio in Dashboard è aggiornato.
           </Banner>
         )}
 
