@@ -9,7 +9,7 @@ import {
   runQuery,
   projectUrl,
 } from '~/lib/supabase-management.server';
-import { MERCHANT_TABLES_SQL } from '~/lib/supabase-schema';
+import { buildMerchantSchemaSQL } from '~/lib/supabase-schema';
 import { isAuthorized } from '~/utils/authorization.server';
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -21,6 +21,13 @@ export async function action({ request }: ActionFunctionArgs) {
   if (!shop) {
     return json({ ok: false, error: 'Shop non trovato' }, { status: 404 });
   }
+
+  // Tabelle da garantire in base al piano: products sempre, customers solo se
+  // la sincronizzazione clienti è inclusa.
+  const plan = await prisma.plan.findUnique({
+    where: { planName: shop.currentPlan },
+  });
+  const includeCustomers = plan?.customersSyncEnabled ?? false;
   if (!isAuthorized(shop.authorization)) {
     return json(
       { ok: false, error: "L'utilizzo dell'app è sospeso per questo negozio.", code: 'not_authorized' },
@@ -54,7 +61,10 @@ export async function action({ request }: ActionFunctionArgs) {
       },
     });
 
-    await runQuery(token, ref, MERCHANT_TABLES_SQL);
+    // DDL idempotente e non distruttivo: crea le tabelle mancanti e allinea le
+    // colonne di quelle già esistenti (progetto pre-esistente) senza cancellare
+    // i dati. Applica solo le tabelle abilitate dal piano.
+    await runQuery(token, ref, buildMerchantSchemaSQL(includeCustomers));
 
     // Abilita la sincronizzazione al collegamento: senza syncEnabled i
     // processor rifiutano il job. Le successive sync automatiche seguono
