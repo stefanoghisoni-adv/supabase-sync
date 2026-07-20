@@ -22,6 +22,25 @@ describe('buildSupabaseReadUrl', () => {
       'https://abcref.supabase.co/rest/v1/products',
     );
   });
+
+  it('input validi (abcref, products) non lanciano', () => {
+    expect(() => buildSupabaseReadUrl('abcref', 'products', '')).not.toThrow();
+    expect(() => buildSupabaseReadUrl('abc123', 'customers', '')).not.toThrow();
+  });
+
+  it('table malevolo lancia', () => {
+    expect(() => buildSupabaseReadUrl('abcref', 'products/../x', '')).toThrow('Nome tabella non valido');
+    expect(() => buildSupabaseReadUrl('abcref', 'products@evil', '')).toThrow('Nome tabella non valido');
+    expect(() => buildSupabaseReadUrl('abcref', 'Products', '')).toThrow('Nome tabella non valido');
+    expect(() => buildSupabaseReadUrl('abcref', 'prod-ucts', '')).toThrow('Nome tabella non valido');
+  });
+
+  it('projectRef malevolo lancia', () => {
+    expect(() => buildSupabaseReadUrl('evil.com', 'products', '')).toThrow('Project ref non valido');
+    expect(() => buildSupabaseReadUrl('ref/../x', 'products', '')).toThrow('Project ref non valido');
+    expect(() => buildSupabaseReadUrl('ref@evil', 'products', '')).toThrow('Project ref non valido');
+    expect(() => buildSupabaseReadUrl('ref:8080', 'products', '')).toThrow('Project ref non valido');
+  });
 });
 
 describe('forwardRead', () => {
@@ -44,5 +63,15 @@ describe('forwardRead', () => {
     expect(init.method).toBe('GET');
     expect(init.headers.apikey).toBe('svc');
     expect(init.headers.Authorization).toBe('Bearer svc');
+  });
+
+  it('propaga status non-200 invariato', async () => {
+    (global.fetch as any).mockResolvedValueOnce({
+      status: 403,
+      text: async () => '{"error":"x"}',
+      headers: { get: (k: string) => (k.toLowerCase() === 'content-type' ? 'application/json' : null) },
+    });
+    const r = await forwardRead(ctx, 'products', '');
+    expect(r).toEqual({ status: 403, body: '{"error":"x"}', contentType: 'application/json' });
   });
 });

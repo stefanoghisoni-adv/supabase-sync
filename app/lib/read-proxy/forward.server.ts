@@ -7,6 +7,13 @@ export function allowedReadTables(customersEnabled: boolean): string[] {
 
 // Host derivato SOLO dal ref memorizzato: nessun input utente nell'host (anti-SSRF).
 export function buildSupabaseReadUrl(projectRef: string, table: string, search: string): string {
+  // Validazione difensiva: difende da bug futuri o usi diretti (la route filtra già table sull'allowlist).
+  if (!/^[a-z_]+$/.test(table)) {
+    throw new Error(`Nome tabella non valido: ${table}`);
+  }
+  if (!/^[a-z0-9]+$/.test(projectRef)) {
+    throw new Error(`Project ref non valido: ${projectRef}`);
+  }
   const qs = search && search !== '?' ? search : '';
   return `https://${projectRef}.supabase.co/rest/v1/${table}${qs}`;
 }
