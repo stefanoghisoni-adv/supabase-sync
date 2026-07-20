@@ -10,6 +10,9 @@ import {
   Banner,
   Combobox,
   Listbox,
+  Labelled,
+  Popover,
+  OptionList,
   Icon,
   TextField,
   Spinner,
@@ -68,29 +71,21 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState('');
   const [region, setRegion] = useState('eu-central-1');
-  // Testo digitato nel campo region: filtra la lista senza mai azzerare la
-  // selezione (a differenza del selettore progetto, qui una region deve sempre
-  // essere valorizzata per poter creare il progetto).
-  const [regionQuery, setRegionQuery] = useState('');
+  const [regionPopoverActive, setRegionPopoverActive] = useState(false);
 
   // Finché /api/supabase/regions non risponde, mostriamo comunque il default:
-  // il form resta usabile e la Select non parte vuota.
+  // il form resta usabile e il campo non parte vuoto.
   const allRegions = regionsFetcher.data?.regions ?? [
     { id: 'eu-central-1', name: 'Central EU (Frankfurt)' },
   ];
   const selectedRegionName = allRegions.find((r) => r.id === region)?.name ?? '';
-  const regionGroups = useMemo(() => {
-    const q = regionQuery.trim().toLowerCase();
-    const matching = q
-      ? allRegions.filter(
-          (r) => r.name.toLowerCase().includes(q) || r.id.toLowerCase().includes(q),
-        )
-      : allRegions;
-    return groupRegionsByContinent(matching);
+  const regionGroups = useMemo(
+    () => groupRegionsByContinent(allRegions),
     // allRegions deriva da regionsFetcher.data: dipendiamo da quello, non
     // dall'array ricreato a ogni render dal fallback qui sopra.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [regionsFetcher.data, regionQuery]);
+    [regionsFetcher.data],
+  );
   const [genPassword, setGenPassword] = useState('');
   const [creatingRef, setCreatingRef] = useState<string | null>(null);
   const [provisioning, setProvisioning] = useState(false);
@@ -446,48 +441,46 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
               onChange={setNewName}
               autoComplete="off"
             />
-            {/* Combobox + Listbox invece di Select: <Select> di Polaris rende un
-                <select> nativo, quindi il menu aperto sarebbe quello del sistema
-                operativo (e i gruppi degli <optgroup> di sistema). Qui il popover
-                e le intestazioni di sezione sono componenti Polaris. */}
-            <Combobox
-              activator={
-                <Combobox.TextField
-                  label="Region"
-                  value={regionQuery || selectedRegionName}
-                  onChange={setRegionQuery}
-                  placeholder="Seleziona una region…"
-                  autoComplete="off"
-                />
-              }
-            >
-              {regionGroups.length > 0 ? (
-                <Listbox
-                  onSelect={(value) => {
-                    setRegion(value);
-                    setRegionQuery('');
-                  }}
-                >
-                  {regionGroups.map((group) => (
-                    <Listbox.Section
-                      key={group.title}
-                      divider
-                      title={<Listbox.Header>{group.title}</Listbox.Header>}
-                    >
-                      {group.options.map((opt) => (
-                        <Listbox.Option
-                          key={opt.value}
-                          value={opt.value}
-                          selected={opt.value === region}
-                        >
-                          {opt.label}
-                        </Listbox.Option>
-                      ))}
-                    </Listbox.Section>
-                  ))}
-                </Listbox>
-              ) : null}
-            </Combobox>
+            {/* Popover + OptionList, non <Select>: quest'ultimo rende un <select>
+                nativo, quindi il menu aperto sarebbe quello del sistema operativo.
+                L'attivatore e' un Button con disclosure, cosi' si legge come un
+                select e non come un campo di testo. OptionList da' gia' i titoli di
+                sezione in grassetto (Text headingSm) con le opzioni in peso normale,
+                e non disegna divider: nessun bordo dopo l'ultima sezione. */}
+            <Labelled id="region-select" label="Region">
+              <Popover
+                active={regionPopoverActive}
+                // Sotto al campo, non sopra. L'altezza fissa del Pane serve
+                // proprio a questo: un popover corto entra nello spazio
+                // disponibile, quindi Polaris non e' costretto a ribaltarlo in
+                // alto quando il form sta in fondo alla pagina.
+                preferredPosition="below"
+                onClose={() => setRegionPopoverActive(false)}
+                activator={
+                  <Button
+                    id="region-select"
+                    onClick={() => setRegionPopoverActive((active) => !active)}
+                    disclosure
+                    fullWidth
+                    textAlign="left"
+                    disabled={disabled}
+                  >
+                    {selectedRegionName || 'Seleziona una region…'}
+                  </Button>
+                }
+              >
+                <Popover.Pane height="280px">
+                  <OptionList
+                    sections={regionGroups}
+                    selected={[region]}
+                    onChange={(selected) => {
+                      if (selected[0]) setRegion(selected[0]);
+                      setRegionPopoverActive(false);
+                    }}
+                  />
+                </Popover.Pane>
+              </Popover>
+            </Labelled>
             {genPassword && (
               <BlockStack gap="100">
                 <Text as="p" tone="subdued">
