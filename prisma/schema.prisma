@@ -48,6 +48,11 @@ model Shop {
   // DISABLED (ban: tutto bloccato, banner danger, fatturazione sospesa).
   authorization     String             @default("ENABLED")
 
+  // Token-proxy per le letture di tracciamento (Stape/GTM). Persistito solo come
+  // hash (lookup) + cifrato (per mostrarlo in Impostazioni), mai in chiaro.
+  readProxyTokenHash String? @unique @map("read_proxy_token_hash")
+  readProxyTokenEnc  String? @map("read_proxy_token_enc")
+
   supabaseConfig    SupabaseConfig?
   supabaseOAuthToken SupabaseOAuthToken?
   billingCharges    BillingCharge[]
