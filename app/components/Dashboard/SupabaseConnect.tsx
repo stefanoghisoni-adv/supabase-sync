@@ -519,8 +519,8 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
       {projectsLoaded && projects && !showCreate && (
         // Disconnessione SEMPLICE in entrambi i rami: qui non è stato creato né
         // collegato alcun progetto, quindi non c'è nulla da eliminare — si
-        // scollega e basta, senza il modal "mantieni/elimina dati". Testo rosso
-        // (plain + tone critical), non un pulsante pieno.
+        // scollega e basta, senza il modal "mantieni/elimina dati". Pulsante
+        // con bordo ma testo rosso (tone critical), come "Rimuovi negozio".
         <InlineStack gap="300" blockAlign="center">
           {planLimitHit ? (
             // Limite raggiunto: creare non è possibile, quindi offriamo l'upgrade.
@@ -543,7 +543,6 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
             </Button>
           )}
           <Button
-            variant="plain"
             tone="critical"
             onClick={() => disconnect(false)}
             loading={disconnecting}
