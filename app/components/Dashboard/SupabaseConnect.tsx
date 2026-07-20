@@ -17,6 +17,7 @@ import {
   Modal,
 } from '@shopify/polaris';
 import { SearchIcon } from '@shopify/polaris-icons';
+import { groupRegionsByContinent } from '~/lib/supabase-regions';
 
 interface SupabaseProject {
   id: string;
@@ -425,8 +426,10 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
             />
             <Select
               label="Region"
-              options={(regionsFetcher.data?.regions ?? [{ id: 'eu-central-1', name: 'Central EU (Frankfurt)' }]).map(
-                (r) => ({ label: r.name, value: r.id }),
+              options={groupRegionsByContinent(
+                regionsFetcher.data?.regions ?? [
+                  { id: 'eu-central-1', name: 'Central EU (Frankfurt)' },
+                ],
               )}
               value={region}
               onChange={setRegion}
