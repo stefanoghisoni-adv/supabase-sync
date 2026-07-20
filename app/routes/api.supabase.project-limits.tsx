@@ -6,7 +6,6 @@ import { json } from '@remix-run/node';
 import { authenticate } from '~/shopify.server';
 import { prisma } from '~/db.server';
 import { getValidAccessToken } from '~/lib/supabase-oauth.server';
-import { isDebugShop } from '~/utils/debug-shop';
 import {
   listProjects,
   listOrganizations,
@@ -70,9 +69,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
       maxProjects,
       limitReached,
       billingUrl: orgSlug ? organizationBillingUrl(orgSlug) : null,
-      // Solo per lo store di debug: gli altri merchant non devono vedere
-      // dettagli interni sulla loro organizzazione Supabase.
-      debug: isDebugShop(session.shop) ? diagnostic : null,
+      // Esito della lettura del piano. Non è gated su uno store di debug: sono
+      // informazioni sull'organizzazione Supabase DEL merchant stesso, restituite
+      // solo a lui, esattamente come billingUrl qui sopra. Servono a capire dal
+      // client perché il piano non è noto (403 = scope Organizations mancante).
+      planHttpStatus: planResult.httpStatus,
+      planRaw: planResult.rawPlan,
+      debug: diagnostic,
     });
   } catch (e) {
     console.error(
@@ -89,6 +92,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
       maxProjects: null,
       limitReached: false,
       billingUrl: null,
+      planHttpStatus: null,
+      planRaw: null,
       debug: null,
     });
   }

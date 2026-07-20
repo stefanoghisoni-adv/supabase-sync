@@ -415,13 +415,6 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
 
   return (
     <BlockStack gap="300">
-      {/* Diagnostica temporanea, visibile solo allo store di debug: dice a che
-          punto della catena si ferma il controllo del limite. */}
-      {limits?.debug && (
-        <Text as="p" tone="subdued" variant="bodySm">
-          [debug limiti] {limits.debug}
-        </Text>
-      )}
       {limits?.limitReached && (
         <Banner tone="warning" title="Hai raggiunto il limite massimo di progetti su Supabase">
           <Text as="p">
