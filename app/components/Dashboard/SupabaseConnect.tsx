@@ -72,9 +72,24 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
   const [newName, setNewName] = useState('');
   const [region, setRegion] = useState('eu-central-1');
   const [regionPopoverActive, setRegionPopoverActive] = useState(false);
+  // Se la richiesta delle region non arriva mai in porto (rete giù, 500), dopo
+  // qualche secondo smettiamo di mostrare il loader e ripieghiamo sulla lista
+  // statica: meglio un default utilizzabile di uno spinner infinito.
+  const [regionsTimedOut, setRegionsTimedOut] = useState(false);
 
-  // Finché /api/supabase/regions non risponde, mostriamo comunque il default:
-  // il form resta usabile e il campo non parte vuoto.
+  useEffect(() => {
+    if (!showCreate || regionsFetcher.data || regionsFetcher.state === 'loading') return;
+    const timer = setTimeout(() => setRegionsTimedOut(true), 8000);
+    return () => clearTimeout(timer);
+  }, [showCreate, regionsFetcher.data, regionsFetcher.state]);
+
+  // Loader nel dropdown finché non sono disponibili TUTTE le region: prima
+  // mostravamo subito la sola Frankfurt del fallback, dando l'impressione che
+  // l'Europa avesse una voce sola.
+  const regionsLoading = !regionsFetcher.data && !regionsTimedOut;
+
+  // Fallback usato sia mentre si carica (per l'etichetta del pulsante) sia se
+  // la richiesta è andata a vuoto: il form resta utilizzabile.
   const allRegions = regionsFetcher.data?.regions ?? [
     { id: 'eu-central-1', name: 'Central EU (Frankfurt)' },
   ];
@@ -433,7 +448,10 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
       )}
 
       {showCreate && (
-        <Box maxWidth="50%">
+        // Larghezza fissa invece del 50% del contenitore: il pulsante region
+        // risultava lunghissimo e il popover, che si dimensiona sul contenuto,
+        // sembrava scollegato. Con una larghezza contenuta i due combaciano.
+        <Box maxWidth="420px">
           <BlockStack gap="300">
             <TextField
               label="Nome del nuovo progetto"
@@ -450,6 +468,8 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
             <Labelled id="region-select" label="Region">
               <Popover
                 active={regionPopoverActive}
+                // Popover largo quanto l'attivatore: pulsante e menu combaciano.
+                fullWidth
                 // Sotto al campo, non sopra. L'altezza fissa del Pane serve
                 // proprio a questo: un popover corto entra nello spazio
                 // disponibile, quindi Polaris non e' costretto a ribaltarlo in
@@ -470,14 +490,25 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
                 }
               >
                 <Popover.Pane height="280px">
-                  <OptionList
-                    sections={regionGroups}
-                    selected={[region]}
-                    onChange={(selected) => {
-                      if (selected[0]) setRegion(selected[0]);
-                      setRegionPopoverActive(false);
-                    }}
-                  />
+                  {regionsLoading ? (
+                    <Box padding="600">
+                      <BlockStack gap="300" inlineAlign="center">
+                        <Spinner accessibilityLabel="Caricamento delle region" size="small" />
+                        <Text as="span" tone="subdued">
+                          Caricamento delle region…
+                        </Text>
+                      </BlockStack>
+                    </Box>
+                  ) : (
+                    <OptionList
+                      sections={regionGroups}
+                      selected={[region]}
+                      onChange={(selected) => {
+                        if (selected[0]) setRegion(selected[0]);
+                        setRegionPopoverActive(false);
+                      }}
+                    />
+                  )}
                 </Popover.Pane>
               </Popover>
             </Labelled>
