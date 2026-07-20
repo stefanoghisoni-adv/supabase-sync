@@ -14,6 +14,7 @@ import {
   organizationBillingUrl,
   getOrganizationPlan,
   SUPABASE_PLAN_PROJECT_LIMITS,
+  isPlanLimitError,
 } from './supabase-management.server';
 
 global.fetch = vi.fn();
@@ -187,7 +188,11 @@ describe('createProject', () => {
   });
 
   it('lancia in errore su risposta non ok (incl. 403 scope insufficiente)', async () => {
-    (global.fetch as any).mockResolvedValueOnce({ ok: false, status: 403 });
+    (global.fetch as any).mockResolvedValueOnce({
+      ok: false,
+      status: 403,
+      text: async () => 'insufficient scope',
+    });
     await expect(
       createProject('tok', { name: 'x', organizationId: 'o', region: 'eu-central-1', dbPass: 'p' }),
     ).rejects.toThrow('403');
@@ -284,5 +289,42 @@ describe('limiti di progetto per piano', () => {
     } as Response);
 
     await expect(getOrganizationPlan('tok', 'slug')).resolves.toBeNull();
+  });
+});
+
+describe('isPlanLimitError', () => {
+  it('riconosce il rifiuto per limite di progetti del piano', () => {
+    expect(isPlanLimitError(403, 'You have reached the free plan project limit')).toBe(true);
+    expect(isPlanLimitError(402, '{"message":"Project quota exceeded"}')).toBe(true);
+    expect(isPlanLimitError(403, 'maximum number of projects reached')).toBe(true);
+  });
+
+  it('non classifica come limite di piano gli altri 403 (es. scope mancante)', () => {
+    // Uno scope mancante e' un 403 ma NON un problema di piano: confonderli
+    // manderebbe l'utente a pagare un upgrade che non gli serve.
+    expect(isPlanLimitError(403, 'insufficient scope: projects:write required')).toBe(false);
+    expect(isPlanLimitError(403, '')).toBe(false);
+  });
+
+  it('ignora gli stati che non indicano un rifiuto di piano', () => {
+    expect(isPlanLimitError(500, 'free plan project limit')).toBe(false);
+    expect(isPlanLimitError(429, 'quota')).toBe(false);
+  });
+});
+
+describe('createProject: errori', () => {
+  beforeEach(() => {
+    (global.fetch as any).mockReset();
+  });
+
+  it('conserva stato e corpo della risposta nell’errore', async () => {
+    (global.fetch as any).mockResolvedValueOnce({
+      ok: false,
+      status: 403,
+      text: async () => 'free plan project limit reached',
+    });
+    await expect(
+      createProject('tok', { name: 'x', organizationId: 'o', region: 'eu-central-1', dbPass: 'p' }),
+    ).rejects.toMatchObject({ status: 403, body: 'free plan project limit reached' });
   });
 });

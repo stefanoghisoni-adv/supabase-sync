@@ -1,5 +1,35 @@
 const MGMT_BASE = 'https://api.supabase.com';
 
+// Errore che conserva stato HTTP e corpo della risposta Supabase, così il
+// chiamante può distinguere i casi (limite di piano, scope mancante, …) invece
+// di ricevere solo "non riuscito".
+export class SupabaseApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly body: string,
+  ) {
+    super(message);
+    this.name = 'SupabaseApiError';
+  }
+}
+
+// Riconosce il rifiuto per limite di progetti del piano. È un'euristica sul
+// testo — Supabase non espone un codice dedicato — quindi in caso di dubbio
+// NON classifichiamo: meglio un messaggio generico che affermare un limite
+// di piano che potrebbe non essere la vera causa.
+export function isPlanLimitError(status: number, body: string): boolean {
+  if (status !== 402 && status !== 403) return false;
+  const text = body.toLowerCase();
+  return (
+    text.includes('free plan') ||
+    text.includes('project limit') ||
+    text.includes('quota') ||
+    text.includes('maximum number of projects') ||
+    (text.includes('limit') && text.includes('project'))
+  );
+}
+
 export interface SupabaseTokenResponse {
   access_token: string;
   refresh_token: string;
@@ -294,7 +324,17 @@ export async function createProject(
       db_pass: params.dbPass,
     }),
   });
-  if (!res.ok) throw new Error(`Supabase create project error: ${res.status}`);
+  if (!res.ok) {
+    // Il corpo della risposta va conservato: e' l'unico posto dove Supabase
+    // spiega PERCHE' ha rifiutato (es. limite di progetti del piano Free).
+    // Scartandolo, ogni fallimento diventava un generico "riprova".
+    const body = await res.text().catch(() => '');
+    throw new SupabaseApiError(
+      `Supabase create project error: ${res.status}`,
+      res.status,
+      body,
+    );
+  }
   const data = (await res.json()) as { id?: unknown; ref?: unknown };
   const ref = String(data.id ?? data.ref);
   return { ref };

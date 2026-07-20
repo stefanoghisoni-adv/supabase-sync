@@ -65,7 +65,7 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
 
   // State for create-project form
   const regionsFetcher = useFetcher<{ regions: { id: string; name: string }[] }>();
-  const createFetcher = useFetcher<{ ok?: boolean; ref?: string; password?: string; error?: string }>();
+  const createFetcher = useFetcher<{ ok?: boolean; ref?: string; password?: string; error?: string; code?: string; billingUrl?: string | null }>();
   const regenFetcher = useFetcher<{ ok?: boolean; password?: string; error?: string }>();
 
   const [showCreate, setShowCreate] = useState(false);
@@ -84,6 +84,14 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
   }>();
   const limits = limitsFetcher.data;
   const limitsChecking = limitsFetcher.state !== 'idle';
+
+  // Il limite di piano puo' emergere in due momenti: dal controllo preventivo
+  // (solo se lo scope organizations:read e' concesso, altrimenti il piano resta
+  // ignoto) oppure dal rifiuto di Supabase alla creazione. Il banner e il
+  // pulsante di upgrade valgono in entrambi i casi.
+  const planLimitFromCreate = createFetcher.data?.code === 'plan_limit';
+  const planLimitHit = Boolean(limits?.limitReached || planLimitFromCreate);
+  const planLimitBillingUrl = createFetcher.data?.billingUrl ?? limits?.billingUrl ?? null;
 
   const [regionPopoverActive, setRegionPopoverActive] = useState(false);
   // Se la richiesta delle region non arriva mai in porto (rete giù, 500), dopo
@@ -415,11 +423,16 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
 
   return (
     <BlockStack gap="300">
-      {limits?.limitReached && (
+      {planLimitHit && (
         <Banner tone="warning" title="Hai raggiunto il limite massimo di progetti su Supabase">
           <Text as="p">
-            Il tuo piano {limits.planLabel ?? ''} consente al massimo{' '}
-            {limits.maxProjects} progetti attivi e ne hai già {limits.activeProjects}.
+            {/* Il piano lo conosciamo solo se la OAuth App concede lo scope
+                organizations:read. Quando il limite emerge dal rifiuto di
+                Supabase alla creazione non lo sappiamo: in quel caso diciamo
+                cosa è successo senza inventare un nome di piano. */}
+            {limits?.planLabel && limits.maxProjects !== null
+              ? `Il tuo piano ${limits.planLabel} consente al massimo ${limits.maxProjects} progetti attivi e ne hai già ${limits.activeProjects}.`
+              : 'Il tuo piano Supabase non consente di creare altri progetti.'}{' '}
             Per crearne un altro aggiorna il piano, oppure metti in pausa un progetto
             esistente dalla dashboard Supabase: i progetti in pausa non occupano uno slot.
           </Text>
@@ -492,14 +505,14 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
 
       {projectsLoaded && projects && !showCreate && (
         <InlineStack>
-          {limits?.limitReached ? (
+          {planLimitHit ? (
             // Limite raggiunto: creare non e' possibile, quindi al posto del
             // pulsante di creazione offriamo la sola azione che sblocca.
             <Button
               variant="primary"
-              url={limits.billingUrl ?? undefined}
+              url={planLimitBillingUrl ?? undefined}
               target="_blank"
-              disabled={disabled || !limits.billingUrl}
+              disabled={disabled || !planLimitBillingUrl}
             >
               Aggiorna piano Supabase
             </Button>

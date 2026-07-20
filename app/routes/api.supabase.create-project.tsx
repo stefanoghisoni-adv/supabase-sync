@@ -5,7 +5,14 @@ import { authenticate } from '~/shopify.server';
 import { prisma } from '~/db.server';
 import { encrypt } from '~/utils/crypto.server';
 import { getValidAccessToken } from '~/lib/supabase-oauth.server';
-import { listProjects, listOrganizations, createProject } from '~/lib/supabase-management.server';
+import {
+  listProjects,
+  listOrganizations,
+  createProject,
+  organizationBillingUrl,
+  isPlanLimitError,
+  SupabaseApiError,
+} from '~/lib/supabase-management.server';
 import { generateDbPassword } from '~/lib/password.server';
 import { isAuthorized } from '~/utils/authorization.server';
 
@@ -94,7 +101,34 @@ export async function action({ request }: ActionFunctionArgs) {
     return json({ ok: true, ref, password: dbPass });
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'errore sconosciuto';
-    console.error('[api.supabase.create-project]', msg);
+    console.error('[api.supabase.create-project]', msg, e instanceof SupabaseApiError ? e.body : '');
+
+    // Rete di sicurezza per i merchant la cui OAuth App non concede lo scope
+    // organizations:read: senza di quello non possiamo verificare il piano
+    // PRIMA di creare, quindi il limite lo scopriamo dal rifiuto di Supabase e
+    // mostriamo lo stesso banner + upgrade, solo a posteriori.
+    if (e instanceof SupabaseApiError && isPlanLimitError(e.status, e.body)) {
+      let billingUrl: string | null = null;
+      try {
+        const token = await getValidAccessToken(shop.id);
+        const projects = await listProjects(token);
+        const slug = projects[0]?.organization_slug;
+        billingUrl = slug ? organizationBillingUrl(slug) : null;
+      } catch {
+        billingUrl = null;
+      }
+      return json(
+        {
+          ok: false,
+          error:
+            'Hai raggiunto il limite massimo di progetti consentito dal tuo piano Supabase. Aggiorna il piano, oppure metti in pausa un progetto esistente: i progetti in pausa non occupano uno slot.',
+          code: 'plan_limit',
+          billingUrl,
+        },
+        { status: 403 },
+      );
+    }
+
     // 403 = scope Projects:Write mancante nella OAuth App.
     if (msg.includes('403')) {
       return json(
