@@ -15,10 +15,13 @@ import {
 import { AppProvider } from '@shopify/shopify-app-remix/react';
 import { NavMenu } from '@shopify/app-bridge-react';
 import polarisStyles from '@shopify/polaris/build/esm/styles.css?url';
+// Caricato DOPO Polaris: neutralizza il tema scuro (vedi force-light.css).
+import forceLightStyles from './force-light.css?url';
 import { Page, Banner, Text, BlockStack } from '@shopify/polaris';
 
 export const links: LinksFunction = () => [
   { rel: 'stylesheet', href: polarisStyles },
+  { rel: 'stylesheet', href: forceLightStyles },
 ];
 
 export async function loader() {
@@ -30,7 +33,10 @@ export default function App() {
   const { apiKey } = useLoaderData<typeof loader>();
 
   return (
-    <html lang="en">
+    // className p-theme-light nel JSX, non solo via App Bridge a runtime: così
+    // React tiene ferma la classe del tema chiaro anche durante un render
+    // d'errore, senza dipendere dal momento in cui App Bridge la applica.
+    <html lang="it" className="p-theme-light">
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -47,7 +53,7 @@ export default function App() {
         <Links />
       </head>
       <body>
-        <AppProvider isEmbeddedApp apiKey={apiKey}>
+        <AppProvider isEmbeddedApp apiKey={apiKey} theme="light">
           <NavMenu>
             <Link to="/" rel="home">
               Dashboard
@@ -73,6 +79,10 @@ export function ErrorBoundary() {
 
   let title = 'Si è verificato un errore';
   let detail = 'Errore sconosciuto';
+  // Un errore di rete lato client ("Failed to fetch") non è un guasto dell'app:
+  // è la connessione dell'utente caduta durante una richiesta. Va trattato come
+  // transitorio e recuperabile, non con un allarme rosso da errore fatale.
+  let transient = false;
 
   if (isRouteErrorResponse(error)) {
     title = `Errore ${error.status} ${error.statusText}`;
@@ -82,10 +92,16 @@ export function ErrorBoundary() {
         : JSON.stringify(error.data);
   } else if (error instanceof Error) {
     detail = error.message;
+    if (/failed to fetch|networkerror|load failed/i.test(error.message)) {
+      transient = true;
+      title = 'Connessione assente';
+      detail =
+        'Non è stato possibile raggiungere il server: controlla la connessione e riprova.';
+    }
   }
 
   return (
-    <html lang="it">
+    <html lang="it" className="p-theme-light">
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -100,7 +116,7 @@ export function ErrorBoundary() {
         <Links />
       </head>
       <body>
-        <AppProvider isEmbeddedApp apiKey={apiKey}>
+        <AppProvider isEmbeddedApp apiKey={apiKey} theme="light">
           <NavMenu>
             <Link to="/" rel="home">
               Dashboard
@@ -110,7 +126,17 @@ export function ErrorBoundary() {
           </NavMenu>
           <Page title="Supabase Tracking Sync">
             <BlockStack gap="400">
-              <Banner tone="critical" title={title}>
+              {/* Warning (non critical) per i blip di rete: il pulsante ricarica
+                  l'app senza costringere l'utente a uscire e rientrare. */}
+              <Banner
+                tone={transient ? 'warning' : 'critical'}
+                title={title}
+                action={
+                  transient
+                    ? { content: 'Riprova', onAction: () => window.location.reload() }
+                    : undefined
+                }
+              >
                 <Text as="p">{detail}</Text>
               </Banner>
             </BlockStack>
