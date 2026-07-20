@@ -202,6 +202,8 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
   const startConnect = useCallback(() => {
     setOauthError(null);
     setConnectFailed(false);
+    // Un nuovo collegamento riparte pulito, anche dopo una disconnessione.
+    setDismissedFlow(false);
     const popup = window.open('', 'supabase-oauth', 'width=600,height=760');
     if (!popup) {
       setOauthError('Consenti i popup per collegare Supabase.');
@@ -233,13 +235,23 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
   // Al successo di selezione o disconnessione, ricarica il loader.
   useEffect(() => {
     if (selectFetcher.data?.ok || disconnectFetcher.data?.ok) {
+      // Disconnessione a flusso non completato: riporta il componente allo
+      // stato iniziale (la revalidation da sola non basta, vedi dismissedFlow).
+      if (disconnectFetcher.data?.ok) setDismissedFlow(true);
       revalidator.revalidate();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectFetcher.data, disconnectFetcher.data]);
 
   const projects = projectsFetcher.data?.projects;
-  const projectsLoaded = projectsFetcher.state === 'idle' && projects !== undefined;
+  // dismissedFlow: dopo una disconnessione a flusso non completato (OAuth fatto
+  // ma nessun progetto scelto) lo stato server non cambia — `connected` era già
+  // false — quindi la revalidation non azzera nulla e il fetcher locale resta
+  // popolato. Questo flag riporta a mano il componente allo stato iniziale
+  // ("Collega Supabase"); startConnect lo rimette a false per un nuovo tentativo.
+  const [dismissedFlow, setDismissedFlow] = useState(false);
+  const projectsLoaded =
+    !dismissedFlow && projectsFetcher.state === 'idle' && projects !== undefined;
 
   // "In corso": il flusso di collegamento è partito ma non ancora completato
   // (OAuth, caricamento/scelta progetto, creazione tabelle).
@@ -505,39 +517,40 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
       )}
 
       {projectsLoaded && projects && !showCreate && (
-        <InlineStack>
+        // Disconnessione SEMPLICE in entrambi i rami: qui non è stato creato né
+        // collegato alcun progetto, quindi non c'è nulla da eliminare — si
+        // scollega e basta, senza il modal "mantieni/elimina dati". Testo rosso
+        // (plain + tone critical), non un pulsante pieno.
+        <InlineStack gap="300" blockAlign="center">
           {planLimitHit ? (
-            // Limite raggiunto: creare non e' possibile. Offriamo l'upgrade e,
-            // accanto, una disconnessione SEMPLICE: qui non e' stato creato ne'
-            // collegato alcun progetto, quindi non c'e' nulla da eliminare — si
-            // scollega e basta, senza il modal "mantieni/elimina dati".
-            <InlineStack gap="300">
-              <Button
-                variant="primary"
-                url={planLimitBillingUrl ?? undefined}
-                target="_blank"
-                disabled={disabled || !planLimitBillingUrl || disconnecting}
-              >
-                Aggiorna piano Supabase
-              </Button>
-              <Button
-                onClick={() => disconnect(false)}
-                loading={disconnecting}
-                disabled={disabled || disconnecting}
-              >
-                Disconnetti
-              </Button>
-            </InlineStack>
+            // Limite raggiunto: creare non è possibile, quindi offriamo l'upgrade.
+            <Button
+              variant="primary"
+              url={planLimitBillingUrl ?? undefined}
+              target="_blank"
+              disabled={disabled || !planLimitBillingUrl || disconnecting}
+            >
+              Aggiorna piano Supabase
+            </Button>
           ) : (
             <Button
               onClick={() => setShowCreate(true)}
               // Loader finché non sappiamo se il piano consente un altro progetto.
               loading={limitsChecking}
-              disabled={disabled || limitsChecking}
+              disabled={disabled || limitsChecking || disconnecting}
             >
               ➕ Crea nuovo progetto
             </Button>
           )}
+          <Button
+            variant="plain"
+            tone="critical"
+            onClick={() => disconnect(false)}
+            loading={disconnecting}
+            disabled={disabled || disconnecting}
+          >
+            Disconnetti
+          </Button>
         </InlineStack>
       )}
 
