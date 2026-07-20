@@ -2,25 +2,32 @@
 // Cache best-effort (Redis/Upstash) dei conteggi di readiness: alla riapertura
 // dell'app li mostriamo SUBITO e li aggiorniamo live in background. Se Redis non
 // è raggiungibile la cache "sparisce" senza mai bloccare: si ricalcola live.
-import Redis from 'ioredis';
+import type Redis from 'ioredis';
 import { getRedisUrl } from '../queue/connection.server';
 
-let client: Redis | null = null;
+// ioredis è importato dinamicamente: il build server di Remix è un bundle unico,
+// quindi un import statico lo caricherebbe a ogni cold start — anche sulle rotte
+// che la cache non la usano. Qui il costo si paga solo al primo accesso reale.
+let clientPromise: Promise<Redis> | null = null;
 
-function getClient(): Redis {
-  if (client) return client;
-  const url = new URL(getRedisUrl());
-  client = new Redis({
-    host: url.hostname,
-    port: parseInt(url.port || '6379', 10),
-    username: url.username || undefined,
-    password: url.password || undefined,
-    tls: url.protocol === 'rediss:' ? {} : undefined,
-    lazyConnect: true,
-    maxRetriesPerRequest: 2,
-    enableOfflineQueue: false,
-  });
-  return client;
+function getClient(): Promise<Redis> {
+  if (!clientPromise) {
+    const url = new URL(getRedisUrl());
+    clientPromise = import('ioredis').then(
+      ({ default: RedisClient }) =>
+        new RedisClient({
+          host: url.hostname,
+          port: parseInt(url.port || '6379', 10),
+          username: url.username || undefined,
+          password: url.password || undefined,
+          tls: url.protocol === 'rediss:' ? {} : undefined,
+          lazyConnect: true,
+          maxRetriesPerRequest: 2,
+          enableOfflineQueue: false,
+        }),
+    );
+  }
+  return clientPromise;
 }
 
 export interface ReadinessStats {
@@ -41,7 +48,8 @@ export async function getReadinessCache(
   shopId: string,
 ): Promise<(ReadinessStats & { computedAt: string }) | null> {
   try {
-    const raw = await getClient().get(key(shopId));
+    const redis = await getClient();
+    const raw = await redis.get(key(shopId));
     return raw ? JSON.parse(raw) : null;
   } catch (err) {
     console.error('[stats-cache] get fallito (ignoro, calcolo live):', err);
@@ -55,7 +63,8 @@ export async function setReadinessCache(
 ): Promise<void> {
   try {
     const payload = JSON.stringify({ ...stats, computedAt: new Date().toISOString() });
-    await getClient().set(key(shopId), payload, 'EX', TTL_SECONDS);
+    const redis = await getClient();
+    await redis.set(key(shopId), payload, 'EX', TTL_SECONDS);
   } catch (err) {
     console.error('[stats-cache] set fallito (ignoro):', err);
   }

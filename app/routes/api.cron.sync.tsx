@@ -1,7 +1,7 @@
 import type { LoaderFunctionArgs } from '@remix-run/node';
 import { json } from '@remix-run/node';
 import { prisma } from '~/db.server';
-import { syncQueue } from '~/lib/queue/queues.server';
+import { getSyncQueue } from '~/lib/queue/queues.server';
 import {
   processPeriodicSyncCheck,
   processInitialBulkSync,
@@ -29,6 +29,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const results = { drained: 0, periodicChecks: 0, errors: [] as string[] };
 
   // 1. Drain jobs enqueued from the UI (manual-sync, initial-bulk-sync, periodic-sync-check)
+  const syncQueue = await getSyncQueue();
   const pendingJobs = await syncQueue.getJobs(['waiting', 'delayed'], 0, 20);
 
   for (const job of pendingJobs) {

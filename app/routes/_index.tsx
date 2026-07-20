@@ -45,9 +45,20 @@ export async function loader({ request }: LoaderFunctionArgs) {
     // race durante l'embedded auth) invece di mandare l'app in 404.
     const shop = await getOrCreateShop(session);
 
-    const plan = await prisma.plan.findUnique({
-      where: { planName: shop.currentPlan },
-    });
+    // Piano e job recenti dipendono entrambi solo da `shop`: in parallelo, così
+    // il loader costa due round-trip in profondità invece di tre. Su Vercel il
+    // DB è remoto, quindi ogni round-trip risparmiato è latenza in meno sul TTFB
+    // — che è ciò che domina l'LCP di questa pagina.
+    const [plan, recentJobs] = await Promise.all([
+      prisma.plan.findUnique({
+        where: { planName: shop.currentPlan },
+      }),
+      prisma.syncJob.findMany({
+        where: { shopId: shop.id },
+        orderBy: { startedAt: 'desc' },
+        take: 10,
+      }),
+    ]);
 
     // Autorizzazione: se il trial (giorni definiti nel piano) è scaduto e il
     // negozio è ancora ENABLED, lo portiamo automaticamente in PENDING (persistente).
@@ -62,12 +73,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
         });
       }
     }
-
-    const recentJobs = await prisma.syncJob.findMany({
-      where: { shopId: shop.id },
-      orderBy: { startedAt: 'desc' },
-      take: 10,
-    });
 
     const supabaseConnected = !!shop.supabaseConfig?.connectionVerifiedAt;
     const customersEnabled = plan?.customersSyncEnabled ?? false;

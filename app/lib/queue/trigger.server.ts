@@ -1,10 +1,11 @@
 import { waitUntil } from '@vercel/functions';
-import { syncQueue } from './queues.server';
+import { getSyncQueue } from './queues.server';
 import type { SyncJobData } from './queues.server';
 
 // Mette in coda una sync manuale (durabile su Redis). Se poi l'app va in timeout
 // o il browser viene chiuso, il job resta in coda e il cron lo drena comunque.
 export async function enqueueManualSync(shopId: string): Promise<void> {
+  const syncQueue = await getSyncQueue();
   await syncQueue.add(
     'manual-sync',
     { type: 'manual-sync', shopId } satisfies SyncJobData,

@@ -28,6 +28,18 @@ export function shopCreateData(session: ShopSession) {
 // del record, o race durante l'embedded auth prima che afterAuth completi — non
 // deve mandare l'app in 404: il record viene materializzato al volo.
 export async function getOrCreateShop(session: ShopSession) {
+  // Percorso veloce: una SELECT. L'upsert incondizionato costava una write
+  // transaction sul primario a OGNI apertura della dashboard, solo per leggere.
+  // La scrittura ora avviene solo quando lo shop manca davvero (primo accesso
+  // dopo l'installazione o self-heal), cioè quasi mai.
+  const existing = await prisma.shop.findUnique({
+    where: { shopDomain: session.shop },
+    include: { supabaseConfig: true },
+  });
+  if (existing) return existing;
+
+  // Resta un upsert (non un create): se afterAuth ha materializzato lo shop tra
+  // la SELECT e questa riga, la corsa si risolve senza violare l'unique.
   return prisma.shop.upsert({
     where: { shopDomain: session.shop },
     create: shopCreateData(session),

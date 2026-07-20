@@ -1,4 +1,4 @@
-import { syncQueue } from './queues.server';
+import { getSyncQueue } from './queues.server';
 import { prisma } from '~/db.server';
 
 /**
@@ -13,6 +13,7 @@ import { prisma } from '~/db.server';
  * processors inline on each invocation.
  */
 export async function schedulePeriodicSyncs() {
+  const syncQueue = await getSyncQueue();
   const shops = await prisma.shop.findMany({
     where: {
       uninstalledAt: null,
@@ -61,6 +62,7 @@ export async function schedulePeriodicSyncs() {
  * Called when a shop disables sync or uninstalls the app.
  */
 export async function unschedulePeriodicSync(shopId: string) {
+  const syncQueue = await getSyncQueue();
   const repeatableJobs = await syncQueue.getRepeatableJobs();
 
   for (const job of repeatableJobs) {
