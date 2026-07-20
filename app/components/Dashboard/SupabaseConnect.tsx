@@ -92,6 +92,7 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
   const planLimitFromCreate = createFetcher.data?.code === 'plan_limit';
   const planLimitHit = Boolean(limits?.limitReached || planLimitFromCreate);
   const planLimitBillingUrl = createFetcher.data?.billingUrl ?? limits?.billingUrl ?? null;
+  const disconnecting = disconnectFetcher.state !== 'idle';
 
   const [regionPopoverActive, setRegionPopoverActive] = useState(false);
   // Se la richiesta delle region non arriva mai in porto (rete giù, 500), dopo
@@ -506,16 +507,27 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
       {projectsLoaded && projects && !showCreate && (
         <InlineStack>
           {planLimitHit ? (
-            // Limite raggiunto: creare non e' possibile, quindi al posto del
-            // pulsante di creazione offriamo la sola azione che sblocca.
-            <Button
-              variant="primary"
-              url={planLimitBillingUrl ?? undefined}
-              target="_blank"
-              disabled={disabled || !planLimitBillingUrl}
-            >
-              Aggiorna piano Supabase
-            </Button>
+            // Limite raggiunto: creare non e' possibile. Offriamo l'upgrade e,
+            // accanto, una disconnessione SEMPLICE: qui non e' stato creato ne'
+            // collegato alcun progetto, quindi non c'e' nulla da eliminare — si
+            // scollega e basta, senza il modal "mantieni/elimina dati".
+            <InlineStack gap="300">
+              <Button
+                variant="primary"
+                url={planLimitBillingUrl ?? undefined}
+                target="_blank"
+                disabled={disabled || !planLimitBillingUrl || disconnecting}
+              >
+                Aggiorna piano Supabase
+              </Button>
+              <Button
+                onClick={() => disconnect(false)}
+                loading={disconnecting}
+                disabled={disabled || disconnecting}
+              >
+                Disconnetti
+              </Button>
+            </InlineStack>
           ) : (
             <Button
               onClick={() => setShowCreate(true)}
