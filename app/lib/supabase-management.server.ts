@@ -11,7 +11,12 @@ export interface SupabaseProject {
   id: string;
   name: string;
   organization_id: string;
+  // Slug dell'organizzazione: e' quello che compare negli URL della dashboard
+  // (…/dashboard/org/<slug>/billing). Nella Management API organization_id e'
+  // deprecato in favore di organization_slug, ma lo teniamo per compatibilita'.
+  organization_slug: string;
   region: string;
+  status: string;
 }
 
 export interface SupabaseProjectKeys {
@@ -95,7 +100,9 @@ export async function listProjects(accessToken: string): Promise<SupabaseProject
     id: String(p.id),
     name: String(p.name),
     organization_id: String(p.organization_id),
+    organization_slug: String(p.organization_slug ?? p.organization_id),
     region: String(p.region),
+    status: String(p.status ?? 'UNKNOWN'),
   }));
 }
 
@@ -145,6 +152,68 @@ export async function listOrganizations(
 
 export function projectUrl(ref: string): string {
   return `https://${ref}.supabase.co`;
+}
+
+export type SupabasePlan = 'free' | 'pro' | 'team' | 'enterprise' | 'platform';
+
+export const SUPABASE_PLAN_LABELS: Record<SupabasePlan, string> = {
+  free: 'Free',
+  pro: 'Pro',
+  team: 'Team',
+  enterprise: 'Enterprise',
+  platform: 'Platform',
+};
+
+// Numero massimo di progetti ATTIVI consentiti dal piano. null = nessun limite
+// che abbia senso far rispettare lato app (sui piani a pagamento i progetti in
+// piu' vengono fatturati, non rifiutati).
+export const SUPABASE_PLAN_PROJECT_LIMITS: Record<SupabasePlan, number | null> = {
+  free: 2,
+  pro: null,
+  team: null,
+  enterprise: null,
+  platform: null,
+};
+
+// Stati che NON occupano uno slot del piano. Supabase e' esplicito sul fatto che
+// i progetti in pausa non contano verso il limite del piano Free; i rimossi e
+// quelli in via di spegnimento men che meno. Tutti gli altri stati (attivi, in
+// avvio, in ripristino…) li consideriamo occupanti: meglio sovrastimare, cosi'
+// non promettiamo una creazione che Supabase poi rifiuta.
+const NON_COUNTING_STATUSES = new Set([
+  'INACTIVE',
+  'REMOVED',
+  'GOING_DOWN',
+  'PAUSING',
+]);
+
+export function countsTowardsPlanLimit(status: string): boolean {
+  return !NON_COUNTING_STATUSES.has(status.toUpperCase());
+}
+
+export function organizationBillingUrl(slug: string): string {
+  return `https://supabase.com/dashboard/org/${slug}/billing`;
+}
+
+// Il piano vive su /v1/organizations/{slug}, che richiede lo scope OAuth
+// "Organizations". Quello scope puo' non essere concesso: in quel caso non
+// possiamo conoscere il piano e ritorniamo null, cosi' il chiamante degrada
+// senza bloccare la creazione con un limite che non e' in grado di verificare.
+export async function getOrganizationPlan(
+  accessToken: string,
+  slug: string,
+): Promise<SupabasePlan | null> {
+  try {
+    const res = await fetch(`${MGMT_BASE}/v1/organizations/${slug}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { plan?: unknown };
+    const plan = typeof data.plan === 'string' ? data.plan : null;
+    return plan && plan in SUPABASE_PLAN_PROJECT_LIMITS ? (plan as SupabasePlan) : null;
+  } catch {
+    return null;
+  }
 }
 
 export interface SupabaseRegion {

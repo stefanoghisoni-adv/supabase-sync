@@ -71,6 +71,19 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState('');
   const [region, setRegion] = useState('eu-central-1');
+  // Limiti di progetto del piano Supabase: alimenta il loader sul pulsante di
+  // creazione e, a limite raggiunto, il banner + il pulsante verso il billing.
+  const limitsFetcher = useFetcher<{
+    ok: boolean;
+    planLabel: string | null;
+    activeProjects: number;
+    maxProjects: number | null;
+    limitReached: boolean;
+    billingUrl: string | null;
+  }>();
+  const limits = limitsFetcher.data;
+  const limitsChecking = limitsFetcher.state !== 'idle';
+
   const [regionPopoverActive, setRegionPopoverActive] = useState(false);
   // Se la richiesta delle region non arriva mai in porto (rete giù, 500), dopo
   // qualche secondo smettiamo di mostrare il loader e ripieghiamo sulla lista
@@ -100,6 +113,21 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
     // dall'array ricreato a ogni render dal fallback qui sopra.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [regionsFetcher.data],
+  );
+
+  // Rientro delle opzioni rispetto al titolo di sezione: le voci risultano
+  // annidate sotto il continente invece che allineate a filo con esso.
+  // Memoizzato perché OptionList confronta le sezioni in profondità.
+  const indentedRegionGroups = useMemo(
+    () =>
+      regionGroups.map((group) => ({
+        title: group.title,
+        options: group.options.map((option) => ({
+          value: option.value,
+          label: <Box paddingInlineStart="300">{option.label}</Box>,
+        })),
+      })),
+    [regionGroups],
   );
   const [genPassword, setGenPassword] = useState('');
   const [creatingRef, setCreatingRef] = useState<string | null>(null);
@@ -241,6 +269,16 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showCreate]);
 
+  // Verifica i limiti del piano appena l'elenco progetti è disponibile: il
+  // controllo deve essere già concluso (o in corso, col suo loader) quando
+  // l'utente guarda il pulsante "Crea nuovo progetto".
+  useEffect(() => {
+    if (projectsLoaded && limitsFetcher.state === 'idle' && !limitsFetcher.data) {
+      limitsFetcher.load('/api/supabase/project-limits');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectsLoaded]);
+
   // Quando la creazione ritorna il ref, mostra la password e avvia il polling.
   useEffect(() => {
     if (createFetcher.data?.ok && createFetcher.data.ref) {
@@ -376,6 +414,16 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
 
   return (
     <BlockStack gap="300">
+      {limits?.limitReached && (
+        <Banner tone="warning" title="Hai raggiunto il limite massimo di progetti su Supabase">
+          <Text as="p">
+            Il tuo piano {limits.planLabel ?? ''} consente al massimo{' '}
+            {limits.maxProjects} progetti attivi e ne hai già {limits.activeProjects}.
+            Per crearne un altro aggiorna il piano, oppure metti in pausa un progetto
+            esistente dalla dashboard Supabase: i progetti in pausa non occupano uno slot.
+          </Text>
+        </Banner>
+      )}
       <Text as="p" tone="subdued">
         Verrai portato su Supabase per accedere o creare gratuitamente un account, poi torni
         qui. L'app elencherà i tuoi progetti e configurerà le tabelle nel progetto scelto.
@@ -443,7 +491,27 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
 
       {projectsLoaded && projects && !showCreate && (
         <InlineStack>
-          <Button onClick={() => setShowCreate(true)} disabled={disabled}>➕ Crea nuovo progetto</Button>
+          {limits?.limitReached ? (
+            // Limite raggiunto: creare non e' possibile, quindi al posto del
+            // pulsante di creazione offriamo la sola azione che sblocca.
+            <Button
+              variant="primary"
+              url={limits.billingUrl ?? undefined}
+              target="_blank"
+              disabled={disabled || !limits.billingUrl}
+            >
+              Aggiorna piano Supabase
+            </Button>
+          ) : (
+            <Button
+              onClick={() => setShowCreate(true)}
+              // Loader finché non sappiamo se il piano consente un altro progetto.
+              loading={limitsChecking}
+              disabled={disabled || limitsChecking}
+            >
+              ➕ Crea nuovo progetto
+            </Button>
+          )}
         </InlineStack>
       )}
 
@@ -501,7 +569,7 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
                     </Box>
                   ) : (
                     <OptionList
-                      sections={regionGroups}
+                      sections={indentedRegionGroups}
                       selected={[region]}
                       onChange={(selected) => {
                         if (selected[0]) setRegion(selected[0]);

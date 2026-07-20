@@ -10,6 +10,10 @@ import {
   createProject,
   getProject,
   resetDbPassword,
+  countsTowardsPlanLimit,
+  organizationBillingUrl,
+  getOrganizationPlan,
+  SUPABASE_PLAN_PROJECT_LIMITS,
 } from './supabase-management.server';
 
 global.fetch = vi.fn();
@@ -51,11 +55,43 @@ describe('listProjects', () => {
     mockFetch.mockResolvedValueOnce({
       ok: true,
       json: async () => [
-        { id: 'ref1', name: 'P1', organization_id: 'org1', region: 'eu-central-1', extra: 'x' },
+        {
+          id: 'ref1',
+          name: 'P1',
+          organization_id: 'org1',
+          organization_slug: 'slug1',
+          region: 'eu-central-1',
+          status: 'ACTIVE_HEALTHY',
+          extra: 'x',
+        },
       ],
     });
     const projects = await listProjects('tok');
-    expect(projects).toEqual([{ id: 'ref1', name: 'P1', organization_id: 'org1', region: 'eu-central-1' }]);
+    expect(projects).toEqual([
+      {
+        id: 'ref1',
+        name: 'P1',
+        organization_id: 'org1',
+        organization_slug: 'slug1',
+        region: 'eu-central-1',
+        status: 'ACTIVE_HEALTHY',
+      },
+    ]);
+  });
+
+  it('ripiega su organization_id se lo slug manca, e su UNKNOWN se manca lo status', async () => {
+    // Risposte piu' vecchie della Management API non hanno organization_slug:
+    // senza fallback l'URL di billing verrebbe costruito su "undefined".
+    const mockFetch = global.fetch as any;
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => [
+        { id: 'ref1', name: 'P1', organization_id: 'org1', region: 'eu-central-1' },
+      ],
+    });
+    const [project] = await listProjects('tok');
+    expect(project.organization_slug).toBe('org1');
+    expect(project.status).toBe('UNKNOWN');
   });
 });
 
@@ -189,5 +225,64 @@ describe('resetDbPassword', () => {
   it('segnala unsupported su 404', async () => {
     (global.fetch as any).mockResolvedValueOnce({ ok: false, status: 404 });
     await expect(resetDbPassword('tok', 'r1', 'p')).rejects.toThrow('unsupported');
+  });
+});
+
+describe('limiti di progetto per piano', () => {
+  beforeEach(() => {
+    (global.fetch as any).mockReset();
+  });
+
+  it('il piano Free consente 2 progetti, i piani a pagamento non hanno un limite da far rispettare', () => {
+    expect(SUPABASE_PLAN_PROJECT_LIMITS.free).toBe(2);
+    expect(SUPABASE_PLAN_PROJECT_LIMITS.pro).toBeNull();
+    expect(SUPABASE_PLAN_PROJECT_LIMITS.team).toBeNull();
+  });
+
+  it('i progetti in pausa o rimossi non occupano uno slot del piano', () => {
+    // Supabase e' esplicito: i progetti in pausa non contano verso il limite Free.
+    expect(countsTowardsPlanLimit('INACTIVE')).toBe(false);
+    expect(countsTowardsPlanLimit('REMOVED')).toBe(false);
+    expect(countsTowardsPlanLimit('PAUSING')).toBe(false);
+    expect(countsTowardsPlanLimit('GOING_DOWN')).toBe(false);
+  });
+
+  it('i progetti attivi o in avvio occupano uno slot', () => {
+    expect(countsTowardsPlanLimit('ACTIVE_HEALTHY')).toBe(true);
+    expect(countsTowardsPlanLimit('ACTIVE_UNHEALTHY')).toBe(true);
+    expect(countsTowardsPlanLimit('COMING_UP')).toBe(true);
+    expect(countsTowardsPlanLimit('RESTORING')).toBe(true);
+  });
+
+  it('costruisce l’URL di billing dallo slug dell’organizzazione', () => {
+    expect(organizationBillingUrl('abcdefghijklmnopqrst')).toBe(
+      'https://supabase.com/dashboard/org/abcdefghijklmnopqrst/billing',
+    );
+  });
+
+  it('legge il piano dell’organizzazione', async () => {
+    (global.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ id: 'o1', name: 'Org', plan: 'free' }),
+    } as Response);
+
+    await expect(getOrganizationPlan('tok', 'slug')).resolves.toBe('free');
+  });
+
+  it('ritorna null se lo scope Organizations non e’ concesso (403)', async () => {
+    // Senza il piano il chiamante NON deve dedurre un limite: meglio lasciar
+    // provare la creazione che bloccarla su un limite non verificabile.
+    (global.fetch as any).mockResolvedValueOnce({ ok: false, status: 403 } as Response);
+
+    await expect(getOrganizationPlan('tok', 'slug')).resolves.toBeNull();
+  });
+
+  it('ritorna null su un piano sconosciuto invece di propagarlo', async () => {
+    (global.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ plan: 'piano_inventato' }),
+    } as Response);
+
+    await expect(getOrganizationPlan('tok', 'slug')).resolves.toBeNull();
   });
 });
