@@ -199,21 +199,43 @@ export function organizationBillingUrl(slug: string): string {
 // "Organizations". Quello scope puo' non essere concesso: in quel caso non
 // possiamo conoscere il piano e ritorniamo null, cosi' il chiamante degrada
 // senza bloccare la creazione con un limite che non e' in grado di verificare.
-export async function getOrganizationPlan(
+export interface OrganizationPlanResult {
+  plan: SupabasePlan | null;
+  // Perche' il piano non e' noto: serve a distinguere "scope non concesso"
+  // (403) da "organizzazione inesistente" (404) o da un piano non mappato.
+  httpStatus: number | null;
+  rawPlan: string | null;
+}
+
+export async function fetchOrganizationPlan(
   accessToken: string,
   slug: string,
-): Promise<SupabasePlan | null> {
+): Promise<OrganizationPlanResult> {
   try {
     const res = await fetch(`${MGMT_BASE}/v1/organizations/${slug}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
-    if (!res.ok) return null;
+    if (!res.ok) return { plan: null, httpStatus: res.status, rawPlan: null };
     const data = (await res.json()) as { plan?: unknown };
-    const plan = typeof data.plan === 'string' ? data.plan : null;
-    return plan && plan in SUPABASE_PLAN_PROJECT_LIMITS ? (plan as SupabasePlan) : null;
-  } catch {
-    return null;
+    const rawPlan = typeof data.plan === 'string' ? data.plan : null;
+    const plan =
+      rawPlan && rawPlan in SUPABASE_PLAN_PROJECT_LIMITS ? (rawPlan as SupabasePlan) : null;
+    return { plan, httpStatus: res.status, rawPlan };
+  } catch (e) {
+    return {
+      plan: null,
+      httpStatus: null,
+      rawPlan: null,
+    };
   }
+}
+
+export async function getOrganizationPlan(
+  accessToken: string,
+  slug: string,
+): Promise<SupabasePlan | null> {
+  const { plan } = await fetchOrganizationPlan(accessToken, slug);
+  return plan;
 }
 
 export interface SupabaseRegion {

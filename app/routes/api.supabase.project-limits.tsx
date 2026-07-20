@@ -6,10 +6,11 @@ import { json } from '@remix-run/node';
 import { authenticate } from '~/shopify.server';
 import { prisma } from '~/db.server';
 import { getValidAccessToken } from '~/lib/supabase-oauth.server';
+import { isDebugShop } from '~/utils/debug-shop';
 import {
   listProjects,
   listOrganizations,
-  getOrganizationPlan,
+  fetchOrganizationPlan,
   countsTowardsPlanLimit,
   organizationBillingUrl,
   SUPABASE_PLAN_LABELS,
@@ -42,7 +43,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
       (p) => p.organization_slug === orgSlug && countsTowardsPlanLimit(p.status),
     ).length;
 
-    const plan = orgSlug ? await getOrganizationPlan(token, orgSlug) : null;
+    const planResult = orgSlug
+      ? await fetchOrganizationPlan(token, orgSlug)
+      : { plan: null, httpStatus: null, rawPlan: null };
+    const plan = planResult.plan;
     const maxProjects = plan ? SUPABASE_PLAN_PROJECT_LIMITS[plan] : null;
 
     // limitReached solo quando sappiamo DAVVERO il piano e il suo limite: senza
@@ -50,6 +54,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
     // sulla base di un limite ipotizzato sarebbe peggio che lasciar provare
     // (Supabase rifiuterebbe comunque, con il suo messaggio).
     const limitReached = maxProjects !== null && activeProjects >= maxProjects;
+
+    // Diagnostica: sempre nei log del server, così è consultabile su Vercel.
+    const diagnostic =
+      `progetti=${projects.length} attivi=${activeProjects} orgSlug=${orgSlug ?? 'n/d'} ` +
+      `planHttp=${planResult.httpStatus ?? 'n/d'} planRaw=${planResult.rawPlan ?? 'n/d'} ` +
+      `max=${maxProjects ?? 'n/d'} limitReached=${limitReached}`;
+    console.log('[api.supabase.project-limits]', diagnostic);
 
     return json({
       ok: true as const,
@@ -59,6 +70,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
       maxProjects,
       limitReached,
       billingUrl: orgSlug ? organizationBillingUrl(orgSlug) : null,
+      // Solo per lo store di debug: gli altri merchant non devono vedere
+      // dettagli interni sulla loro organizzazione Supabase.
+      debug: isDebugShop(session.shop) ? diagnostic : null,
     });
   } catch (e) {
     console.error(
@@ -75,6 +89,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       maxProjects: null,
       limitReached: false,
       billingUrl: null,
+      debug: null,
     });
   }
 }
