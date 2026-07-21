@@ -87,4 +87,13 @@ describe('resolveShopReadContext', () => {
     await resolveShopReadContext('spx_same');
     expect(findUnique).toHaveBeenCalledTimes(1);
   });
+
+  // I token sconosciuti sono l'unico esito che un chiamante ostile può
+  // generare a volontà: cacharli gli lascerebbe far crescere la Map.
+  it('non mette in cache i token sconosciuti', async () => {
+    findUnique.mockResolvedValue(null);
+    await resolveShopReadContext('spx_ignoto');
+    await resolveShopReadContext('spx_ignoto');
+    expect(findUnique).toHaveBeenCalledTimes(2);
+  });
 });

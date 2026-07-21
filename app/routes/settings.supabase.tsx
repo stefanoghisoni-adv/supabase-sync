@@ -78,7 +78,7 @@ export async function action({ request }: ActionFunctionArgs) {
     await issueReadProxyToken(shop.id);
     return json({
       success:
-        'Chiave di lettura rigenerata. Aggiorna la configurazione in Stape/GTM: la chiave precedente non è più valida.',
+        'Chiave di lettura rigenerata. Aggiorna la configurazione in Stape/GTM: la chiave precedente smetterà di funzionare entro ~30 secondi.',
     });
   }
 
@@ -222,6 +222,13 @@ export default function SupabaseSettings() {
                       <Banner tone="warning">
                         Chiave di lettura non ancora generata. Usa
                         &laquo;Rigenera chiave di lettura&raquo; per crearne una.
+                      </Banner>
+                    )}
+                    {!config.proxyBaseUrl && (
+                      <Banner tone="critical">
+                        URL di lettura non disponibile: manca la configurazione
+                        del dominio dell&apos;app. Contatta il supporto prima di
+                        impostare il tracciamento.
                       </Banner>
                     )}
                     <InlineStack align="start">

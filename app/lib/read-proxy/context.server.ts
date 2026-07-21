@@ -26,10 +26,28 @@ export type ReadContextResult =
 // Cache per-istanza: evita un round-trip al DB owner ad ogni lettura di
 // tracciamento. TTL 30s = finestra massima di obsolescenza dello stato shop.
 const TTL_MS = 30_000;
+// Tetto alla dimensione: questo è l'unico endpoint pubblico dell'app e la
+// chiave della cache deriva da un token fornito dal chiamante. Senza tetto,
+// una raffica di token casuali farebbe crescere la Map senza limite su
+// un'istanza di lunga durata.
+const MAX_ENTRIES = 500;
 const cache = new Map<string, { result: ReadContextResult; expiresAt: number }>();
 
 export function clearReadContextCache(): void {
   cache.clear();
+}
+
+// Rimuove le entry scadute; se non basta, sfratta le più vecchie (la Map
+// itera in ordine di inserimento).
+function prune(now: number): void {
+  for (const [key, entry] of cache) {
+    if (entry.expiresAt <= now) cache.delete(key);
+  }
+  while (cache.size >= MAX_ENTRIES) {
+    const oldest = cache.keys().next();
+    if (oldest.done) break;
+    cache.delete(oldest.value);
+  }
 }
 
 export async function resolveShopReadContext(token: string): Promise<ReadContextResult> {
@@ -39,7 +57,14 @@ export async function resolveShopReadContext(token: string): Promise<ReadContext
   if (cached && cached.expiresAt > now) return cached.result;
 
   const result = await loadReadContext(hash);
-  cache.set(hash, { result, expiresAt: now + TTL_MS });
+
+  // I token sconosciuti NON entrano in cache: sono il caso che un chiamante
+  // ostile può generare a volontà, e cacharli lo lascerebbe riempire la Map.
+  // Sono anche l'unico esito che non risparmia lavoro utile se ripetuto.
+  if (result.kind !== 'unknown') {
+    prune(now);
+    cache.set(hash, { result, expiresAt: now + TTL_MS });
+  }
   return result;
 }
 

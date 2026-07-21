@@ -82,12 +82,26 @@ export async function action({ request }: ActionFunctionArgs) {
     // Emette il token-proxy per le letture di tracciamento se lo shop non ne ha
     // già uno: una riconnessione mantiene il token esistente, così il merchant
     // non deve riconfigurare Stape/GTM.
-    const existing = await prisma.shop.findUnique({
-      where: { id: shop.id },
-      select: { readProxyTokenHash: true },
-    });
-    if (!existing?.readProxyTokenHash) {
-      await issueReadProxyToken(shop.id);
+    //
+    // Best effort, come il salvataggio di ref/password in create-project: a
+    // questo punto il collegamento è già completo e funzionante, e un errore
+    // qui (timeout del pooler, colonne di migrazione mancanti) NON deve farlo
+    // finire nel catch, che azzererebbe connectionVerifiedAt e costringerebbe a
+    // rieseguire la DDL. Se il token non viene emesso, il merchant lo genera
+    // dalle Impostazioni.
+    try {
+      const existing = await prisma.shop.findUnique({
+        where: { id: shop.id },
+        select: { readProxyTokenHash: true },
+      });
+      if (!existing?.readProxyTokenHash) {
+        await issueReadProxyToken(shop.id);
+      }
+    } catch (tokenErr) {
+      console.warn(
+        '[api.supabase.select-project] collegamento riuscito ma emissione del token-proxy fallita:',
+        tokenErr instanceof Error ? tokenErr.message : 'errore sconosciuto',
+      );
     }
 
     return json({ ok: true });
