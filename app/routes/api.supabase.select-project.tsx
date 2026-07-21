@@ -11,6 +11,7 @@ import {
 } from '~/lib/supabase-management.server';
 import { buildMerchantSchemaSQL } from '~/lib/supabase-schema';
 import { isAuthorized } from '~/utils/authorization.server';
+import { issueReadProxyToken } from '~/lib/read-proxy/token.server';
 
 export async function action({ request }: ActionFunctionArgs) {
   const { session } = await authenticate.admin(request);
@@ -53,11 +54,15 @@ export async function action({ request }: ActionFunctionArgs) {
         supabaseUrl: url,
         supabasePublicKey: encrypt(keys.anon),
         supabaseServiceRoleKey: encrypt(keys.serviceRole),
+        // Il ref è la sola fonte dell'host di inoltro del proxy di lettura:
+        // senza, ogni lettura di tracciamento risponderebbe "non collegato".
+        supabaseProjectRef: ref,
       },
       update: {
         supabaseUrl: url,
         supabasePublicKey: encrypt(keys.anon),
         supabaseServiceRoleKey: encrypt(keys.serviceRole),
+        supabaseProjectRef: ref,
       },
     });
 
@@ -73,6 +78,17 @@ export async function action({ request }: ActionFunctionArgs) {
       where: { shopId: shop.id },
       data: { connectionVerifiedAt: new Date(), syncEnabled: true },
     });
+
+    // Emette il token-proxy per le letture di tracciamento se lo shop non ne ha
+    // già uno: una riconnessione mantiene il token esistente, così il merchant
+    // non deve riconfigurare Stape/GTM.
+    const existing = await prisma.shop.findUnique({
+      where: { id: shop.id },
+      select: { readProxyTokenHash: true },
+    });
+    if (!existing?.readProxyTokenHash) {
+      await issueReadProxyToken(shop.id);
+    }
 
     return json({ ok: true });
   } catch (e) {
