@@ -51,11 +51,33 @@ describe('resolveShopReadContext', () => {
       ctx: {
         shopId: 's1',
         authorization: 'ENABLED',
+        canReadData: true,
         projectRef: 'abcref',
         serviceRoleKey: 'svc',
         customersEnabled: true,
       },
     });
+  });
+
+  // Il gate deve fallire CHIUSO: `authorization` è testo libero editato a mano
+  // dall'owner, senza CHECK constraint. Un refuso non deve concedere accesso.
+  it.each([
+    ['DISABLED', false],
+    ['PENDING', false],
+    ['disabled', false],
+    ['  ENABLED  ', true],
+    ['enabled', true],
+    ['DISABLD', false],
+    ['BANNED', false],
+    ['SUSPENDED', false],
+    ['', false],
+    [null, false],
+  ])('authorization %j → canReadData %s', async (value, expected) => {
+    findUnique.mockResolvedValueOnce(shopRow({ authorization: value }));
+    planFindUnique.mockResolvedValueOnce({ customersSyncEnabled: false });
+    const r = await resolveShopReadContext(`spx_${String(value)}`);
+    expect(r.kind).toBe('ok');
+    expect((r as { ctx: { canReadData: boolean } }).ctx.canReadData).toBe(expected);
   });
 
   it('usa la cache entro il TTL (una sola query per token)', async () => {

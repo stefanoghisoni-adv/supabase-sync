@@ -1,11 +1,18 @@
 import { prisma } from '~/db.server';
 import { decrypt } from '~/utils/crypto.server';
-import { normalizeAuthorization, type AuthorizationState } from '~/utils/authorization.server';
+import {
+  grantsDataAccess,
+  normalizeAuthorization,
+  type AuthorizationState,
+} from '~/utils/authorization.server';
 import { hashReadProxyToken } from './token.server';
 
 export interface ShopReadContext {
   shopId: string;
+  // Stato normalizzato, per messaggi e diagnostica. NON usarlo come gate.
   authorization: AuthorizationState;
+  // Unico gate valido per l'accesso ai dati: fail-closed sul valore grezzo.
+  canReadData: boolean;
   projectRef: string;
   serviceRoleKey: string;
   customersEnabled: boolean;
@@ -62,6 +69,7 @@ async function loadReadContext(hash: string): Promise<ReadContextResult> {
     ctx: {
       shopId: shop.id,
       authorization: normalizeAuthorization(shop.authorization),
+      canReadData: grantsDataAccess(shop.authorization),
       projectRef: config.supabaseProjectRef,
       serviceRoleKey,
       customersEnabled: plan?.customersSyncEnabled ?? false,

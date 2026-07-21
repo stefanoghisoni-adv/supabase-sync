@@ -1,7 +1,11 @@
 import type { LoaderFunctionArgs } from '@remix-run/node';
 import { extractReadProxyToken } from '~/lib/read-proxy/token.server';
 import { resolveShopReadContext } from '~/lib/read-proxy/context.server';
-import { allowedReadTables, forwardRead } from '~/lib/read-proxy/forward.server';
+import {
+  allowedReadTables,
+  forwardRead,
+  selectEmbedsForbiddenTable,
+} from '~/lib/read-proxy/forward.server';
 
 // Risposta di blocco: JSON minimale. Stape tratta ogni status non 2xx come
 // "nessun dato", quindi il tracciamento prosegue senza errori all'utente finale.
@@ -23,16 +27,23 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   if (result.kind === 'not_configured') return deny(409, 'Supabase non collegato.');
 
   const { ctx } = result;
-  if (ctx.authorization !== 'ENABLED') {
+  // Gate fail-closed: solo un ENABLED esatto passa (vedi grantsDataAccess).
+  if (!ctx.canReadData) {
     return deny(403, 'Accesso ai dati sospeso per questo negozio.');
   }
 
   const table = params.table ?? '';
-  if (!allowedReadTables(ctx.customersEnabled).includes(table)) {
+  const allowed = allowedReadTables(ctx.customersEnabled);
+  if (!allowed.includes(table)) {
     return deny(403, 'Tabella non disponibile.');
   }
 
   const search = new URL(request.url).search;
+  // L'allowlist sul path non copre l'embedding PostgREST dentro `select`.
+  if (selectEmbedsForbiddenTable(search, allowed)) {
+    return deny(403, 'Tabella non disponibile.');
+  }
+
   const { status, body, contentType } = await forwardRead(ctx, table, search);
   return new Response(body, { status, headers: { 'Content-Type': contentType } });
 }

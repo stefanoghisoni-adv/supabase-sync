@@ -16,6 +16,20 @@ export function isAuthorized(value: string | null | undefined): boolean {
   return normalizeAuthorization(value) === 'ENABLED';
 }
 
+// Gate FAIL-CLOSED per l'accesso ai dati (proxy di lettura).
+//
+// `normalizeAuthorization` è deliberatamente permissiva: mappa a ENABLED tutto
+// ciò che non riconosce, così la UI non si blocca su valori nulli o legacy.
+// Sul percorso dati quel comportamento è però un bypass: la colonna
+// `authorization` è testo libero senza CHECK constraint, editata a mano
+// dall'owner su Supabase, e un refuso ("DISABLD", "BANNED") concederebbe
+// silenziosamente l'accesso proprio allo shop che si voleva bloccare.
+// Qui l'unico valore che concede accesso è l'esatto ENABLED: qualsiasi altra
+// cosa — inclusa una stringa sconosciuta — nega.
+export function grantsDataAccess(value: string | null | undefined): boolean {
+  return (value ?? '').trim().toUpperCase() === 'ENABLED';
+}
+
 // Messaggio utente per lo stato di blocco (banner e risposte d'errore).
 export function authorizationMessage(state: AuthorizationState): string {
   if (state === 'DISABLED') {

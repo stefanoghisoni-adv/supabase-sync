@@ -1,10 +1,46 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { allowedReadTables, buildSupabaseReadUrl, forwardRead } from './forward.server';
+import {
+  allowedReadTables,
+  buildSupabaseReadUrl,
+  forwardRead,
+  selectEmbedsForbiddenTable,
+} from './forward.server';
 
 describe('allowedReadTables', () => {
   it('solo products senza clienti; products+customers con clienti', () => {
     expect(allowedReadTables(false)).toEqual(['products']);
     expect(allowedReadTables(true)).toEqual(['products', 'customers']);
+  });
+});
+
+describe('selectEmbedsForbiddenTable', () => {
+  const noCustomers = ['products'];
+  const withCustomers = ['products', 'customers'];
+
+  it('nessun select → consentito', () => {
+    expect(selectEmbedsForbiddenTable('', noCustomers)).toBe(false);
+    expect(selectEmbedsForbiddenTable('?sku=eq.X', noCustomers)).toBe(false);
+  });
+
+  it('select semplice → consentito', () => {
+    expect(selectEmbedsForbiddenTable('?select=*', noCustomers)).toBe(false);
+    expect(selectEmbedsForbiddenTable('?select=sku,price', noCustomers)).toBe(false);
+  });
+
+  it('embedding di una tabella gestita ma esclusa dal piano → bloccato', () => {
+    expect(selectEmbedsForbiddenTable('?select=*,customers(*)', noCustomers)).toBe(true);
+    expect(selectEmbedsForbiddenTable('?select=sku,customers(email)', noCustomers)).toBe(true);
+    expect(selectEmbedsForbiddenTable('?select=*,customers!inner(email)', noCustomers)).toBe(true);
+    expect(selectEmbedsForbiddenTable('?select=*,alias:customers(*)', noCustomers)).toBe(true);
+  });
+
+  it('la stessa embedding è consentita quando il piano include i clienti', () => {
+    expect(selectEmbedsForbiddenTable('?select=*,customers(*)', withCustomers)).toBe(false);
+  });
+
+  it('gli aggregati PostgREST non sono scambiati per embedding', () => {
+    expect(selectEmbedsForbiddenTable('?select=count()', noCustomers)).toBe(false);
+    expect(selectEmbedsForbiddenTable('?select=price.sum()', noCustomers)).toBe(false);
   });
 });
 
@@ -46,7 +82,7 @@ describe('buildSupabaseReadUrl', () => {
 describe('forwardRead', () => {
   beforeEach(() => { global.fetch = vi.fn(); });
   const ctx = {
-    shopId: 's1', authorization: 'ENABLED' as const, projectRef: 'abcref',
+    shopId: 's1', authorization: 'ENABLED' as const, canReadData: true, projectRef: 'abcref',
     serviceRoleKey: 'svc', customersEnabled: true,
   };
 
