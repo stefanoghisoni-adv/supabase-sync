@@ -12,7 +12,6 @@ import {
   Button,
   Text,
   Icon,
-  Tooltip,
   Banner,
   SkeletonDisplayText,
 } from '@shopify/polaris';
@@ -158,6 +157,10 @@ interface CountsResponse {
 
 interface ReadinessResponse {
   totalProducts: number;
+  // Totale varianti esposto dall'endpoint. La card lo ricalcola comunque come
+  // readyCount + problemCount (vero per costruzione): qui il campo completa il
+  // contratto dell'API, non e' la fonte usata per il rendering.
+  totalVariants: number;
   readyCount: number;
   problemCount: number;
   // true se il risultato arriva dalla cache: il client innesca poi il refresh live.
