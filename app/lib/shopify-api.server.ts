@@ -169,4 +169,14 @@ export class ShopifyAPIClient {
     const { data } = await this.makeRequest('customers/count.json');
     return typeof data.count === 'number' ? data.count : 0;
   }
+
+  // Metadati del negozio. Serve iana_timezone (es. "Europe/Rome") per formattare
+  // le date nel fuso del NEGOZIO: il server non puo' conoscere quello del browser,
+  // e usare l'ora locale della macchina produrrebbe stringhe diverse fra render
+  // server e idratazione client.
+  async getShopInfo(): Promise<{ ianaTimezone: string | null }> {
+    const { data } = await this.makeRequest('shop.json');
+    const shop = (data as { shop?: { iana_timezone?: string | null } }).shop;
+    return { ianaTimezone: shop?.iana_timezone ?? null };
+  }
 }

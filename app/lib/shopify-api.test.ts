@@ -197,4 +197,26 @@ describe('Shopify API Client', () => {
     expect(calledUrl.pathname).toContain('customers/count.json');
     expect(count).toBe(42);
   });
+
+  it('getShopInfo restituisce il fuso orario del negozio', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      headers: { get: () => null },
+      json: async () => ({ shop: { iana_timezone: 'Europe/Rome' } }),
+    }) as unknown as typeof fetch;
+
+    const client = new ShopifyAPIClient('test-shop.myshopify.com', 'enc');
+    expect(await client.getShopInfo()).toEqual({ ianaTimezone: 'Europe/Rome' });
+  });
+
+  it('getShopInfo senza fuso restituisce null', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      headers: { get: () => null },
+      json: async () => ({ shop: {} }),
+    }) as unknown as typeof fetch;
+
+    const client = new ShopifyAPIClient('test-shop.myshopify.com', 'enc');
+    expect(await client.getShopInfo()).toEqual({ ianaTimezone: null });
+  });
 });

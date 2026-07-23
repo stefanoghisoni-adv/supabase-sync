@@ -49,6 +49,9 @@ model Shop {
   // Enum e non testo libero: il Table Editor di Supabase mostra i soli valori
   // ammessi e un refuso diventa impossibile a livello di database.
   authorization     AuthorizationState @default(ENABLED)
+  // Fuso orario IANA del negozio (es. Europe/Rome), letto da Shopify e
+  // memorizzato: rende le date del log identiche su server e client.
+  ianaTimezone      String?            @map("iana_timezone")
 
   // Token-proxy per le letture di tracciamento (Stape/GTM). Persistito solo come
   // hash (lookup) + cifrato (per mostrarlo in Impostazioni), mai in chiaro.
