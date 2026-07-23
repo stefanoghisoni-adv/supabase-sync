@@ -194,11 +194,11 @@ export async function processPeriodicSyncCheck(shopId: string): Promise<void> {
           continue;
         }
 
-        // Righe correnti: ogni riga ha un shopify_variant_id reale (anche i
-        // prodotti a variante singola).
-        const currentRows = transformProduct(product);
+        // Solo righe idonee: le varianti senza costo non vanno scritte e, se
+        // presenti da prima, devono risultare "orfane" e quindi cancellate.
+        const eligibleRows = filterEligibleProductRows(transformProduct(product));
         const currentVariantIds = new Set(
-          currentRows.map(r => r.shopify_variant_id).filter((id): id is number => id != null)
+          eligibleRows.map(r => r.shopify_variant_id).filter((id): id is number => id != null)
         );
 
         // Fetch existing rows from Supabase for this product
@@ -239,10 +239,14 @@ export async function processPeriodicSyncCheck(shopId: string): Promise<void> {
           }
         }
 
-        // Upsert di tutte le righe correnti con la chiave univoca.
+        // Se non resta alcuna variante idonea, la riconciliazione sopra ha già
+        // rimosso le righe del prodotto: non si upserta e non si consuma quota.
+        if (eligibleRows.length === 0) continue;
+
+        // Upsert delle sole righe idonee con la chiave univoca.
         const { error } = await supabase
           .from(shop.supabaseConfig.tableNameProducts)
-          .upsert(currentRows, {
+          .upsert(eligibleRows, {
             onConflict: 'shopify_variant_id',
             ignoreDuplicates: false,
           });
@@ -253,7 +257,7 @@ export async function processPeriodicSyncCheck(shopId: string): Promise<void> {
         }
 
         totalProducts++;
-        totalVariants += currentRows.length;
+        totalVariants += eligibleRows.length;
         // Aggiorna il conteggio prodotti distinti (no-op se già presente).
         if (existingProductIds != null) existingProductIds.add(product.id);
       }

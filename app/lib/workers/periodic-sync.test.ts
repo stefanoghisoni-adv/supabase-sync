@@ -33,6 +33,12 @@ vi.mock('../transformers/product.server', () => ({
   transformProduct: vi.fn(),
 }));
 
+// enrichVariantCosts muta i prodotti in place leggendo il costo via API: nei test
+// la mockiamo a passthrough, così non tenta chiamate agli InventoryItem.
+vi.mock('../stats/inventory-cost.server', () => ({
+  enrichVariantCosts: vi.fn(async (_client: unknown, products: unknown) => products),
+}));
+
 // Import after mocks
 import { processPeriodicSyncCheck } from './processors.server';
 import { ShopifyAPIClient } from '../shopify-api.server';
@@ -497,5 +503,59 @@ describe('Periodic sync check processor', () => {
       productsSynced: 2,
       variantsSynced: 2,
     });
+  });
+
+  it('cancella la variante che perde il costo e upserta solo le idonee', async () => {
+    const mockShop = {
+      id: 'shop-1',
+      shopDomain: 'test-shop.myshopify.com',
+      accessToken: 'encrypted-token',
+      authorization: 'ENABLED',
+      currentPlan: 'free',
+      supabaseConfig: {
+        syncEnabled: true,
+        tableNameProducts: 'products',
+        updatedAt: new Date('2026-07-01T00:00:00Z'),
+      },
+    };
+    (prisma.shop.findUnique as any).mockResolvedValue(mockShop);
+    (prisma.plan.findUnique as any).mockResolvedValue({ maxProducts: null, customersSyncEnabled: false });
+    (prisma.syncJob.findFirst as any).mockResolvedValue(null);
+    (prisma.syncJob.create as any).mockResolvedValue({ id: 'job-1' });
+    (prisma.syncJob.update as any).mockResolvedValue({});
+
+    const deletedInIds: any[] = [];
+    const upserted: any[] = [];
+    const supabaseMock = {
+      from: () => ({
+        // riga esistente: variante 11 (che ora perde il costo)
+        select: () => ({ eq: async () => ({ data: [{ shopify_variant_id: 11 }] }) }),
+        delete: () => ({
+          eq: () => ({
+            in: async (_col: string, ids: any[]) => { deletedInIds.push(...ids); return { error: null }; },
+            is: async () => ({ error: null }),
+          }),
+        }),
+        upsert: async (rows: any[]) => { upserted.push(...rows); return { error: null }; },
+      }),
+    };
+    (createSupabaseClient as any).mockReturnValue(supabaseMock);
+    (ShopifyAPIClient as any).mockImplementation(() => ({
+      getProducts: vi
+        .fn()
+        .mockResolvedValueOnce({ products: [{ id: 1 }], nextPageInfo: null })
+        .mockResolvedValue({ products: [], nextPageInfo: null }),
+    }));
+    // Il prodotto ora ha variante 11 senza costo e 12 con costo.
+    (transformProduct as any).mockReturnValue([
+      { shopify_product_id: 1, shopify_variant_id: 11, cost_per_item: null },
+      { shopify_product_id: 1, shopify_variant_id: 12, cost_per_item: 8 },
+    ]);
+
+    await processPeriodicSyncCheck('shop-1');
+
+    // La 11 (persa idoneità) viene cancellata come orfana; solo la 12 è upsertata.
+    expect(deletedInIds).toContain(11);
+    expect(upserted.map((r) => r.shopify_variant_id)).toEqual([12]);
   });
 });
