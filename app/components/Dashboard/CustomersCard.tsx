@@ -21,15 +21,24 @@ export function CustomersCard({
 }: CustomersCardProps) {
   const value = (n: number) => (loading ? '—' : String(n));
 
-  const rows = (
+  // `withInfo` esiste per l'accessibilita' della variante bloccata: il Tooltip di
+  // Polaris imposta tabIndex=0 sul proprio nodo, quindi le icone info sarebbero
+  // raggiungibili col tab anche dietro l'overlay (pointer-events blocca il mouse,
+  // non la tastiera) — e un aria-hidden con discendenti focalizzabili e' una
+  // violazione WAI-ARIA. Da bloccata quindi i tooltip non si renderizzano affatto.
+  const rows = (withInfo: boolean) => (
     <BlockStack gap="300">
       <MetricRow label="Clienti totali" badge={{ content: value(totalCustomers) }} />
       <MetricRow
         label="Clienti opt-in"
-        info={OPT_IN_INFO}
+        info={withInfo ? OPT_IN_INFO : undefined}
         badge={{ tone: 'success', content: value(optIn) }}
       />
-      <MetricRow label="Clienti opt-out" info={OPT_OUT_INFO} badge={{ content: value(optOut) }} />
+      <MetricRow
+        label="Clienti opt-out"
+        info={withInfo ? OPT_OUT_INFO : undefined}
+        badge={{ content: value(optOut) }}
+      />
     </BlockStack>
   );
 
@@ -40,14 +49,15 @@ export function CustomersCard({
           Clienti
         </Text>
         {enabled ? (
-          rows
+          rows(true)
         ) : (
           <Box position="relative">
             {/* Contenuto reale ma inerte: non deve essere raggiungibile da tastiera
                 ne' letto dagli screen reader, perche' mostra numeri che il piano
-                corrente non da' diritto di vedere. */}
+                corrente non da' diritto di vedere. Senza tooltip non resta nulla
+                di focalizzabile, quindi l'aria-hidden e' legittimo. */}
             <div aria-hidden="true" style={{ pointerEvents: 'none' }}>
-              {rows}
+              {rows(false)}
             </div>
             {/* Velo che sfuma dal 40% in alto (prime righe intraviste) all'opaco in
                 basso. Polaris non ha un token per i gradienti: unica eccezione. */}
