@@ -78,7 +78,7 @@ export async function action({ request }: ActionFunctionArgs) {
     await issueReadProxyToken(shop.id);
     return json({
       success:
-        'Chiave di lettura rigenerata. Aggiorna la configurazione in Stape/GTM: la chiave precedente smetterà di funzionare entro ~30 secondi.',
+        'Chiave di lettura rigenerata. Aggiorna la configurazione nel tuo tool di tracciamento: la chiave precedente smetterà di funzionare entro ~30 secondi.',
     });
   }
 
@@ -203,7 +203,7 @@ export default function SupabaseSettings() {
                 <Card>
                   <BlockStack gap="400">
                     <Text as="h2" variant="headingMd">
-                      Lettura dei dati (Stape / GTM server-side)
+                      Lettura dei dati
                     </Text>
                     <CopyableField
                       label="URL di lettura"
@@ -289,7 +289,8 @@ export default function SupabaseSettings() {
                     <Text as="p">
                       La chiave attuale smetterà di funzionare{' '}
                       <strong>entro ~30 secondi</strong>. Il tracciamento resterà
-                      senza dati finché non incolli la nuova chiave in Stape/GTM.
+                      senza dati finché non incolli la nuova chiave nel tuo tool di
+                      tracciamento.
                     </Text>
                   </Modal.Section>
                 </Modal>
