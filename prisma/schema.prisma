@@ -46,7 +46,9 @@ model Shop {
   // Autorizzazione all'uso dell'app, gestita manualmente dall'owner su Supabase:
   // ENABLED (uso normale), PENDING (trial scaduto: tutto sospeso, banner warning),
   // DISABLED (ban: tutto bloccato, banner danger, fatturazione sospesa).
-  authorization     String             @default("ENABLED")
+  // Enum e non testo libero: il Table Editor di Supabase mostra i soli valori
+  // ammessi e un refuso diventa impossibile a livello di database.
+  authorization     AuthorizationState @default(ENABLED)
 
   // Token-proxy per le letture di tracciamento (Stape/GTM). Persistito solo come
   // hash (lookup) + cifrato (per mostrarlo in Impostazioni), mai in chiaro.
@@ -62,6 +64,17 @@ model Shop {
 
   @@index([shopDomain])
   @@map("shops")
+}
+
+// Stati di autorizzazione di un negozio. Il tipo Postgres si chiama
+// `authorization_state`; nota che la COLONNA `authorization` va sempre quotata
+// nell'SQL scritto a mano, perche' AUTHORIZATION e' una parola riservata.
+enum AuthorizationState {
+  ENABLED
+  PENDING
+  DISABLED
+
+  @@map("authorization_state")
 }
 
 model SupabaseConfig {
