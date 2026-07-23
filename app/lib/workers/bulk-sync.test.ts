@@ -386,7 +386,8 @@ describe('Initial bulk sync processor', () => {
     // Solo la variante 11 (idonea) è stata upsertata.
     expect(upserted.map((r) => r.shopify_variant_id)).toEqual([11]);
     // Il progresso registra 1 prodotto (A) e 1 variante: B, senza varianti idonee,
-    // non consuma quota. (updateProgress riceve i totali della pagina.)
+    // non consuma quota. (updateProgress riceve i totali cumulativi; qui c'è una
+    // sola pagina, quindi coincidono coi totali di pagina.)
     expect(job.updateProgress).toHaveBeenCalledWith({ products: 1, variants: 1 });
   });
 });

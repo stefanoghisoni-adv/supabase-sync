@@ -11,7 +11,7 @@ import { isAuthorized } from '../../utils/authorization.server';
 import { isProductLimitReached } from '../limits/product-limit';
 import { enrichVariantCosts } from '../stats/inventory-cost.server';
 import { filterEligibleProductRows } from '../eligibility/product-eligibility';
-import type { ShopifyCustomer, ShopifyProduct } from '~/types/shopify';
+import type { ShopifyCustomer } from '~/types/shopify';
 
 /**
  * Syncs customers from Shopify into the merchant's Supabase `customers` table.
