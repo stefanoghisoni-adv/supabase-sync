@@ -169,6 +169,26 @@ export async function runQuery(
   if (!res.ok) throw new Error(`Supabase query error: ${res.status}`);
 }
 
+// Come runQuery, ma restituisce le righe. runQuery è pensata per la DDL e
+// scarta il corpo della risposta: per le SELECT serve leggerlo.
+export async function runQueryRows<T = Record<string, unknown>>(
+  accessToken: string,
+  ref: string,
+  query: string,
+): Promise<T[]> {
+  const res = await fetch(`${MGMT_BASE}/v1/projects/${ref}/database/query`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ query }),
+  });
+  if (!res.ok) throw new Error(`Supabase query error: ${res.status}`);
+  const data = await res.json();
+  return Array.isArray(data) ? (data as T[]) : [];
+}
+
 export async function listOrganizations(
   accessToken: string,
 ): Promise<SupabaseOrganization[]> {
