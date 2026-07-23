@@ -7,11 +7,16 @@ import { getValidAccessToken } from '~/lib/supabase-oauth.server';
 import {
   getProjectApiKeys,
   runQuery,
+  runQueryRows,
   projectUrl,
 } from '~/lib/supabase-management.server';
 import { buildMerchantSchemaSQL } from '~/lib/supabase-schema';
 import { isAuthorized } from '~/utils/authorization.server';
 import { issueReadProxyToken } from '~/lib/read-proxy/token.server';
+import {
+  detectCreatedTables,
+  tableCreationJobType,
+} from '~/lib/supabase/detect-created-tables';
 
 export async function action({ request }: ActionFunctionArgs) {
   const { session } = await authenticate.admin(request);
@@ -66,10 +71,52 @@ export async function action({ request }: ActionFunctionArgs) {
       },
     });
 
+    // Quali tabelle esistono gia': serve a distinguere nel log "create entrambe"
+    // da "mancava solo clienti". La DDL usa CREATE TABLE IF NOT EXISTS e non
+    // riporta cosa ha creato, quindi il confronto va fatto prima.
+    // Best effort: se fallisce si perde solo il dettaglio del log.
+    let existingTables: string[] = [];
+    try {
+      const rows = await runQueryRows<{ table_name: string }>(
+        token,
+        ref,
+        "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('products', 'customers');",
+      );
+      existingTables = rows.map((r) => r.table_name).filter(Boolean);
+    } catch (err) {
+      console.warn(
+        '[api.supabase.select-project] controllo tabelle preesistenti fallito:',
+        err instanceof Error ? err.message : 'errore sconosciuto',
+      );
+    }
+
     // DDL idempotente e non distruttivo: crea le tabelle mancanti e allinea le
     // colonne di quelle già esistenti (progetto pre-esistente) senza cancellare
     // i dati. Applica solo le tabelle abilitate dal piano.
     await runQuery(token, ref, buildMerchantSchemaSQL(includeCustomers));
+
+    // Log dell'evento di creazione tabelle. Best effort come l'emissione del
+    // token-proxy: a questo punto la DDL e' riuscita e un errore qui non deve
+    // far fallire il collegamento.
+    try {
+      const created = detectCreatedTables(existingTables, includeCustomers);
+      const jobType = tableCreationJobType(created);
+      if (jobType) {
+        await prisma.syncJob.create({
+          data: {
+            shopId: shop.id,
+            jobType,
+            status: 'completed',
+            completedAt: new Date(),
+          },
+        });
+      }
+    } catch (err) {
+      console.warn(
+        '[api.supabase.select-project] log creazione tabelle fallito:',
+        err instanceof Error ? err.message : 'errore sconosciuto',
+      );
+    }
 
     // Abilita la sincronizzazione al collegamento: senza syncEnabled i
     // processor rifiutano il job. Le successive sync automatiche seguono
