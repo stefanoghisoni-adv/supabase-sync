@@ -9,3 +9,6 @@ prisma/migrations/dev.db*
 .DS_Store
 
 /generated/prisma
+
+# Scratch SDD interno (non deve finire nel repo pubblico)
+.superpowers/
