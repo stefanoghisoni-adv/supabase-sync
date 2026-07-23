@@ -27,6 +27,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     if (cached) {
       return json({
         totalProducts: cached.totalProducts,
+        totalVariants: cached.readyCount + cached.problemCount,
         readyCount: cached.readyCount,
         problemCount: cached.problemCount,
         cached: true,
@@ -64,5 +65,5 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const result = { totalProducts, readyCount, problemCount };
   await setReadinessCache(shop.id, result);
 
-  return json({ ...result, cached: false });
+  return json({ ...result, totalVariants: readyCount + problemCount, cached: false });
 }

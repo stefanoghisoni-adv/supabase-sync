@@ -17,7 +17,9 @@ import {
   SkeletonDisplayText,
 } from '@shopify/polaris';
 import { ProductIcon, PersonIcon, SettingsIcon } from '@shopify/polaris-icons';
-import { StatsCard } from '~/components/Dashboard/StatsCard';
+import { AccountCard } from '~/components/Dashboard/AccountCard';
+import { ProductsCard } from '~/components/Dashboard/ProductsCard';
+import { CustomersCard } from '~/components/Dashboard/CustomersCard';
 import { ActivityLog } from '~/components/Dashboard/ActivityLog';
 import { PlanBanner } from '~/components/Dashboard/PlanBanner';
 import { Stepper, type StepperItem } from '~/components/Dashboard/Stepper';
@@ -94,6 +96,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       customersEnabled,
       syncState,
       authorization,
+      syncFrequencyHours: plan?.maxSyncFrequencyHours ?? null,
     });
   } catch (err) {
     // Le Response (redirect di auth, 404) devono passare intatte.
@@ -161,8 +164,16 @@ interface ReadinessResponse {
   cached?: boolean;
 }
 
+interface CustomerStatsResponse {
+  enabled: boolean;
+  totalCustomers: number;
+  optIn: number;
+  optOut: number;
+  cached?: boolean;
+}
+
 export default function Dashboard() {
-  const { shop, plan, supabaseConnected, customersEnabled, authorization, syncState, recentJobs } =
+  const { shop, plan, supabaseConnected, customersEnabled, authorization, syncState, recentJobs, syncFrequencyHours } =
     useLoaderData<typeof loader>();
   const blocked = authorization !== 'ENABLED';
   const navigate = useNavigate();
@@ -185,10 +196,13 @@ export default function Dashboard() {
   const countsFetcher = useFetcher<CountsResponse>();
   const readinessFetcher = useFetcher<ReadinessResponse>();
   const readinessRefreshFetcher = useFetcher<ReadinessResponse>();
+  const customerStatsFetcher = useFetcher<CustomerStatsResponse>();
+  const customerStatsRefreshFetcher = useFetcher<CustomerStatsResponse>();
 
   useEffect(() => {
     countsFetcher.load('/api/stats/counts');
     readinessFetcher.load('/api/stats/products');
+    customerStatsFetcher.load('/api/stats/customers');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -201,11 +215,20 @@ export default function Dashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [readinessFetcher.data]);
 
+  useEffect(() => {
+    if (customerStatsFetcher.data?.cached) {
+      customerStatsRefreshFetcher.load('/api/stats/customers?refresh=1');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customerStatsFetcher.data]);
+
   const counts = countsFetcher.data;
   // Il valore live (refresh) vince appena disponibile, altrimenti la cache/primo calcolo.
   const readiness = readinessRefreshFetcher.data ?? readinessFetcher.data;
+  const customerStats = customerStatsRefreshFetcher.data ?? customerStatsFetcher.data;
   const countsLoading = countsFetcher.state === 'loading' || !counts;
   const readinessLoading = !readiness;
+  const customerStatsLoading = !customerStats;
 
   // Sync in background durabile (coda + drain). Il pulsante mostra il loader
   // mentre la sync è in corso — anche se prosegue in background a pagina chiusa —
@@ -404,58 +427,25 @@ export default function Dashboard() {
           />
         )}
 
-        <InlineGrid columns={{ xs: 1, sm: 2, md: 4 }} gap="400">
-          <StatsCard
-            title="Prodotti totali"
-            value={counts?.totalProducts ?? 0}
-            loading={countsLoading}
+        <InlineGrid columns={{ xs: 1, md: 3 }} gap="400">
+          <AccountCard
+            connected={supabaseConnected}
+            planName={shop.currentPlan}
+            syncFrequencyHours={syncFrequencyHours}
           />
-          <StatsCard
-            title="Prodotti pronti"
-            value={readiness?.readyCount ?? 0}
-            status="success"
+          <ProductsCard
+            readyCount={readiness?.readyCount ?? 0}
+            problemCount={readiness?.problemCount ?? 0}
             loading={readinessLoading}
+            onViewIssues={() => navigate('/products/issues')}
           />
-          <StatsCard
-            title="Prodotti con problemi"
-            value={readiness?.problemCount ?? 0}
-            status="critical"
-            loading={readinessLoading}
-            info="Prodotti in cui manca il valore per cost_per_item."
-            footer={
-              <Box paddingBlockStart="100">
-                <Button
-                  variant="plain"
-                  onClick={() => navigate('/products/issues')}
-                >
-                  Vedi dettagli
-                </Button>
-              </Box>
-            }
+          <CustomersCard
+            enabled={customersEnabled}
+            totalCustomers={customerStats?.totalCustomers ?? 0}
+            optIn={customerStats?.optIn ?? 0}
+            optOut={customerStats?.optOut ?? 0}
+            loading={customerStatsLoading}
           />
-          {/* Card Clienti sempre presente: se il piano non include i clienti,
-              al posto del numero mostra il pulsante di upgrade. */}
-          {customersEnabled ? (
-            <StatsCard
-              title="Clienti"
-              value={counts?.customerCount ?? 0}
-              loading={countsLoading}
-            />
-          ) : (
-            <StatsCard
-              title="Clienti"
-              value=""
-              action={
-                <Box paddingBlockStart="200">
-                  <Tooltip content="Presto disponibile">
-                    <Button variant="primary" disabled>
-                      Aggiorna piano
-                    </Button>
-                  </Tooltip>
-                </Box>
-              }
-            />
-          )}
         </InlineGrid>
 
         <Stepper steps={stepperItems} />
