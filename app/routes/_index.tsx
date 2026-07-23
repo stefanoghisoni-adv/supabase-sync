@@ -29,6 +29,7 @@ import { normalizeAuthorization, isAuthorized } from '~/utils/authorization.serv
 import { resolveSyncState } from '~/components/Dashboard/sync-state';
 import { enqueueManualSync, triggerSyncDrain } from '~/lib/queue/trigger.server';
 import { authenticate } from '~/shopify.server';
+import { ShopifyAPIClient } from '~/lib/shopify-api.server';
 
 // Solo per questo store mostriamo il messaggio d'errore reale (utile in debug),
 // invece del generico "Errore interno": gli altri merchant non devono vedere
@@ -44,6 +45,28 @@ export async function loader({ request }: LoaderFunctionArgs) {
     // Self-heal: crea il record shop se manca (reinstall, cancellazione manuale,
     // race durante l'embedded auth) invece di mandare l'app in 404.
     const shop = await getOrCreateShop(session);
+
+    // Il fuso del negozio si legge una volta sola e resta memorizzato: da qui in
+    // poi il costo e' zero. Best effort — se Shopify non risponde si usa UTC e
+    // la dashboard si carica comunque.
+    let shopTimezone = shop.ianaTimezone;
+    if (!shopTimezone) {
+      try {
+        const info = await new ShopifyAPIClient(shop.shopDomain, shop.accessToken).getShopInfo();
+        if (info.ianaTimezone) {
+          shopTimezone = info.ianaTimezone;
+          await prisma.shop.update({
+            where: { id: shop.id },
+            data: { ianaTimezone: info.ianaTimezone },
+          });
+        }
+      } catch (err) {
+        console.warn(
+          '[dashboard loader] lettura fuso orario negozio fallita:',
+          err instanceof Error ? err.message : 'errore sconosciuto',
+        );
+      }
+    }
 
     // Piano e job recenti dipendono entrambi solo da `shop`: in parallelo, così
     // il loader costa due round-trip in profondità invece di tre. Su Vercel il
@@ -95,6 +118,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       syncState,
       authorization,
       syncFrequencyHours: plan?.maxSyncFrequencyHours ?? null,
+      shopTimezone,
     });
   } catch (err) {
     // Le Response (redirect di auth, 404) devono passare intatte.
@@ -175,7 +199,7 @@ interface CustomerStatsResponse {
 }
 
 export default function Dashboard() {
-  const { shop, plan, supabaseConnected, customersEnabled, authorization, syncState, recentJobs, syncFrequencyHours } =
+  const { shop, plan, supabaseConnected, customersEnabled, authorization, syncState, recentJobs, syncFrequencyHours, shopTimezone } =
     useLoaderData<typeof loader>();
   const blocked = authorization !== 'ENABLED';
   const navigate = useNavigate();
@@ -452,7 +476,11 @@ export default function Dashboard() {
 
         <InlineGrid columns={{ xs: 1, md: 2 }} gap="400">
           <Stepper steps={stepperItems} />
-          <SyncLog jobs={recentJobs} customersEnabled={customersEnabled} />
+          <SyncLog
+            jobs={recentJobs}
+            customersEnabled={customersEnabled}
+            timeZone={shopTimezone}
+          />
         </InlineGrid>
       </BlockStack>
     </Page>

@@ -15,9 +15,10 @@ type SerializedSyncJob = SerializeFrom<SyncJob>;
 interface SyncLogProps {
   jobs: SerializedSyncJob[];
   customersEnabled: boolean;
+  timeZone: string | null;
 }
 
-export function SyncLog({ jobs, customersEnabled }: SyncLogProps) {
+export function SyncLog({ jobs, customersEnabled, timeZone }: SyncLogProps) {
   const rows = jobs.map((job) => {
     const creation = tableCreationMessage(job.jobType);
     const status = syncStatusBadge(job.status);
@@ -39,8 +40,8 @@ export function SyncLog({ jobs, customersEnabled }: SyncLogProps) {
 
     const duration = formatDuration(job.startedAt, job.completedAt);
     const when = duration
-      ? `${formatDateTime(job.startedAt)} · ${duration}`
-      : formatDateTime(job.startedAt);
+      ? `${formatDateTime(job.startedAt, timeZone)} · ${duration}`
+      : formatDateTime(job.startedAt, timeZone);
 
     return [stateCell, when, syncRowNumbers(job, customersEnabled)];
   });
