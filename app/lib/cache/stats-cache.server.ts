@@ -69,3 +69,39 @@ export async function setReadinessCache(
     console.error('[stats-cache] set fallito (ignoro):', err);
   }
 }
+
+export interface CustomerStats {
+  totalCustomers: number;
+  optIn: number;
+  optOut: number;
+}
+
+function customerKey(shopId: string): string {
+  return `stats:customers:${shopId}`;
+}
+
+export async function getCustomerStatsCache(
+  shopId: string,
+): Promise<(CustomerStats & { computedAt: string }) | null> {
+  try {
+    const redis = await getClient();
+    const raw = await redis.get(customerKey(shopId));
+    return raw ? JSON.parse(raw) : null;
+  } catch (err) {
+    console.error('[stats-cache] get clienti fallito (ignoro, calcolo live):', err);
+    return null;
+  }
+}
+
+export async function setCustomerStatsCache(
+  shopId: string,
+  stats: CustomerStats,
+): Promise<void> {
+  try {
+    const payload = JSON.stringify({ ...stats, computedAt: new Date().toISOString() });
+    const redis = await getClient();
+    await redis.set(customerKey(shopId), payload, 'EX', TTL_SECONDS);
+  } catch (err) {
+    console.error('[stats-cache] set clienti fallito (ignoro):', err);
+  }
+}
