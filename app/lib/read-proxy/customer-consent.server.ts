@@ -1,6 +1,6 @@
 // Colonne univoche identificative: un filtro `eq` su una di queste è un "lookup
 // mirato" a uno specifico cliente (es. email=eq.x).
-export const IDENTIFIER_COLUMNS = ['email', 'phone', 'shopify_customer_id'];
+export const IDENTIFIER_COLUMNS = ['id', 'email', 'phone', 'shopify_customer_id'];
 
 // True se la query filtra con `eq` su una colonna identificativa.
 // (URLSearchParams ignora il '?' iniziale della search.)
@@ -13,9 +13,14 @@ export function isCustomerIdentifierLookup(search: string): boolean {
 }
 
 // Query di controllo consenso: stessi filtri, ma select=accepts_marketing.
+// Rimuoviamo limit/offset così il controllo valuta l'INTERO insieme dei match:
+// un limit del chiamante non deve poter nascondere una riga non consenziente
+// dietro l'ordinamento (non garantito) di una consenziente.
 export function consentCheckSearch(search: string): string {
   const params = new URLSearchParams(search);
   params.set('select', 'accepts_marketing');
+  params.delete('limit');
+  params.delete('offset');
   return '?' + params.toString();
 }
 

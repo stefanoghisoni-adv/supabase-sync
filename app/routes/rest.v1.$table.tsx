@@ -5,6 +5,7 @@ import {
   allowedReadTables,
   forwardRead,
   selectEmbedsForbiddenTable,
+  selectEmbedsCustomers,
 } from '~/lib/read-proxy/forward.server';
 import {
   isCustomerIdentifierLookup,
@@ -47,6 +48,13 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const search = new URL(request.url).search;
   // L'allowlist sul path non copre l'embedding PostgREST dentro `select`.
   if (selectEmbedsForbiddenTable(search, allowed)) {
+    return deny(403, 'Tabella non disponibile.');
+  }
+
+  // Il consenso clienti vale solo al top-level: un customers embeddato aggirerebbe
+  // il gate, quindi lo vietiamo sempre (difesa in profondità: oggi lo schema non
+  // ha FK, ma un progetto merchant preesistente potrebbe averne).
+  if (selectEmbedsCustomers(search)) {
     return deny(403, 'Tabella non disponibile.');
   }
 

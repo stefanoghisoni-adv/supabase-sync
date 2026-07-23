@@ -9,25 +9,28 @@ export function allowedReadTables(customersEnabled: boolean): string[] {
 // piano. Le altre tabelle nel progetto sono del merchant e non ci riguardano.
 const MANAGED_TABLES = ['products', 'customers'];
 
-// PostgREST sa restituire risorse collegate dentro un `select`
-// (`?select=*,customers(*)`). L'allowlist sul path da sola non basta: senza
-// questa guardia una GET su `products` potrebbe esfiltrare `customers` a uno
-// shop il cui piano non li include.
-//
-// Cattura l'identificatore che precede una parentesi aperta, tollerando gli
-// alias (`alias:customers(...)`) e gli hint di join (`customers!inner(...)`).
-// Gli aggregati (`count()`, `price.sum()`) producono nomi che non sono tabelle
-// gestite, quindi passano.
-export function selectEmbedsForbiddenTable(search: string, allowed: string[]): boolean {
+// Nomi delle risorse embeddate in un `select` PostgREST (`select=*,customers(*)`),
+// tollerando alias (`alias:customers(...)`) e hint di join (`customers!inner(...)`).
+export function embeddedTableNames(search: string): string[] {
   const select = new URLSearchParams(search).get('select');
-  if (!select) return false;
-
-  const embeds = select.matchAll(/([a-z_][a-z0-9_]*)(?:!\w+)?\s*\(/gi);
-  for (const [, name] of embeds) {
-    const table = name.toLowerCase();
-    if (MANAGED_TABLES.includes(table) && !allowed.includes(table)) return true;
+  if (!select) return [];
+  const names: string[] = [];
+  for (const [, name] of select.matchAll(/([a-z_][a-z0-9_]*)(?:!\w+)?\s*\(/gi)) {
+    names.push(name.toLowerCase());
   }
-  return false;
+  return names;
+}
+
+export function selectEmbedsForbiddenTable(search: string, allowed: string[]): boolean {
+  return embeddedTableNames(search).some(
+    (t) => MANAGED_TABLES.includes(t) && !allowed.includes(t),
+  );
+}
+
+// Il consenso clienti è applicato solo al livello top del proxy: un `customers`
+// embeddato aggirerebbe il gate. Vietiamo di embeddare customers, sempre.
+export function selectEmbedsCustomers(search: string): boolean {
+  return embeddedTableNames(search).includes('customers');
 }
 
 // Host derivato SOLO dal ref memorizzato: nessun input utente nell'host (anti-SSRF).

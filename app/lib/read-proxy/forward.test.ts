@@ -4,12 +4,46 @@ import {
   buildSupabaseReadUrl,
   forwardRead,
   selectEmbedsForbiddenTable,
+  embeddedTableNames,
+  selectEmbedsCustomers,
 } from './forward.server';
 
 describe('allowedReadTables', () => {
   it('solo products senza clienti; products+customers con clienti', () => {
     expect(allowedReadTables(false)).toEqual(['products']);
     expect(allowedReadTables(true)).toEqual(['products', 'customers']);
+  });
+});
+
+describe('embeddedTableNames', () => {
+  it('nessun select → array vuoto', () => {
+    expect(embeddedTableNames('')).toEqual([]);
+    expect(embeddedTableNames('?sku=eq.X')).toEqual([]);
+  });
+
+  it('select semplice → array vuoto', () => {
+    expect(embeddedTableNames('?select=*')).toEqual([]);
+    expect(embeddedTableNames('?select=id,email')).toEqual([]);
+  });
+
+  it('cattura embedding base', () => {
+    expect(embeddedTableNames('?select=*,customers(*)')).toEqual(['customers']);
+  });
+
+  it('cattura embedding con alias', () => {
+    expect(embeddedTableNames('?select=*,c:customers(*)')).toEqual(['customers']);
+  });
+
+  it('cattura embedding con hint di join', () => {
+    expect(embeddedTableNames('?select=*,customers!inner(*)')).toEqual(['customers']);
+  });
+
+  it('cattura multipli embedding', () => {
+    expect(embeddedTableNames('?select=*,orders(*),customers(*)')).toEqual(['orders', 'customers']);
+  });
+
+  it('normalizza a lowercase', () => {
+    expect(embeddedTableNames('?select=*,Customers(*)')).toEqual(['customers']);
   });
 });
 
@@ -41,6 +75,29 @@ describe('selectEmbedsForbiddenTable', () => {
   it('gli aggregati PostgREST non sono scambiati per embedding', () => {
     expect(selectEmbedsForbiddenTable('?select=count()', noCustomers)).toBe(false);
     expect(selectEmbedsForbiddenTable('?select=price.sum()', noCustomers)).toBe(false);
+  });
+});
+
+describe('selectEmbedsCustomers', () => {
+  it('embedding di customers → true', () => {
+    expect(selectEmbedsCustomers('?select=*,customers(*)')).toBe(true);
+  });
+
+  it('embedding con alias → true', () => {
+    expect(selectEmbedsCustomers('?select=*,c:customers(*)')).toBe(true);
+  });
+
+  it('embedding con hint di join → true', () => {
+    expect(selectEmbedsCustomers('?select=*,customers!inner(*)')).toBe(true);
+  });
+
+  it('nessun embedding → false', () => {
+    expect(selectEmbedsCustomers('?select=*')).toBe(false);
+    expect(selectEmbedsCustomers('?select=id,email')).toBe(false);
+  });
+
+  it('embedding di altre tabelle → false', () => {
+    expect(selectEmbedsCustomers('?select=*,orders(*)')).toBe(false);
   });
 });
 

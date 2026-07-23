@@ -12,6 +12,7 @@ vi.mock('~/lib/read-proxy/forward.server', async () => {
   return {
     allowedReadTables: (c: boolean) => (c ? ['products', 'customers'] : ['products']),
     selectEmbedsForbiddenTable: actual.selectEmbedsForbiddenTable,
+    selectEmbedsCustomers: actual.selectEmbedsCustomers,
     forwardRead: (...a: unknown[]) => forwardRead(...a),
   };
 });
@@ -99,16 +100,15 @@ describe('proxy loader', () => {
     expect(forwardRead).not.toHaveBeenCalled();
   });
 
-  it('select che embedda customers CON piano clienti → inoltra', async () => {
+  it('select che embedda customers CON piano clienti → blocca comunque (gate consenso top-level)', async () => {
     resolveShopReadContext.mockResolvedValueOnce(okCtx({ customersEnabled: true }));
-    forwardRead.mockResolvedValueOnce({ status: 200, body: '[]', contentType: 'application/json' });
     const res = await call(
       { authorization: 'Bearer spx_x' },
       'products',
       'https://app/rest/v1/products?select=*,customers(*)',
     );
-    expect(res.status).toBe(200);
-    expect(forwardRead).toHaveBeenCalled();
+    expect(res.status).toBe(403);
+    expect(forwardRead).not.toHaveBeenCalled();
   });
 
   it('tabella non ammessa dal piano → 403', async () => {

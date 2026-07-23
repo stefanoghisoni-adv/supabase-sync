@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
+  IDENTIFIER_COLUMNS,
   isCustomerIdentifierLookup,
   consentCheckSearch,
   forceConsentedOnlySearch,
@@ -7,7 +8,16 @@ import {
 } from './customer-consent.server';
 
 describe('customer-consent', () => {
+  describe('IDENTIFIER_COLUMNS', () => {
+    it('includes id, email, phone, shopify_customer_id', () => {
+      expect(IDENTIFIER_COLUMNS).toEqual(['id', 'email', 'phone', 'shopify_customer_id']);
+    });
+  });
+
   describe('isCustomerIdentifierLookup', () => {
+    it('id=eq.abc → true', () => {
+      expect(isCustomerIdentifierLookup('?id=eq.abc')).toBe(true);
+    });
     it('email=eq.x → true', () => {
       expect(isCustomerIdentifierLookup('?email=eq.foo@bar.com')).toBe(true);
     });
@@ -31,6 +41,15 @@ describe('customer-consent', () => {
       const p = new URLSearchParams(out);
       expect(p.get('select')).toBe('accepts_marketing');
       expect(p.get('email')).toBe('eq.foo@bar.com');
+    });
+
+    it('rimuove limit e offset, preserva filtri', () => {
+      const out = consentCheckSearch('?phone=eq.x&limit=1&offset=2');
+      const p = new URLSearchParams(out);
+      expect(p.get('select')).toBe('accepts_marketing');
+      expect(p.get('phone')).toBe('eq.x');
+      expect(p.has('limit')).toBe(false);
+      expect(p.has('offset')).toBe(false);
     });
   });
 
