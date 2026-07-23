@@ -4,7 +4,6 @@ import { useLoaderData, useFetcher, useRevalidator, useNavigate } from '@remix-r
 import { useEffect, useState } from 'react';
 import {
   Page,
-  Layout,
   Box,
   BlockStack,
   InlineGrid,
@@ -19,7 +18,7 @@ import { ProductIcon, PersonIcon, SettingsIcon } from '@shopify/polaris-icons';
 import { AccountCard } from '~/components/Dashboard/AccountCard';
 import { ProductsCard } from '~/components/Dashboard/ProductsCard';
 import { CustomersCard } from '~/components/Dashboard/CustomersCard';
-import { ActivityLog } from '~/components/Dashboard/ActivityLog';
+import { SyncLog } from '~/components/Dashboard/SyncLog';
 import { PlanBanner } from '~/components/Dashboard/PlanBanner';
 import { Stepper, type StepperItem } from '~/components/Dashboard/Stepper';
 import { resolveStepStates } from '~/components/Dashboard/stepper-state';
@@ -451,15 +450,10 @@ export default function Dashboard() {
           />
         </InlineGrid>
 
-        <Stepper steps={stepperItems} />
-
-        {supabaseConnected && (
-          <Layout>
-            <Layout.Section>
-              <ActivityLog jobs={recentJobs} />
-            </Layout.Section>
-          </Layout>
-        )}
+        <InlineGrid columns={{ xs: 1, md: 2 }} gap="400">
+          <Stepper steps={stepperItems} />
+          <SyncLog jobs={recentJobs} customersEnabled={customersEnabled} />
+        </InlineGrid>
       </BlockStack>
     </Page>
   );
