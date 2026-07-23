@@ -32,13 +32,30 @@ export function formatDuration(
   return `${(ms / 1000).toFixed(1)} s`;
 }
 
-function due(n: number): string {
-  return String(n).padStart(2, '0');
+// Formatta SEMPRE nel fuso indicato, mai in quello della macchina: cosi' il
+// render sul server e l'idratazione sul client producono la stessa stringa
+// (niente disallineamento) e il merchant legge l'orario del proprio negozio.
+// Fallback UTC se il fuso manca o non e' valido: deterministico comunque.
+function formatIn(iso: string, timeZone: string): string {
+  return new Intl.DateTimeFormat('it-IT', {
+    timeZone,
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+    .format(new Date(iso))
+    .replace(',', '');
 }
 
-export function formatDateTime(iso: string): string {
-  const d = new Date(iso);
-  return `${due(d.getDate())}/${due(d.getMonth() + 1)}/${d.getFullYear()} ${due(d.getHours())}:${due(d.getMinutes())}`;
+export function formatDateTime(iso: string, timeZone?: string | null): string {
+  try {
+    return formatIn(iso, timeZone || 'UTC');
+  } catch {
+    // Fuso non riconosciuto dall'ambiente: non deve rompere la pagina.
+    return formatIn(iso, 'UTC');
+  }
 }
 
 // Terza colonna: vuota per le creazioni tabella, altrimenti varianti idonee e —

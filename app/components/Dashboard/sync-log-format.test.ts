@@ -37,10 +37,25 @@ describe('formatDuration', () => {
 });
 
 describe('formatDateTime', () => {
-  it('formato giorno/mese/anno ora:minuti', () => {
-    // Costruito in ora locale per non dipendere dal fuso della macchina.
-    const iso = new Date(2026, 6, 24, 14, 5).toISOString();
-    expect(formatDateTime(iso)).toBe('24/07/2026 14:05');
+  // Istante noto in UTC: le 12:05 UTC del 24 luglio 2026.
+  const iso = '2026-07-24T12:05:00.000Z';
+
+  it('formatta nel fuso indicato', () => {
+    // Europe/Rome d'estate e UTC+2.
+    expect(formatDateTime(iso, 'Europe/Rome')).toBe('24/07/2026 14:05');
+  });
+
+  it('fuso assente → UTC', () => {
+    expect(formatDateTime(iso, null)).toBe('24/07/2026 12:05');
+    expect(formatDateTime(iso)).toBe('24/07/2026 12:05');
+  });
+
+  it('fuso non valido → ricade su UTC senza lanciare', () => {
+    expect(formatDateTime(iso, 'Non/Esiste')).toBe('24/07/2026 12:05');
+  });
+
+  it('fuso diverso produce un orario diverso dallo stesso istante', () => {
+    expect(formatDateTime(iso, 'America/New_York')).toBe('24/07/2026 08:05');
   });
 });
 
