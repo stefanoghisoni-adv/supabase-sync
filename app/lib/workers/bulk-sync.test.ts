@@ -33,6 +33,10 @@ vi.mock('../transformers/product.server', () => ({
   transformProduct: vi.fn(),
 }));
 
+vi.mock('../stats/inventory-cost.server', () => ({
+  enrichVariantCosts: vi.fn(async (_client: unknown, products: unknown) => products),
+}));
+
 // Import after mocks
 import { processInitialBulkSync } from './processors.server';
 import { ShopifyAPIClient } from '../shopify-api.server';
@@ -328,5 +332,61 @@ describe('Initial bulk sync processor', () => {
     await expect(processInitialBulkSync('shop-3', mockJob)).rejects.toThrow(
       'Shop shop-3 not configured for sync'
     );
+  });
+
+  it('upserta solo le varianti idonee e non conta i prodotti senza costo verso il tetto', async () => {
+    const mockShop = {
+      id: 'shop-1',
+      shopDomain: 'test-shop.myshopify.com',
+      accessToken: 'encrypted-token',
+      authorization: 'ENABLED',
+      currentPlan: 'free',
+      supabaseConfig: {
+        syncEnabled: true,
+        tableNameProducts: 'products',
+        tableNameCustomers: 'customers',
+        supabaseUrl: 'https://test.supabase.co',
+        supabasePublicKey: 'k',
+        supabaseServiceRoleKey: 's',
+      },
+    };
+    (prisma.shop.findUnique as any).mockResolvedValue(mockShop);
+    (prisma.plan.findUnique as any).mockResolvedValue({ maxProducts: null, customersSyncEnabled: false });
+    (prisma.syncJob.create as any).mockResolvedValue({ id: 'job-1' });
+    (prisma.syncJob.update as any).mockResolvedValue({});
+
+    // Pagina 1: due prodotti. Prodotto A con una variante idonea e una no;
+    // prodotto B senza varianti idonee.
+    const upserted: any[] = [];
+    const supabaseMock = {
+      from: () => ({
+        delete: () => ({ gte: async () => ({ error: null }) }),
+        upsert: async (rows: any[]) => { upserted.push(...rows); return { error: null }; },
+      }),
+    };
+    (createSupabaseClient as any).mockReturnValue(supabaseMock);
+    (ShopifyAPIClient as any).mockImplementation(() => ({
+      getProducts: vi
+        .fn()
+        .mockResolvedValueOnce({ products: [{ id: 1 }, { id: 2 }], nextPageInfo: null })
+        .mockResolvedValue({ products: [], nextPageInfo: null }),
+    }));
+    (transformProduct as any).mockImplementation((p: any) =>
+      p.id === 1
+        ? [
+            { shopify_product_id: 1, shopify_variant_id: 11, cost_per_item: 5 },
+            { shopify_product_id: 1, shopify_variant_id: 12, cost_per_item: null },
+          ]
+        : [{ shopify_product_id: 2, shopify_variant_id: 21, cost_per_item: null }],
+    );
+
+    const job = { updateProgress: vi.fn() } as any;
+    await processInitialBulkSync('shop-1', job);
+
+    // Solo la variante 11 (idonea) è stata upsertata.
+    expect(upserted.map((r) => r.shopify_variant_id)).toEqual([11]);
+    // Il progresso registra 1 prodotto (A) e 1 variante: B, senza varianti idonee,
+    // non consuma quota. (updateProgress riceve i totali della pagina.)
+    expect(job.updateProgress).toHaveBeenCalledWith({ products: 1, variants: 1 });
   });
 });

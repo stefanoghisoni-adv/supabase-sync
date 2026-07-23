@@ -8,8 +8,9 @@ import { transformCustomer } from '../transformers/customer.server';
 import { createSupabaseClient } from '../supabase.server';
 import { prisma } from '../../db.server';
 import { isAuthorized } from '../../utils/authorization.server';
-import { limitProducts, isProductLimitReached } from '../limits/product-limit';
+import { isProductLimitReached } from '../limits/product-limit';
 import { enrichVariantCosts } from '../stats/inventory-cost.server';
+import { filterEligibleProductRows } from '../eligibility/product-eligibility';
 import type { ShopifyCustomer, ShopifyProduct } from '~/types/shopify';
 
 /**
@@ -377,17 +378,16 @@ export async function processInitialBulkSync(shopId: string, job: Job<any>): Pro
       // altrimenti verrebbe scritto sempre null su Supabase.
       await enrichVariantCosts(shopifyClient, products);
 
-      // Tetto del piano: processa al massimo `maxProducts` prodotti totali.
-      // I prodotti oltre il limite non vengono sincronizzati (upgrade richiesto).
-      const pageProducts = limitProducts<ShopifyProduct>(products, totalProducts, maxProducts);
-
-      // Transform products to Supabase rows
+      // Trasforma, filtra le idonee e applica il tetto DOPO il filtro: un prodotto
+      // consuma quota solo se ha ≥1 variante idonea.
       const allRows = [];
-      for (const product of pageProducts) {
-        const rows = transformProduct(product);
-        allRows.push(...rows);
+      for (const product of products) {
+        if (maxProducts != null && totalProducts >= maxProducts) break;
+        const eligibleRows = filterEligibleProductRows(transformProduct(product));
+        if (eligibleRows.length === 0) continue; // nessuna variante idonea: niente quota
+        allRows.push(...eligibleRows);
         totalProducts++;
-        totalVariants += rows.length;
+        totalVariants += eligibleRows.length;
       }
 
       // Ogni riga ha ora un shopify_variant_id reale (anche i prodotti a
