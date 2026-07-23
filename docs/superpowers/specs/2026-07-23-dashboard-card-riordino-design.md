@@ -137,10 +137,15 @@ Vitest, coerente con la suite esistente:
   e `pending` → optOut; fallback legacy `accepts_marketing: true` → optIn; array
   vuoto → zeri.
 - `/api/stats/customers`: risponde con i conteggi; usa la cache quando presente.
-- Card Prodotti: con `problemCount > 0` il link "Vedi prodotti" è presente e il
-  badge è arancione; con `problemCount === 0` il link è assente e il badge grigio.
-- Card Clienti bloccata: il pulsante "Aggiorna piano" è presente e disabilitato, e
-  il contenuto sottostante è `aria-hidden`.
+- `problemRowPresentation(problemCount)`: con `> 0` → `{ tone: 'warning', showLink: true }`;
+  con `0` → `{ tone: undefined, showLink: false }`.
+
+**Vincolo noto:** il progetto **non ha infrastruttura per test di componenti React**
+(nessun jsdom né testing-library; ambiente Vitest `node`). Introdurla è fuori scope.
+Perciò la logica decisionale della UI vive in funzioni pure testate
+(`problemRowPresentation`, `planLabel`, `syncFrequencyLabel`,
+`countMarketingConsent`) e i componenti restano markup dichiarativo sottile, senza
+rami condizionali propri oltre a quelli che consumano queste funzioni.
 
 ## Criteri di completamento
 
