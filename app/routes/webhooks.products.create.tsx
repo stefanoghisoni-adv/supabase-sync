@@ -4,6 +4,9 @@ import { verifyWebhook } from '~/lib/webhooks/verify.server';
 import { transformProduct } from '~/lib/transformers/product.server';
 import { createSupabaseClient } from '~/lib/supabase.server';
 import { prisma } from '~/db.server';
+import { ShopifyAPIClient } from '~/lib/shopify-api.server';
+import { enrichVariantCosts } from '~/lib/stats/inventory-cost.server';
+import { filterEligibleProductRows } from '~/lib/eligibility/product-eligibility';
 import type { ShopifyProduct } from '~/types/shopify';
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -45,15 +48,43 @@ export async function action({ request }: ActionFunctionArgs) {
       return json({ ok: true }, { status: 200 });
     }
 
-    // Transform product to Supabase rows
-    const rows = transformProduct(product);
+    // Il cost_per_item vive sull'InventoryItem e NON è nel payload del webhook:
+    // arricchiamo il costo prima di trasformare, altrimenti ogni update scriverebbe
+    // cost_per_item null (variante non idonea → rimossa).
+    const shopifyClient = new ShopifyAPIClient(shop.shopDomain, shop.accessToken);
+    await enrichVariantCosts(shopifyClient, [product]);
+
+    // Solo righe idonee (con costo).
+    const rows = filterEligibleProductRows(transformProduct(product));
 
     // Create Supabase client
     const supabase = createSupabaseClient(shop.supabaseConfig);
     const tableName = shop.supabaseConfig.tableNameProducts;
 
-    // Ogni riga ha ora un shopify_variant_id reale (anche i single-variant) →
-    // un solo upsert con la chiave univoca.
+    if (rows.length === 0) {
+      // Nessuna variante idonea: rimuovi tutte le righe del prodotto (potrebbe
+      // aver perso il costo su tutte le varianti).
+      const { error: delAllError } = await supabase
+        .from(tableName)
+        .delete()
+        .eq('shopify_product_id', product.id);
+      if (delAllError) {
+        console.warn('Could not remove rows for now-ineligible product:', delAllError);
+      }
+      await prisma.syncJob.create({
+        data: {
+          shopId: shop.id,
+          jobType: 'webhook',
+          status: 'completed',
+          productsSynced: 0,
+          variantsSynced: 0,
+          completedAt: new Date(),
+        },
+      });
+      return json({ ok: true }, { status: 200 });
+    }
+
+    // Upsert delle sole righe idonee con la chiave univoca.
     const { error } = await supabase
       .from(tableName)
       .upsert(rows, {
@@ -76,8 +107,9 @@ export async function action({ request }: ActionFunctionArgs) {
       return json({ ok: true }, { status: 200 });
     }
 
-    // Riconcilia: elimina le righe del prodotto il cui variant_id non è più nel
-    // payload (varianti rimosse / transizione multi→single).
+    // Riconcilia: elimina le righe del prodotto il cui variant_id non è più tra
+    // le idonee correnti (varianti rimosse, transizione multi→single, o varianti
+    // che hanno perso il costo).
     const currentVariantIds = rows.map(r => r.shopify_variant_id).filter(Boolean);
     if (currentVariantIds.length > 0) {
       const { error: deleteError } = await supabase
