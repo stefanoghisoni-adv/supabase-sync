@@ -6,6 +6,12 @@ import {
   forwardRead,
   selectEmbedsForbiddenTable,
 } from '~/lib/read-proxy/forward.server';
+import {
+  isCustomerIdentifierLookup,
+  consentCheckSearch,
+  forceConsentedOnlySearch,
+  rowsHaveNonConsented,
+} from '~/lib/read-proxy/customer-consent.server';
 
 // Risposta di blocco: JSON minimale. Stape tratta ogni status non 2xx come
 // "nessun dato", quindi il tracciamento prosegue senza errori all'utente finale.
@@ -44,6 +50,34 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     return deny(403, 'Tabella non disponibile.');
   }
 
-  const { status, body, contentType } = await forwardRead(ctx, table, search);
+  // Enforcement consenso marketing: solo la tabella customers.
+  let forwardSearch = search;
+  if (table === 'customers') {
+    if (isCustomerIdentifierLookup(search)) {
+      // Lookup mirato: verifica il consenso del cliente puntato con la
+      // service_role. Il corpo del controllo NON viene restituito al chiamante.
+      const check = await forwardRead(ctx, 'customers', consentCheckSearch(search));
+      if (check.status !== 200) {
+        return deny(403, "L'utente non ha acconsentito al marketing su Shopify");
+      }
+      let rows: Array<{ accepts_marketing?: unknown }>;
+      try {
+        rows = JSON.parse(check.body);
+        if (!Array.isArray(rows)) throw new Error('non-array');
+      } catch {
+        // Fail-closed: risposta di controllo non interpretabile → nega.
+        return deny(403, "L'utente non ha acconsentito al marketing su Shopify");
+      }
+      if (rowsHaveNonConsented(rows)) {
+        return deny(403, "L'utente non ha acconsentito al marketing su Shopify");
+      }
+      // Consenzienti (o nessuna corrispondenza) → inoltra la query originale.
+    } else {
+      // Lettura non mirata: restituisci solo i consenzienti.
+      forwardSearch = forceConsentedOnlySearch(search);
+    }
+  }
+
+  const { status, body, contentType } = await forwardRead(ctx, table, forwardSearch);
   return new Response(body, { status, headers: { 'Content-Type': contentType } });
 }

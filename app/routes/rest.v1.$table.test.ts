@@ -128,4 +128,74 @@ describe('proxy loader', () => {
     expect(table).toBe('products');
     expect(search).toBe('?sku=eq.X');
   });
+
+  it('customers lookup mirato, cliente non consenziente → 403 e nessun inoltro dell\'originale', async () => {
+    resolveShopReadContext.mockResolvedValueOnce(okCtx({ customersEnabled: true }));
+    // 1a chiamata forwardRead = query di controllo consenso
+    forwardRead.mockResolvedValueOnce({ status: 200, body: '[{"accepts_marketing":false}]', contentType: 'application/json' });
+    const res = await call(
+      { authorization: 'Bearer spx_x' },
+      'customers',
+      'https://app/rest/v1/customers?email=eq.foo@bar.com&select=*',
+    );
+    expect(res.status).toBe(403);
+    expect(await res.text()).toContain("L'utente non ha acconsentito al marketing su Shopify");
+    // solo la query di controllo, NON l'inoltro dell'originale
+    expect(forwardRead).toHaveBeenCalledTimes(1);
+  });
+
+  it('customers lookup mirato, cliente consenziente → inoltra e restituisce i dati', async () => {
+    resolveShopReadContext.mockResolvedValueOnce(okCtx({ customersEnabled: true }));
+    forwardRead
+      .mockResolvedValueOnce({ status: 200, body: '[{"accepts_marketing":true}]', contentType: 'application/json' })
+      .mockResolvedValueOnce({ status: 200, body: '[{"email":"foo@bar.com"}]', contentType: 'application/json' });
+    const res = await call(
+      { authorization: 'Bearer spx_x' },
+      'customers',
+      'https://app/rest/v1/customers?email=eq.foo@bar.com',
+    );
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain('foo@bar.com');
+    expect(forwardRead).toHaveBeenCalledTimes(2);
+  });
+
+  it('customers lookup mirato senza corrispondenze → inoltra (torna [])', async () => {
+    resolveShopReadContext.mockResolvedValueOnce(okCtx({ customersEnabled: true }));
+    forwardRead
+      .mockResolvedValueOnce({ status: 200, body: '[]', contentType: 'application/json' })
+      .mockResolvedValueOnce({ status: 200, body: '[]', contentType: 'application/json' });
+    const res = await call(
+      { authorization: 'Bearer spx_x' },
+      'customers',
+      'https://app/rest/v1/customers?shopify_customer_id=eq.999',
+    );
+    expect(res.status).toBe(200);
+    expect(forwardRead).toHaveBeenCalledTimes(2);
+  });
+
+  it('customers lettura non mirata → inoltra con accepts_marketing=eq.true', async () => {
+    resolveShopReadContext.mockResolvedValueOnce(okCtx({ customersEnabled: true }));
+    forwardRead.mockResolvedValueOnce({ status: 200, body: '[]', contentType: 'application/json' });
+    await call(
+      { authorization: 'Bearer spx_x' },
+      'customers',
+      'https://app/rest/v1/customers?select=*&limit=10',
+    );
+    expect(forwardRead).toHaveBeenCalledTimes(1);
+    const forwardedSearch = forwardRead.mock.calls[0][2] as string;
+    expect(forwardedSearch).toContain('accepts_marketing=eq.true');
+  });
+
+  it('products non è toccato dal consenso', async () => {
+    resolveShopReadContext.mockResolvedValueOnce(okCtx({ customersEnabled: true }));
+    forwardRead.mockResolvedValueOnce({ status: 200, body: '[]', contentType: 'application/json' });
+    await call(
+      { authorization: 'Bearer spx_x' },
+      'products',
+      'https://app/rest/v1/products?email=eq.foo@bar.com',
+    );
+    expect(forwardRead).toHaveBeenCalledTimes(1);
+    const forwardedSearch = forwardRead.mock.calls[0][2] as string;
+    expect(forwardedSearch).not.toContain('accepts_marketing');
+  });
 });
