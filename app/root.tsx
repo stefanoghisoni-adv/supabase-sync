@@ -62,6 +62,7 @@ export default function App() {
             </Link>
             <Link to="/products/issues">Prodotti con problemi</Link>
             <Link to="/logs">Logs</Link>
+            <Link to="/plan">Piano</Link>
             <Link to="/settings/supabase">Impostazioni</Link>
           </NavMenu>
           <Outlet />
@@ -126,6 +127,7 @@ export function ErrorBoundary() {
             </Link>
             <Link to="/products/issues">Prodotti con problemi</Link>
             <Link to="/logs">Logs</Link>
+            <Link to="/plan">Piano</Link>
             <Link to="/settings/supabase">Impostazioni</Link>
           </NavMenu>
           <Page title="Supabase Tracking Sync">
