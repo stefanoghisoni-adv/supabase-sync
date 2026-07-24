@@ -12,6 +12,7 @@ import { isProductLimitReached } from '../limits/product-limit';
 import { enrichVariantCosts } from '../stats/inventory-cost.server';
 import { filterEligibleProductRows } from '../eligibility/product-eligibility';
 import type { ShopifyCustomer } from '~/types/shopify';
+import { isCustomerOptedIn } from '../stats/customer-consent-stats';
 
 /**
  * Syncs customers from Shopify into the merchant's Supabase `customers` table.
@@ -40,7 +41,10 @@ async function syncCustomers(
 
     if (!customers || customers.length === 0) break;
 
-    const rows = (customers as ShopifyCustomer[]).map(transformCustomer);
+    // Due destini diversi per due categorie diverse.
+    const page = customers as ShopifyCustomer[];
+    const rows = page.filter(isCustomerOptedIn).map(transformCustomer);
+    const revokedIds = page.filter((c) => !isCustomerOptedIn(c)).map((c) => c.id);
 
     const chunkSize = 1000;
     for (let i = 0; i < rows.length; i += chunkSize) {
@@ -52,6 +56,22 @@ async function syncCustomers(
 
       if (error) {
         throw new Error(`Supabase customer upsert failed: ${error.message}`);
+      }
+    }
+
+    // Chi non ha acconsentito non entra: nessuna insert. Ma se una riga sua e'
+    // gia' su Supabase — sincronizzata quando il consenso c'era — va marcata,
+    // perche' il proxy decide il 403 leggendo proprio questa colonna. Una
+    // `update` non crea righe: sui clienti mai sincronizzati e' un no-op.
+    if (revokedIds.length > 0) {
+      const { error: revokeError } = await supabase
+        .from(tableName)
+        .update({ accepts_marketing: false })
+        .in('shopify_customer_id', revokedIds);
+
+      if (revokeError) {
+        // Non fatale: gli opt-in sono gia' scritti, la corsa successiva ritenta.
+        console.warn('Marcatura dei consensi revocati fallita:', revokeError.message);
       }
     }
 
