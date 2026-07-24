@@ -12,9 +12,9 @@ interface Props {
 export function PlanFeatureList({ features }: Props) {
   const sorted = sortFeatures(features);
   return (
-    <BlockStack gap="200">
+    <BlockStack gap="200" inlineAlign="start">
       {sorted.map((feature, index) => (
-        <InlineStack key={`${feature.label}-${index}`} gap="200" blockAlign="center" wrap={false}>
+        <InlineStack key={`${feature.label}-${index}`} align="start" gap="200" blockAlign="center" wrap={false}>
           <Icon
             source={feature.included ? CheckIcon : XIcon}
             tone={feature.included ? 'success' : 'subdued'}

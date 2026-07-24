@@ -41,6 +41,7 @@ export default function Plan() {
   return (
     <Page
       title="Piano"
+      backAction={{ url: '/', content: 'Dashboard' }}
       secondaryActions={[
         {
           content: 'Impostazioni',
@@ -61,36 +62,48 @@ export default function Plan() {
               key={plan.id}
               background={plan.recommended ? 'bg-surface-selected' : undefined}
             >
-              <BlockStack gap="300">
-                <InlineStack gap="200" blockAlign="center">
-                  <Text as="h2" variant="headingMd">
-                    {plan.name}
-                  </Text>
-                  {plan.recommended && <Badge tone="success">Consigliato</Badge>}
-                  {isCurrent && <Badge tone="info">Piano attuale</Badge>}
-                </InlineStack>
+              {/* Colonna a tutta altezza per tenere la CTA incollata in fondo:
+                  le card della grid sono alte uguali (la piu' alta detta la riga)
+                  e il pulsante scende in fondo a prescindere dalla lunghezza del
+                  contenuto. Polaris non espone un "pin in basso": questo wrapper
+                  flex inline e' l'unica eccezione al vincolo "solo Polaris", come
+                  gia' fatto per il contenitore del grafico. */}
+              <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                <BlockStack gap="300">
+                  <InlineStack gap="200" blockAlign="center">
+                    <Text as="h2" variant="headingMd">
+                      {plan.name}
+                    </Text>
+                    {plan.recommended && <Badge tone="success">Consigliato</Badge>}
+                    {isCurrent && <Badge tone="info">Piano attuale</Badge>}
+                  </InlineStack>
 
-                <InlineStack gap="100" blockAlign="baseline">
-                  <Text as="span" variant="headingLg">
-                    €{plan.priceMonthly}
-                  </Text>
-                  <Text as="span" tone="subdued">
-                    /mese
-                  </Text>
-                </InlineStack>
+                  <InlineStack gap="100" blockAlign="baseline">
+                    <Text as="span" variant="headingLg">
+                      €{plan.priceMonthly}
+                    </Text>
+                    <Text as="span" tone="subdued">
+                      /mese
+                    </Text>
+                  </InlineStack>
 
-                <PlanFeatureList features={plan.features} />
+                  <PlanFeatureList features={plan.features} />
+                </BlockStack>
 
-                {/* CTA placeholder: nessuna azione reale finche' non colleghiamo
+                {/* marginBlockStart:auto spinge la CTA in fondo alla colonna;
+                    il padding garantisce una distanza minima dalle feature quando
+                    la card e' la piu' corta. CTA placeholder finche' non colleghiamo
                     Shopify Billing (slice successiva). */}
-                <Button
-                  variant={plan.recommended ? 'primary' : undefined}
-                  disabled={isCurrent}
-                  fullWidth
-                >
-                  {isCurrent ? 'Piano attuale' : `Scegli ${plan.name}`}
-                </Button>
-              </BlockStack>
+                <div style={{ marginBlockStart: 'auto', paddingBlockStart: 'var(--p-space-400)' }}>
+                  <Button
+                    variant={plan.recommended ? 'primary' : undefined}
+                    disabled={isCurrent}
+                    fullWidth
+                  >
+                    {isCurrent ? 'Piano attuale' : `Scegli ${plan.name}`}
+                  </Button>
+                </div>
+              </div>
             </Card>
           );
         })}
