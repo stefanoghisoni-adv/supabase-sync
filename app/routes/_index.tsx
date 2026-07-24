@@ -1,6 +1,6 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from '@remix-run/node';
 import { json } from '@remix-run/node';
-import { useLoaderData, useFetcher, useRevalidator, useNavigate } from '@remix-run/react';
+import { useLoaderData, useFetcher, useRevalidator, useNavigate, useNavigation } from '@remix-run/react';
 import { useEffect, useState } from 'react';
 import {
   Page,
@@ -225,6 +225,16 @@ export default function Dashboard() {
     useLoaderData<typeof loader>();
   const blocked = authorization !== 'ENABLED';
   const navigate = useNavigate();
+
+  // Pulsanti-link (Impostazioni, Vedi logs): mentre Remix carica la rotta di
+  // destinazione mostriamo lo spinner e disabilitiamo il pulsante, così un clic
+  // su un DB remoto (Vercel) non sembra "morto". navigation.location e' valorizzato
+  // solo durante una navigazione: confrontiamo il pathname di arrivo.
+  const navigation = useNavigation();
+  const navigatingTo =
+    navigation.state === 'loading' ? navigation.location?.pathname : undefined;
+  const loadingSettings = navigatingTo === '/settings/supabase';
+  const loadingLogs = navigatingTo === '/logs';
 
   // Stato del collegamento Supabase per il badge del primo step: Non collegato
   // (grigio) → In corso (arancione) → Fallito (rosso) / Collegato (verde).
@@ -478,9 +488,16 @@ export default function Dashboard() {
                     : 'Avvia sincronizzazione'}
               </Button>
               {syncCompleted ? (
-                <Text as="span" tone="success">
-                  Le sincronizzazioni successive avvengono in automatico.
-                </Text>
+                <>
+                  {/* url + Remix Link: la navigazione a /logs attiva loadingLogs,
+                      che disabilita il pulsante e mostra lo spinner in caricamento. */}
+                  <Button url="/logs" disabled={loadingLogs} loading={loadingLogs}>
+                    Vedi logs
+                  </Button>
+                  <Text as="span" tone="success">
+                    Le sincronizzazioni successive avvengono in automatico.
+                  </Text>
+                </>
               ) : inProgress ? (
                 <Text as="span" tone="subdued">
                   Prosegue in background: puoi chiudere questa pagina.
@@ -506,6 +523,8 @@ export default function Dashboard() {
           icon: SettingsIcon,
           url: '/settings/supabase',
           accessibilityLabel: 'Impostazioni',
+          disabled: loadingSettings,
+          loading: loadingSettings,
         },
       ]}
     >

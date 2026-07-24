@@ -1,7 +1,8 @@
 import type { LoaderFunctionArgs } from '@remix-run/node';
 import { json } from '@remix-run/node';
-import { useLoaderData } from '@remix-run/react';
+import { useLoaderData, useNavigation } from '@remix-run/react';
 import { Page, Layout } from '@shopify/polaris';
+import { SettingsIcon } from '@shopify/polaris-icons';
 import { authenticate } from '~/shopify.server';
 import { prisma } from '~/db.server';
 import { SyncLog } from '~/components/Dashboard/SyncLog';
@@ -40,8 +41,28 @@ export async function loader({ request }: LoaderFunctionArgs) {
 export default function Logs() {
   const { jobs, customersEnabled, timeZone } = useLoaderData<typeof loader>();
 
+  // Stesso comportamento della dashboard: mentre Remix carica /settings/supabase
+  // il pulsante mostra lo spinner e si disabilita.
+  const navigation = useNavigation();
+  const loadingSettings =
+    navigation.state === 'loading' &&
+    navigation.location?.pathname === '/settings/supabase';
+
   return (
-    <Page title="Logs" backAction={{ url: '/' }}>
+    <Page
+      title="Logs"
+      backAction={{ url: '/' }}
+      secondaryActions={[
+        {
+          content: 'Impostazioni',
+          icon: SettingsIcon,
+          url: '/settings/supabase',
+          accessibilityLabel: 'Impostazioni',
+          disabled: loadingSettings,
+          loading: loadingSettings,
+        },
+      ]}
+    >
       <Layout>
         <Layout.Section>
           <SyncLog jobs={jobs} customersEnabled={customersEnabled} timeZone={timeZone} />
