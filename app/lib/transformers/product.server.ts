@@ -1,5 +1,14 @@
 import type { ShopifyProduct, SupabaseProductRow } from '~/types/shopify';
 
+// Profitto per unita'. Senza costo non e' calcolabile: null, e la riga risultera'
+// non idonea. L'arrotondamento a 2 decimali evita le code della sottrazione in
+// virgola mobile (19.90 - 4.35 = 15.549999999999999) prima ancora di arrivare
+// alla colonna NUMERIC(10, 2).
+function netValue(price: number, cost: number | null): number | null {
+  if (cost === null) return null;
+  return Math.round((price - cost) * 100) / 100;
+}
+
 export function transformProduct(product: ShopifyProduct): SupabaseProductRow[] {
   const hasMultipleVariants = product.variants.length > 1 ||
     (product.variants.length === 1 && product.variants[0].title !== 'Default Title');
@@ -10,50 +19,58 @@ export function transformProduct(product: ShopifyProduct): SupabaseProductRow[] 
 
   if (hasMultipleVariants) {
     // Product has variants → create row per variant
-    return product.variants.map(variant => ({
-      shopify_product_id: product.id,
-      shopify_variant_id: variant.id,
-      is_variant: true,
+    return product.variants.map(variant => {
+      const cost = variant.cost ? parseFloat(variant.cost) : null;
+      const price = parseFloat(variant.price);
 
-      // Product-level data (duplicated)
-      product_title: product.title,
-      product_description: product.body_html || null,
-      vendor: product.vendor || null,
-      product_type: product.product_type || null,
-      handle: product.handle,
-      product_status: product.status,
-      tags,
-      product_published_at: product.published_at,
+      return {
+        shopify_product_id: product.id,
+        shopify_variant_id: variant.id,
+        is_variant: true,
 
-      // Variant-level data
-      variant_title: variant.title,
-      sku: variant.sku || null,
-      barcode: variant.barcode,
-      price: parseFloat(variant.price),
-      compare_at_price: variant.compare_at_price ? parseFloat(variant.compare_at_price) : null,
-      cost_per_item: variant.cost ? parseFloat(variant.cost) : null,
-      position: variant.position,
-      inventory_quantity:
-        variant.inventory_management != null ? variant.inventory_quantity : null,
-      inventory_tracked: variant.inventory_management != null,
-      inventory_policy: variant.inventory_policy ?? null,
-      weight: variant.weight,
-      weight_unit: variant.weight_unit,
-      requires_shipping: variant.requires_shipping,
-      taxable: variant.taxable,
-      image_url: getVariantImageUrl(product, variant),
-      option1: variant.option1,
-      option2: variant.option2,
-      option3: variant.option3,
+        // Product-level data (duplicated)
+        product_title: product.title,
+        product_description: product.body_html || null,
+        vendor: product.vendor || null,
+        product_type: product.product_type || null,
+        handle: product.handle,
+        product_status: product.status,
+        tags,
+        product_published_at: product.published_at,
 
-      synced_at: new Date().toISOString(),
-    }));
+        // Variant-level data
+        variant_title: variant.title,
+        sku: variant.sku || null,
+        barcode: variant.barcode,
+        price,
+        compare_at_price: variant.compare_at_price ? parseFloat(variant.compare_at_price) : null,
+        cost_per_item: cost,
+        net_value: netValue(price, cost),
+        position: variant.position,
+        inventory_quantity:
+          variant.inventory_management != null ? variant.inventory_quantity : null,
+        inventory_tracked: variant.inventory_management != null,
+        inventory_policy: variant.inventory_policy ?? null,
+        weight: variant.weight,
+        weight_unit: variant.weight_unit,
+        requires_shipping: variant.requires_shipping,
+        taxable: variant.taxable,
+        image_url: getVariantImageUrl(product, variant),
+        option1: variant.option1,
+        option2: variant.option2,
+        option3: variant.option3,
+
+        synced_at: new Date().toISOString(),
+      };
+    });
   } else {
     // Product without "real" variants → single row. In Shopify anche questi
     // hanno UNA variante ("Default Title") con un id reale: lo usiamo come
     // shopify_variant_id così ogni riga ha una chiave univoca (evita l'upsert
     // su shopify_product_id, che non ha vincolo UNIQUE). is_variant resta false.
     const variant = product.variants[0];
+    const cost = variant.cost ? parseFloat(variant.cost) : null;
+    const price = parseFloat(variant.price);
 
     return [{
       shopify_product_id: product.id,
@@ -72,9 +89,10 @@ export function transformProduct(product: ShopifyProduct): SupabaseProductRow[] 
       variant_title: null,
       sku: variant.sku || null,
       barcode: variant.barcode,
-      price: parseFloat(variant.price),
+      price,
       compare_at_price: variant.compare_at_price ? parseFloat(variant.compare_at_price) : null,
-      cost_per_item: variant.cost ? parseFloat(variant.cost) : null,
+      cost_per_item: cost,
+      net_value: netValue(price, cost),
       position: variant.position,
       inventory_quantity:
         variant.inventory_management != null ? variant.inventory_quantity : null,

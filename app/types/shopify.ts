@@ -105,6 +105,8 @@ export interface SupabaseProductRow {
   price: number;
   compare_at_price: number | null;
   cost_per_item: number | null;
+  // Profitto per unita': price - cost_per_item. Derivato, mai scritto a mano.
+  net_value: number | null;
   position: number | null;
   inventory_quantity: number | null;
   inventory_tracked: boolean;

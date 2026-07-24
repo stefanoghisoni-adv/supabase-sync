@@ -38,6 +38,7 @@ const PRODUCTS_COLUMNS: Column[] = [
   { name: 'price', type: 'NUMERIC(10, 2)', constraints: 'NOT NULL' },
   { name: 'compare_at_price', type: 'NUMERIC(10, 2)' },
   { name: 'cost_per_item', type: 'NUMERIC(10, 2)' },
+  { name: 'net_value', type: 'NUMERIC(10, 2)' },
   { name: 'position', type: 'INTEGER' },
   { name: 'inventory_quantity', type: 'INTEGER' },
   { name: 'inventory_tracked', type: 'BOOLEAN' },
