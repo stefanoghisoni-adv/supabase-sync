@@ -71,6 +71,7 @@ describe('collectProblemVariants', () => {
         variantId: 2,
         variantTitle: 'Rossa / M',
         sku: 'SKU-2',
+        price: '10.00',
         inventoryItemId: 999,
         missingField: 'cost_per_item',
       },
@@ -86,5 +87,29 @@ describe('collectProblemVariants', () => {
 
   it('returns an empty list when every variant is ready', () => {
     expect(collectProblemVariants([makeProduct(['1.00', '2.00'])])).toEqual([]);
+  });
+
+  it('collectProblemVariants riporta il prezzo della variante', () => {
+    const rows = collectProblemVariants([
+      {
+        id: 1,
+        title: 'Prodotto',
+        variants: [
+          { id: 11, title: 'S', sku: 'A1', price: '29.90', cost: null, inventory_item_id: 111 },
+        ],
+      },
+    ] as any);
+    expect(rows[0].price).toBe('29.90');
+  });
+
+  it('collectProblemVariants mette null se il prezzo manca', () => {
+    const rows = collectProblemVariants([
+      {
+        id: 2,
+        title: 'Senza prezzo',
+        variants: [{ id: 21, title: 'M', sku: null, cost: null, inventory_item_id: 211 }],
+      },
+    ] as any);
+    expect(rows[0].price).toBeNull();
   });
 });

@@ -32,6 +32,10 @@ export interface ProblemVariant {
   variantId: number;
   variantTitle: string;
   sku: string | null;
+  // Prezzo come stringa, cosi' come lo restituisce Shopify: serve alla ricerca e
+  // alla colonna Prezzo. Convertirlo in numero non aggiungerebbe nulla e
+  // introdurrebbe arrotondamenti.
+  price: string | null;
   // Serve per scrivere il costo: il cost_per_item si aggiorna sull'InventoryItem.
   inventoryItemId: number | null;
   missingField: 'cost_per_item';
@@ -50,6 +54,7 @@ export function collectProblemVariants(
         variantId: variant.id,
         variantTitle: variant.title,
         sku: variant.sku ? variant.sku : null,
+        price: variant.price ?? null,
         inventoryItemId: variant.inventory_item_id ?? null,
         missingField: 'cost_per_item',
       });
