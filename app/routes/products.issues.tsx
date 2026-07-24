@@ -460,12 +460,23 @@ export default function ProblemProducts() {
                   clearButton
                   onClearButtonClick={() => setQuery('')}
                 />
-                <Text as="p" tone="subdued">
-                  {filtered.length}{' '}
-                  {filtered.length === 1 ? 'variante' : 'varianti'} a cui manca il valore{' '}
-                  <code>cost_per_item</code>. Inserisci il costo e premi Invio (o
-                  esci dal campo): viene salvato su Shopify e Supabase.
-                </Text>
+                {/* Con una ricerca senza risultati il conteggio direbbe "0
+                    varianti a cui manca il valore...", che si legge come "non ci
+                    sono problemi" mentre e' solo la ricerca a non aver trovato
+                    nulla. Meglio dirlo esplicitamente. */}
+                {query.trim() && filtered.length === 0 ? (
+                  <Text as="p" tone="subdued">
+                    Nessun risultato per &laquo;{query.trim()}&raquo;. Le varianti
+                    con problemi sono {rows.length}: prova a modificare la ricerca.
+                  </Text>
+                ) : (
+                  <Text as="p" tone="subdued">
+                    {filtered.length}{' '}
+                    {filtered.length === 1 ? 'variante' : 'varianti'} a cui manca il valore{' '}
+                    <code>cost_per_item</code>. Inserisci il costo e premi Invio (o
+                    esci dal campo): viene salvato su Shopify e Supabase.
+                  </Text>
+                )}
               </BlockStack>
             </Box>
             <IndexTable
