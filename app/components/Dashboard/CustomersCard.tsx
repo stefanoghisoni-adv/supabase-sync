@@ -56,7 +56,7 @@ export function CustomersCard({
             <Box paddingInline="400">
               <Text as="p" tone="subdued" alignment="center" variant="bodySm">
                 Potenzia la trasmissione dei dati utente monitorando anche il
-                lifetime value (LTV) e lifetime profit (LTP).
+                Lifetime Value (LTV) e Lifetime Profit (LTP).
               </Text>
             </Box>
           </BlockStack>
