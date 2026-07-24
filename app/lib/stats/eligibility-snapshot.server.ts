@@ -6,7 +6,7 @@ import type { Shop } from '@prisma/client';
 
 // Mezzanotte UTC di oggi: la chiave del giorno deve essere stabile a prescindere
 // dall'ora in cui il cron passa.
-function today(): Date {
+export function today(): Date {
   const now = new Date();
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
 }
@@ -51,4 +51,21 @@ export async function recordEligibilitySnapshotIfMissing(
   });
 
   return 'written';
+}
+
+// Aggiorna (o crea) lo snapshot di OGGI. Serve a tenere il punto del giorno
+// corrente allineato a quello che il merchant vede in dashboard: il cron lo
+// scrive una volta sola, ma i prodotti possono diventare idonei durante la
+// giornata, appena qualcuno inserisce i costi mancanti.
+export async function upsertTodayEligibilitySnapshot(
+  shopId: string,
+  eligibleCount: number,
+): Promise<void> {
+  const day = today();
+
+  await prisma.productEligibilitySnapshot.upsert({
+    where: { shopId_day: { shopId, day } },
+    create: { shopId, day, eligibleCount },
+    update: { eligibleCount },
+  });
 }

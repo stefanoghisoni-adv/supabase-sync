@@ -4,9 +4,10 @@ import { json } from '@remix-run/node';
 import { authenticate } from '~/shopify.server';
 import { prisma } from '~/db.server';
 import { ShopifyAPIClient } from '~/lib/shopify-api.server';
-import { computeProductReadiness } from '~/lib/stats/product-readiness';
+import { computeProductReadiness, countEligibleProducts } from '~/lib/stats/product-readiness';
 import { enrichVariantCosts } from '~/lib/stats/inventory-cost.server';
 import { getReadinessCache, setReadinessCache } from '~/lib/cache/stats-cache.server';
+import { upsertTodayEligibilitySnapshot } from '~/lib/stats/eligibility-snapshot.server';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const { session } = await authenticate.admin(request);
@@ -40,6 +41,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   let totalProducts = 0;
   let readyCount = 0;
   let problemCount = 0;
+  let eligibleProducts = 0;
   let pageInfo: string | undefined;
 
   // Scomposizione pronti/problemi: richiede il dato per-variante, quindi la
@@ -59,11 +61,22 @@ export async function loader({ request }: LoaderFunctionArgs) {
     totalProducts += counts.totalProducts;
     readyCount += counts.readyCount;
     problemCount += counts.problemCount;
+    eligibleProducts += countEligibleProducts(enriched);
     pageInfo = nextPageInfo ?? undefined;
   } while (pageInfo);
 
   const result = { totalProducts, readyCount, problemCount };
   await setReadinessCache(shop.id, result);
+
+  // Aggiorna lo snapshot di oggi: i prodotti possono diventare idonei durante la
+  // giornata (il merchant inserisce i costi mancanti dalla tab "Prodotti con problemi"),
+  // ma il cron passa una sola volta. Un problema sullo snapshot non deve far fallire
+  // l'endpoint, che serve alla dashboard.
+  try {
+    await upsertTodayEligibilitySnapshot(shop.id, eligibleProducts);
+  } catch (err) {
+    console.error('Failed to update today eligibility snapshot:', err);
+  }
 
   return json({ ...result, totalVariants: readyCount + problemCount, cached: false });
 }
