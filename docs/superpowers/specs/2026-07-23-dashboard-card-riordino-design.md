@@ -67,6 +67,13 @@ aritmetica. Il campo `totalProducts` esistente resta invariato (lo usa `PlanBann
 
 ### Piano senza sync clienti (`customersSyncEnabled === false`)
 
+> **SUPERATO il 2026-07-24.** L'overlay descritto qui sotto è stato rimosso: sul
+> piano senza clienti la card mostra **solo** titolo, pulsante "Aggiorna piano" e
+> descrizione, senza righe velate. Sparisce così l'unica eccezione al vincolo
+> Polaris (gradiente CSS) e con essa il problema di accessibilità dei tooltip
+> raggiungibili col tab dietro il velo. Il testo che segue resta come traccia
+> storica della decisione originale.
+
 Le righe reali vengono renderizzate ma coperte da un **overlay chiaro in
 gradiente**: opacità 40% in alto (prime due righe intraviste) fino a completamente
 opaco in basso. Al centro dell'overlay il pulsante **"Aggiorna piano"**.
