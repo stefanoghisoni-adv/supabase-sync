@@ -438,4 +438,142 @@ describe('Initial bulk sync processor', () => {
     // L'azzeramento totale passava da delete().gte('shopify_product_id', 0).
     expect(deleteCalls.some((c) => c.method === 'gte')).toBe(false);
   });
+
+  it('spazza le righe non toccate dopo una scansione completa', async () => {
+    const mockShop = {
+      id: 'shop-1',
+      shopDomain: 'test-shop.myshopify.com',
+      accessToken: 'encrypted-token',
+      authorization: 'ENABLED',
+      currentPlan: 'free',
+      supabaseConfig: {
+        syncEnabled: true,
+        tableNameProducts: 'products',
+        tableNameCustomers: 'customers',
+        supabaseUrl: 'https://test.supabase.co',
+        supabasePublicKey: 'k',
+        supabaseServiceRoleKey: 's',
+      },
+    };
+    (prisma.shop.findUnique as any).mockResolvedValue(mockShop);
+    (prisma.plan.findUnique as any).mockResolvedValue({ maxProducts: null, customersSyncEnabled: false });
+    (prisma.syncJob.create as any).mockResolvedValue({ id: 'job-1' });
+    (prisma.syncJob.update as any).mockResolvedValue({});
+
+    const deleteCalls: { method: string; args: any[] }[] = [];
+    const supabaseMock = {
+      from: () => ({
+        delete: () => ({
+          gte: async (...a: any[]) => { deleteCalls.push({ method: 'gte', args: a }); return { error: null }; },
+          lt: async (...a: any[]) => { deleteCalls.push({ method: 'lt', args: a }); return { error: null }; },
+        }),
+        upsert: async () => ({ error: null }),
+      }),
+    };
+    (createSupabaseClient as any).mockReturnValue(supabaseMock);
+    (ShopifyAPIClient as any).mockImplementation(() => ({
+      getProducts: vi.fn().mockResolvedValue({ products: [{ id: 1 }], nextPageInfo: null }),
+    }));
+    (transformProduct as any).mockReturnValue([
+      { shopify_product_id: 1, shopify_variant_id: 10, cost_per_item: 5 },
+    ]);
+
+    await processInitialBulkSync('shop-1', { updateProgress: vi.fn() } as any);
+
+    const sweep = deleteCalls.find((c) => c.method === 'lt');
+    expect(sweep).toBeDefined();
+    expect(sweep!.args[0]).toBe('synced_at');
+  });
+
+  it('non spazza nulla se la scansione fallisce a meta', async () => {
+    const mockShop = {
+      id: 'shop-1',
+      shopDomain: 'test-shop.myshopify.com',
+      accessToken: 'encrypted-token',
+      authorization: 'ENABLED',
+      currentPlan: 'free',
+      supabaseConfig: {
+        syncEnabled: true,
+        tableNameProducts: 'products',
+        tableNameCustomers: 'customers',
+        supabaseUrl: 'https://test.supabase.co',
+        supabasePublicKey: 'k',
+        supabaseServiceRoleKey: 's',
+      },
+    };
+    (prisma.shop.findUnique as any).mockResolvedValue(mockShop);
+    (prisma.plan.findUnique as any).mockResolvedValue({ maxProducts: null, customersSyncEnabled: false });
+    (prisma.syncJob.create as any).mockResolvedValue({ id: 'job-1' });
+    (prisma.syncJob.update as any).mockResolvedValue({});
+
+    const deleteCalls: { method: string; args: any[] }[] = [];
+    const supabaseMock = {
+      from: () => ({
+        delete: () => ({
+          gte: async (...a: any[]) => { deleteCalls.push({ method: 'gte', args: a }); return { error: null }; },
+          lt: async (...a: any[]) => { deleteCalls.push({ method: 'lt', args: a }); return { error: null }; },
+        }),
+        upsert: async () => ({ error: null }),
+      }),
+    };
+    (createSupabaseClient as any).mockReturnValue(supabaseMock);
+    (ShopifyAPIClient as any).mockImplementation(() => ({
+      getProducts: vi
+        .fn()
+        .mockResolvedValueOnce({ products: [{ id: 1 }], nextPageInfo: 'p2' })
+        .mockRejectedValueOnce(new Error('Shopify API error')),
+    }));
+
+    await expect(
+      processInitialBulkSync('shop-1', { updateProgress: vi.fn() } as any),
+    ).rejects.toThrow();
+
+    // Nessuna cancellazione: meglio righe obsolete che perdere prodotti veri.
+    expect(deleteCalls.some((c) => c.method === 'lt')).toBe(false);
+  });
+
+  it('spazza anche quando si raggiunge il tetto del piano', async () => {
+    const mockShop = {
+      id: 'shop-1',
+      shopDomain: 'test-shop.myshopify.com',
+      accessToken: 'encrypted-token',
+      authorization: 'ENABLED',
+      currentPlan: 'free',
+      supabaseConfig: {
+        syncEnabled: true,
+        tableNameProducts: 'products',
+        tableNameCustomers: 'customers',
+        supabaseUrl: 'https://test.supabase.co',
+        supabasePublicKey: 'k',
+        supabaseServiceRoleKey: 's',
+      },
+    };
+    (prisma.shop.findUnique as any).mockResolvedValue(mockShop);
+    (prisma.plan.findUnique as any).mockResolvedValue({ maxProducts: 1, customersSyncEnabled: false });
+    (prisma.syncJob.create as any).mockResolvedValue({ id: 'job-1' });
+    (prisma.syncJob.update as any).mockResolvedValue({});
+
+    const deleteCalls: { method: string; args: any[] }[] = [];
+    const supabaseMock = {
+      from: () => ({
+        delete: () => ({
+          gte: async (...a: any[]) => { deleteCalls.push({ method: 'gte', args: a }); return { error: null }; },
+          lt: async (...a: any[]) => { deleteCalls.push({ method: 'lt', args: a }); return { error: null }; },
+        }),
+        upsert: async () => ({ error: null }),
+      }),
+    };
+    (createSupabaseClient as any).mockReturnValue(supabaseMock);
+    (ShopifyAPIClient as any).mockImplementation(() => ({
+      getProducts: vi.fn().mockResolvedValue({ products: [{ id: 1 }, { id: 2 }], nextPageInfo: 'p2' }),
+    }));
+    (transformProduct as any).mockImplementation((p: any) => [
+      { shopify_product_id: p.id, shopify_variant_id: p.id * 10, cost_per_item: 5 },
+    ]);
+
+    await processInitialBulkSync('shop-1', { updateProgress: vi.fn() } as any);
+
+    // Il tetto e' una terminazione regolare: la spazzata deve avvenire.
+    expect(deleteCalls.some((c) => c.method === 'lt')).toBe(true);
+  });
 });

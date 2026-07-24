@@ -431,6 +431,29 @@ export async function processInitialBulkSync(shopId: string, job: Job<any>): Pro
 
     } while (nextPageInfo);
 
+    // Spazzata: le righe con synced_at anteriore all'inizio corsa sono quelle che
+    // la scansione non ha toccato, cioe' esattamente le due categorie da togliere
+    // — prodotti non piu' presenti su Shopify e varianti che hanno perso il
+    // cost_per_item. Una sola query, indipendente dal numero di prodotti.
+    //
+    // Sta QUI di proposito: ci si arriva solo se la paginazione e' terminata
+    // regolarmente (anche per raggiunto tetto del piano). Se una pagina lancia,
+    // il controllo salta al catch e non si cancella nulla: meglio qualche riga
+    // obsoleta che perdere prodotti veri per un errore di rete.
+    //
+    // Le righe con synced_at NULL sopravvivono (in SQL un confronto con NULL non
+    // e' mai vero): non le ha scritte l'app, non le tocchiamo.
+    const { error: sweepError } = await supabase
+      .from(shop.supabaseConfig.tableNameProducts)
+      .delete()
+      .lt('synced_at', runStartedAt);
+
+    if (sweepError) {
+      // Non fatale: i prodotti idonei sono gia' stati scritti. Le righe obsolete
+      // verranno rimosse alla corsa successiva.
+      console.warn('Spazzata dei prodotti obsoleti fallita:', sweepError);
+    }
+
     // Sync customers if the shop's plan includes customer sync
     let totalCustomers = 0;
     if (plan?.customersSyncEnabled) {
