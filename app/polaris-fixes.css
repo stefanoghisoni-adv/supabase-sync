@@ -9,7 +9,8 @@
    perche' anti-aliasate su piu' pixel. Verificato riproducendo il DOM reale in
    Chrome headless: con rasterizzazione software la linea c'e' (grigio 142),
    con la GPU attiva sparisce, a parita' di larghezza e device pixel ratio.
-   1px pieno regge in entrambi i casi. */
+   A 1px la linea regge in entrambi i casi, ma resta esile: 1,5px la rende
+   leggibile senza pesare come i 2px di un campo in stato di focus. */
 .Polaris-TextField__Backdrop {
-  border-width: 0.0625rem;
+  border-width: 0.09375rem;
 }
