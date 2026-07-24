@@ -547,6 +547,8 @@ export default function ProblemProducts() {
             )}
           </Card>
         )}
+        {/* Respiro in fondo: senza, il bordo della card/tabella tocca il fondo dell'iframe. */}
+        <Box paddingBlockEnd="800" />
       </BlockStack>
     </Page>
   );

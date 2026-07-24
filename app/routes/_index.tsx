@@ -595,6 +595,9 @@ export default function Dashboard() {
             loading={!historyFetcher.data}
           />
         </InlineGrid>
+
+        {/* Respiro in fondo: senza, il bordo dell'ultima card tocca il fondo dell'iframe. */}
+        <Box paddingBlockEnd="800" />
       </BlockStack>
     </Page>
   );

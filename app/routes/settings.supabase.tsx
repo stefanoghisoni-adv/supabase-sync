@@ -320,6 +320,8 @@ export default function SupabaseSettings() {
           </BlockStack>
         </Layout.Section>
       </Layout>
+      {/* Respiro in fondo: senza, il bordo della card tocca il fondo dell'iframe. */}
+      <Box paddingBlockEnd="800" />
     </Page>
   );
 }
