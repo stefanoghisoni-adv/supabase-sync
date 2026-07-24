@@ -13,7 +13,7 @@ async function main() {
         priceYearly: 0,
         maxProducts: 50,
         maxCustomers: 0,
-        maxSyncFrequencyHours: 24,
+        maxSyncFrequencyHours: 168,
         customFieldsLimit: 3,
         supportLevel: 'community',
         customersSyncEnabled: false,
