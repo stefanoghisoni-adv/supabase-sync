@@ -10,7 +10,11 @@
    Chrome headless: con rasterizzazione software la linea c'e' (grigio 142),
    con la GPU attiva sparisce, a parita' di larghezza e device pixel ratio.
    A 1px la linea regge in entrambi i casi, ma resta esile: 1,5px la rende
-   leggibile senza pesare come i 2px di un campo in stato di focus. */
+   leggibile senza pesare come i 2px di un campo in stato di focus.
+
+   Si tocca SOLO il lato superiore: gli altri tre non hanno mai mostrato il
+   problema nelle prove (larghezze 420-1440px, device pixel ratio da 1 a 2) e
+   restano allo spessore deciso da Polaris. */
 .Polaris-TextField__Backdrop {
-  border-width: 0.09375rem;
+  border-top-width: 0.09375rem;
 }
