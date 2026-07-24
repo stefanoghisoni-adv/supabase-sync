@@ -15,14 +15,12 @@ import {
 import { AppProvider } from '@shopify/shopify-app-remix/react';
 import { NavMenu } from '@shopify/app-bridge-react';
 import polarisStyles from '@shopify/polaris/build/esm/styles.css?url';
-import vizStyles from '@shopify/polaris-viz/build/esm/styles.css?url';
 // Caricato DOPO Polaris: neutralizza il tema scuro (vedi force-light.css).
 import forceLightStyles from './force-light.css?url';
 import { Page, Banner, Text, BlockStack } from '@shopify/polaris';
 
 export const links: LinksFunction = () => [
   { rel: 'stylesheet', href: polarisStyles },
-  { rel: 'stylesheet', href: vizStyles },
   { rel: 'stylesheet', href: forceLightStyles },
 ];
 
