@@ -28,7 +28,10 @@ export function SyncLog({ jobs, customersEnabled, timeZone }: SyncLogProps) {
     const stateCell = creation ? (
       <Badge tone="success">{creation}</Badge>
     ) : (
-      <BlockStack gap="100">
+      // inlineAlign="start": senza, il BlockStack allarga il badge a tutta la
+      // cella (i figli di un flex column si estendono per default), mentre deve
+      // essere largo quanto il suo testo.
+      <BlockStack gap="100" inlineAlign="start">
         <Badge tone={status.tone}>{status.label}</Badge>
         {job.status === 'failed' && job.errors ? (
           <Text as="span" variant="bodySm" tone="critical">
