@@ -183,11 +183,28 @@ export async function action({ request }: ActionFunctionArgs) {
   if (shop.supabaseConfig?.connectionVerifiedAt && Number.isInteger(variantId)) {
     try {
       const supabase = createSupabaseClient(shop.supabaseConfig);
-      const { error: sbError } = await supabase
+
+      // Il prezzo dalla riga esistente, non dal form: il client non deve poter
+      // decidere un valore che finisce in tabella. Se la riga non c'è ancora
+      // (prodotto non idoneo, quindi mai sincronizzato) non si aggiorna nulla.
+      const { data: existing, error: readError } = await supabase
         .from(shop.supabaseConfig.tableNameProducts)
-        .update({ cost_per_item: parsed })
-        .eq('shopify_variant_id', variantId);
-      if (sbError) throw sbError;
+        .select('price')
+        .eq('shopify_variant_id', variantId)
+        .maybeSingle();
+      if (readError) throw readError;
+
+      if (existing) {
+        const price = Number(existing.price);
+        const { error: sbError } = await supabase
+          .from(shop.supabaseConfig.tableNameProducts)
+          .update({
+            cost_per_item: parsed,
+            net_value: Math.round((price - parsed) * 100) / 100,
+          })
+          .eq('shopify_variant_id', variantId);
+        if (sbError) throw sbError;
+      }
     } catch (err) {
       console.error('[products.issues save] update Supabase fallito:', err);
       return json(
