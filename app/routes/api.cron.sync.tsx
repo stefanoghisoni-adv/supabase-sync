@@ -7,6 +7,7 @@ import {
   processInitialBulkSync,
   processManualSync,
 } from '~/lib/workers/processors.server';
+import { recordEligibilitySnapshotIfMissing } from '~/lib/stats/eligibility-snapshot.server';
 
 /**
  * Cron-triggered sync endpoint (replaces the long-running BullMQ worker on the
@@ -26,7 +27,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     return json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const results = { drained: 0, periodicChecks: 0, errors: [] as string[] };
+  const results = { drained: 0, periodicChecks: 0, snapshots: 0, errors: [] as string[] };
 
   // 1. Drain jobs enqueued from the UI (manual-sync, initial-bulk-sync, periodic-sync-check)
   const syncQueue = await getSyncQueue();
@@ -65,6 +66,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
   });
 
   for (const shop of shops) {
+    // Snapshot giornaliero per il grafico: in un try/catch separato perche' una
+    // sua rottura non deve impedire la sync vera e propria del negozio.
+    try {
+      const result = await recordEligibilitySnapshotIfMissing(shop);
+      if (result === 'written') results.snapshots++;
+    } catch (error) {
+      console.error(`Snapshot idoneita' fallito per ${shop.shopDomain}:`, error);
+    }
+
     try {
       const plan = await prisma.plan.findUnique({
         where: { planName: shop.currentPlan },

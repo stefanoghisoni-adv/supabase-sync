@@ -3,6 +3,7 @@ import {
   isVariantReady,
   computeProductReadiness,
   collectProblemVariants,
+  countEligibleProducts,
 } from './product-readiness';
 import type { ShopifyProduct } from '~/types/shopify';
 
@@ -111,5 +112,31 @@ describe('collectProblemVariants', () => {
       },
     ] as any);
     expect(rows[0].price).toBeNull();
+  });
+});
+
+describe('countEligibleProducts', () => {
+  it('conta 1 quando un prodotto ha 3 varianti di cui 1 con costo', () => {
+    const products = [makeProduct(['5.00', null, null])];
+    expect(countEligibleProducts(products)).toBe(1);
+  });
+
+  it('conta 0 quando un prodotto ha tutte le varianti senza costo', () => {
+    const products = [makeProduct([null, null])];
+    expect(countEligibleProducts(products)).toBe(0);
+  });
+
+  it('conta 2 quando ci sono due prodotti idonei e uno non idoneo', () => {
+    const products = [
+      makeProduct(['5.00'], { id: 1 }),
+      makeProduct(['3.00'], { id: 2 }),
+      makeProduct([null], { id: 3 }),
+    ];
+    expect(countEligibleProducts(products)).toBe(2);
+  });
+
+  it('conta il prodotto come idoneo quando una variante ha costo "0.00"', () => {
+    const products = [makeProduct(['0.00'])];
+    expect(countEligibleProducts(products)).toBe(1);
   });
 });

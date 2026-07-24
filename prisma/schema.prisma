@@ -70,6 +70,7 @@ model Shop {
   syncJobs          SyncJob[]
   customFields      CustomField[]
   fieldMappings     FieldMapping[]
+  eligibilitySnapshots ProductEligibilitySnapshot[]
 
   @@index([shopDomain])
   @@map("shops")
@@ -207,4 +208,18 @@ model SupabaseOAuthToken {
   shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
 
   @@map("supabase_oauth_tokens")
+}
+
+model ProductEligibilitySnapshot {
+  id            String   @id @default(uuid())
+  shopId        String   @map("shop_id")
+  // Giorno UTC dello snapshot: una riga per negozio per giorno.
+  day           DateTime @map("day") @db.Date
+  eligibleCount Int      @map("eligible_count")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@unique([shopId, day])
+  @@map("product_eligibility_snapshots")
 }

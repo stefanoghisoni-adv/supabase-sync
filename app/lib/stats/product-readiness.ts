@@ -24,6 +24,13 @@ export function computeProductReadiness(
   return { totalProducts: products.length, readyCount, problemCount };
 }
 
+// Prodotti DISTINTI con almeno una variante idonea. Unita' diversa da
+// readyCount, che conta le varianti: il tetto del piano (maxProducts) si applica
+// ai prodotti, quindi e' questo il numero da confrontare con quella soglia.
+export function countEligibleProducts(products: ShopifyProduct[]): number {
+  return products.filter((p) => p.variants.some((v) => isVariantReady(v.cost))).length;
+}
+
 // Riga di dettaglio per la tabella "Prodotti con problemi": una variante a cui
 // manca il valore richiesto (oggi cost_per_item, coerente con problemCount).
 export interface ProblemVariant {
