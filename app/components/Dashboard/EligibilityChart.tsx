@@ -1,4 +1,5 @@
-import { useState, useEffect, lazy, Suspense } from 'react';
+import { useState, useEffect, lazy, Suspense, Component } from 'react';
+import type { ReactNode } from 'react';
 import { Card, Text, BlockStack, SkeletonBodyText } from '@shopify/polaris';
 
 // Import DINAMICO: il modulo che contiene polaris-viz non deve finire nel grafo
@@ -25,6 +26,36 @@ interface EligibilityChartProps {
   points: EligibilityPoint[];
   planLimit: number | null;
   loading: boolean;
+}
+
+// Il chunk del grafico viene scaricato a parte, dopo l'idratazione: se quella
+// richiesta fallisce (rete, deploy appena aggiornato, chunk non piu' presente)
+// l'errore risalirebbe fino all'ErrorBoundary di root e porterebbe giu' l'intera
+// dashboard per un riquadro secondario. Qui lo fermiamo: il resto della pagina
+// resta usabile e al posto del grafico compare una riga di testo.
+// E' una class component perche' React non offre altro modo di intercettare un
+// errore di render; l'interfaccia che rende resta Polaris.
+class ChartErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  componentDidCatch(error: unknown) {
+    console.error('[EligibilityChart] caricamento del grafico fallito:', error);
+  }
+
+  render() {
+    if (this.state.failed) {
+      return (
+        <Text as="p" tone="subdued">
+          Grafico non disponibile al momento. Ricarica la pagina per riprovare.
+        </Text>
+      );
+    }
+    return this.props.children;
+  }
 }
 
 // Titolo e sottotitolo sono identici in tutti gli stati: la Card non deve
@@ -88,9 +119,11 @@ export function EligibilityChart({ points, planLimit, loading }: EligibilityChar
 
   return (
     <ChartCard>
-      <Suspense fallback={skeleton}>
-        <EligibilityChartCanvas series={series} />
-      </Suspense>
+      <ChartErrorBoundary>
+        <Suspense fallback={skeleton}>
+          <EligibilityChartCanvas series={series} />
+        </Suspense>
+      </ChartErrorBoundary>
     </ChartCard>
   );
 }
