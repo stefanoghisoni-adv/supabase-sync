@@ -28,6 +28,7 @@ import { resolveSyncState } from '~/components/Dashboard/sync-state';
 import { enqueueManualSync, triggerSyncDrain } from '~/lib/queue/trigger.server';
 import { authenticate } from '~/shopify.server';
 import { ShopifyAPIClient } from '~/lib/shopify-api.server';
+import { hasPlanChanged, syncButtonLabel, planChangeBanner } from '~/components/Dashboard/plan-upgrade';
 
 // Solo per questo store mostriamo il messaggio d'errore reale (utile in debug),
 // invece del generico "Errore interno": gli altri merchant non devono vedere
@@ -105,6 +106,24 @@ export async function loader({ request }: LoaderFunctionArgs) {
       shop.supabaseConfig?.connectionVerifiedAt,
     );
 
+    // Piano dell'ultima sync: serve a capire se c'e' altro da sincronizzare e a
+    // dire, nel banner, se il tetto prodotti e' salito o sceso.
+    const planChanged = hasPlanChanged(shop.currentPlan, shop.lastSyncedPlan);
+    const previousPlan = planChanged && shop.lastSyncedPlan
+      ? await prisma.plan.findUnique({ where: { planName: shop.lastSyncedPlan } })
+      : null;
+
+    // Il banner si mostra una volta sola nella vita del negozio: lo si marca qui,
+    // al primo render che lo mostrerebbe, cosi' alla riapertura dell'app non
+    // torna. Dentro la sessione resta vivo grazie al sessionStorage lato client.
+    const bannerFirstShow = planChanged && shop.planBannerShownAt == null;
+    if (bannerFirstShow) {
+      await prisma.shop.update({
+        where: { id: shop.id },
+        data: { planBannerShownAt: new Date() },
+      });
+    }
+
     return json({
       shop,
       plan,
@@ -112,6 +131,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
       customersEnabled,
       syncState,
       authorization,
+      planChanged,
+      currentMaxProducts: plan?.maxProducts ?? null,
+      previousMaxProducts: previousPlan?.maxProducts ?? null,
+      bannerFirstShow,
     });
   } catch (err) {
     // Le Response (redirect di auth, 404) devono passare intatte.
@@ -192,7 +215,7 @@ interface CustomerStatsResponse {
 }
 
 export default function Dashboard() {
-  const { shop, plan, supabaseConnected, customersEnabled, authorization, syncState } =
+  const { shop, plan, supabaseConnected, customersEnabled, authorization, syncState, planChanged, currentMaxProducts, previousMaxProducts, bannerFirstShow } =
     useLoaderData<typeof loader>();
   const blocked = authorization !== 'ENABLED';
   const navigate = useNavigate();
@@ -279,12 +302,59 @@ export default function Dashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inProgress, syncCompleted]);
 
-  const syncDisabled = blocked || inProgress || syncCompleted;
+  // A sync completata il pulsante resta disabilitato FINCHE' il piano non cambia:
+  // al cambio c'e' altro da sincronizzare (clienti e/o prodotti oltre il vecchio
+  // tetto), quindi torna disponibile. Dopo la nuova sync lastSyncedPlan si
+  // riallinea e il pulsante si ridisabilita da solo.
+  const syncDisabled = blocked || inProgress || (syncCompleted && !planChanged);
 
   const steps = resolveStepStates(supabaseConnected);
-  const syncTitle = customersEnabled
-    ? 'Sincronizza prodotti e clienti'
-    : 'Sincronizza prodotti';
+  const syncTitle = syncButtonLabel({ planChanged, customersEnabled });
+
+  // Ciclo di vita del banner:
+  // - sessionStorage lo tiene vivo navigando fra le tab (stessa iframe) e muore
+  //   con la chiusura di app/Shopify, che e' esattamente il comportamento voluto;
+  // - il flag persistente scritto dal loader impedisce che torni alla riapertura.
+  // Nessuno dei due meccanismi da solo soddisfa entrambe le richieste.
+  const BANNER_KEY = 'planChangeBannerShownAt';
+  const FLOOR_MS = 120_000;
+
+  const [bannerAt, setBannerAt] = useState<number | null>(null);
+  const [bannerDismissed, setBannerDismissed] = useState(false);
+  const [, forceTick] = useState(0);
+
+  useEffect(() => {
+    const stored = sessionStorage.getItem(BANNER_KEY);
+    if (stored) {
+      setBannerAt(Number(stored));
+      return;
+    }
+    if (bannerFirstShow) {
+      const now = Date.now();
+      sessionStorage.setItem(BANNER_KEY, String(now));
+      setBannerAt(now);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Al superamento dei 2 minuti il banner diventa chiudibile: serve un re-render
+  // al momento giusto, altrimenti la X comparirebbe solo alla prossima
+  // interazione.
+  useEffect(() => {
+    if (bannerAt === null) return;
+    const remaining = FLOOR_MS - (Date.now() - bannerAt);
+    if (remaining <= 0) return;
+    const id = setTimeout(() => forceTick((n) => n + 1), remaining);
+    return () => clearTimeout(id);
+  }, [bannerAt]);
+
+  const showPlanBanner = bannerAt !== null && !bannerDismissed;
+  const bannerClosable = bannerAt !== null && Date.now() - bannerAt >= FLOOR_MS;
+  const planBanner = planChangeBanner({
+    currentMax: currentMaxProducts,
+    previousMax: previousMaxProducts,
+    customersEnabled,
+  });
 
   // Skeleton per i numeri di anteprima finché i conteggi non sono pronti.
   const numberSkeleton = (
@@ -431,6 +501,16 @@ export default function Dashboard() {
               Il periodo di prova è terminato: il tracciamento che utilizza le tabelle Supabase
               è sospeso. Aggiorna il piano per riattivarlo.
             </Text>
+          </Banner>
+        )}
+
+        {showPlanBanner && (
+          <Banner
+            tone={planBanner.tone}
+            title={planBanner.title}
+            onDismiss={bannerClosable ? () => setBannerDismissed(true) : undefined}
+          >
+            <Text as="p">{planBanner.message}</Text>
           </Banner>
         )}
 
