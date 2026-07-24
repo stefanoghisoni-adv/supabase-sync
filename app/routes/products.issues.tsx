@@ -534,14 +534,19 @@ export default function ProblemProducts() {
             </IndexTable>
             {totalPages > 1 && (
               <Box padding="400">
-                <InlineStack align="center">
+                {/* Numeri fuori dalle frecce, a destra: la label integrata di
+                    Pagination starebbe in mezzo ai due pulsanti, qui invece la
+                    rendiamo come Text accanto al gruppo di frecce. */}
+                <InlineStack align="center" blockAlign="center" gap="300">
                   <Pagination
                     hasPrevious={page > 1}
                     onPrevious={() => setPage((p) => p - 1)}
                     hasNext={page < totalPages}
                     onNext={() => setPage((p) => p + 1)}
-                    label={`Pagina ${page} di ${totalPages}`}
                   />
+                  <Text as="span" tone="subdued">
+                    {page} di {totalPages}
+                  </Text>
                 </InlineStack>
               </Box>
             )}
