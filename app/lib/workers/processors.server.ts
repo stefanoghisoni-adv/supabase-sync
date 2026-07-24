@@ -12,6 +12,7 @@ import { isProductLimitReached } from '../limits/product-limit';
 import { enrichVariantCosts } from '../stats/inventory-cost.server';
 import { filterEligibleProductRows } from '../eligibility/product-eligibility';
 import type { ShopifyCustomer } from '~/types/shopify';
+import { isCustomerOptedIn } from '../stats/customer-consent-stats';
 
 /**
  * Syncs customers from Shopify into the merchant's Supabase `customers` table.
@@ -40,7 +41,13 @@ async function syncCustomers(
 
     if (!customers || customers.length === 0) break;
 
-    const rows = (customers as ShopifyCustomer[]).map(transformCustomer);
+    // Solo i consenzienti finiscono su Supabase: i dati di chi non ha acconsentito
+    // al marketing non devono proprio entrare. Chi revoca DOPO essere stato
+    // sincronizzato non viene rimosso (lo storico e l'LTV restano) ma le sue
+    // letture sono negate dal proxy: i due meccanismi si completano.
+    const rows = (customers as ShopifyCustomer[])
+      .filter(isCustomerOptedIn)
+      .map(transformCustomer);
 
     const chunkSize = 1000;
     for (let i = 0; i < rows.length; i += chunkSize) {

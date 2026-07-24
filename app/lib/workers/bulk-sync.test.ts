@@ -621,4 +621,58 @@ describe('Initial bulk sync processor', () => {
       }),
     );
   });
+
+  it('sincronizza solo i clienti opt-in', async () => {
+    const mockShop = {
+      id: 'shop-1',
+      shopDomain: 'test-shop.myshopify.com',
+      accessToken: 'encrypted-token',
+      authorization: 'ENABLED',
+      currentPlan: 'pro',
+      supabaseConfig: {
+        syncEnabled: true,
+        tableNameProducts: 'products',
+        tableNameCustomers: 'customers',
+        supabaseUrl: 'https://test.supabase.co',
+        supabasePublicKey: 'k',
+        supabaseServiceRoleKey: 's',
+      },
+    };
+    vi.mocked(prisma.shop.findUnique).mockResolvedValue(mockShop as any);
+    vi.mocked(prisma.plan.findUnique).mockResolvedValue({ maxProducts: null, customersSyncEnabled: true } as any);
+    vi.mocked(prisma.syncJob.create).mockResolvedValue({ id: 'job-1' } as any);
+    vi.mocked(prisma.syncJob.update).mockResolvedValue({} as any);
+    vi.mocked(prisma.shop.update).mockResolvedValue({} as any);
+
+    const upserted: any[] = [];
+    vi.mocked(createSupabaseClient).mockReturnValue({
+      from: () => ({
+        upsert: (rows: any[]) => { upserted.push(...rows); return { error: null }; },
+        delete: () => ({
+          gte: vi.fn().mockReturnValue({ error: null }),
+          lt: vi.fn().mockReturnValue({ error: null }),
+        }),
+      }),
+    } as any);
+
+    vi.mocked(ShopifyAPIClient).mockImplementation(() => ({
+      getProducts: vi.fn().mockResolvedValue({ products: [], nextPageInfo: null }),
+      getCustomers: vi.fn().mockResolvedValue({
+        customers: [
+          { id: 1, email: 'si@x.it', email_marketing_consent: { state: 'subscribed' } },
+          { id: 2, email: 'no@x.it', email_marketing_consent: { state: 'unsubscribed' } },
+          { id: 3, email: 'legacy@x.it', accepts_marketing: true },
+        ],
+        nextPageInfo: null,
+      }),
+    }) as any);
+
+    await processInitialBulkSync('shop-1', { updateProgress: vi.fn() } as any);
+
+    // Solo i due consenzienti (nidificato subscribed + legacy true).
+    const customerIds = upserted
+      .filter((r) => r.shopify_customer_id != null)
+      .map((r) => r.shopify_customer_id);
+    expect(customerIds).toEqual([1, 3]);
+  });
 });
