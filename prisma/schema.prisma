@@ -52,6 +52,12 @@ model Shop {
   // Fuso orario IANA del negozio (es. Europe/Rome), letto da Shopify e
   // memorizzato: rende le date del log identiche su server e client.
   ianaTimezone      String?            @map("iana_timezone")
+  // Piano con cui e' stata eseguita l'ultima sync completata. Confrontandolo con
+  // currentPlan si capisce se il piano e' cambiato e c'e' altro da sincronizzare.
+  lastSyncedPlan    String?            @map("last_synced_plan")
+  // Istante in cui il banner di cambio piano e' stato mostrato la prima volta:
+  // garantisce che non riappaia dopo la chiusura dell'app.
+  planBannerShownAt DateTime?          @map("plan_banner_shown_at")
 
   // Token-proxy per le letture di tracciamento (Stape/GTM). Persistito solo come
   // hash (lookup) + cifrato (per mostrarlo in Impostazioni), mai in chiaro.

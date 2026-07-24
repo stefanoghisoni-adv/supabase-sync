@@ -6,6 +6,7 @@ vi.mock('../../db.server', () => ({
   prisma: {
     shop: {
       findUnique: vi.fn(),
+      update: vi.fn(),
     },
     syncJob: {
       create: vi.fn(),
@@ -575,5 +576,49 @@ describe('Initial bulk sync processor', () => {
 
     // Il tetto e' una terminazione regolare: la spazzata deve avvenire.
     expect(deleteCalls.some((c) => c.method === 'lt')).toBe(true);
+  });
+
+  it('registra il piano usato quando la sync si completa', async () => {
+    const mockShop = {
+      id: 'shop-1',
+      shopDomain: 'test-shop.myshopify.com',
+      accessToken: 'encrypted-token',
+      authorization: 'ENABLED',
+      currentPlan: 'pro',
+      supabaseConfig: {
+        syncEnabled: true,
+        tableNameProducts: 'products',
+        tableNameCustomers: 'customers',
+        supabaseUrl: 'https://test.supabase.co',
+        supabasePublicKey: 'k',
+        supabaseServiceRoleKey: 's',
+      },
+    };
+    vi.mocked(prisma.shop.findUnique).mockResolvedValue(mockShop as any);
+    vi.mocked(prisma.plan.findUnique).mockResolvedValue({ maxProducts: null, customersSyncEnabled: false } as any);
+    vi.mocked(prisma.syncJob.create).mockResolvedValue({ id: 'job-1' } as any);
+    vi.mocked(prisma.syncJob.update).mockResolvedValue({} as any);
+    vi.mocked(prisma.shop.update).mockResolvedValue({} as any);
+
+    const mockGte = vi.fn().mockReturnValue({ error: null });
+    const mockLt = vi.fn().mockReturnValue({ error: null });
+    vi.mocked(createSupabaseClient).mockReturnValue({
+      from: () => ({
+        upsert: vi.fn().mockReturnValue({ error: null }),
+        delete: () => ({ gte: mockGte, lt: mockLt }),
+      }),
+    } as any);
+    vi.mocked(ShopifyAPIClient).mockImplementation(() => ({
+      getProducts: vi.fn().mockResolvedValue({ products: [], nextPageInfo: null }),
+    }) as any);
+
+    await processInitialBulkSync('shop-1', { updateProgress: vi.fn() } as any);
+
+    expect(prisma.shop.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'shop-1' },
+        data: expect.objectContaining({ lastSyncedPlan: 'pro' }),
+      }),
+    );
   });
 });

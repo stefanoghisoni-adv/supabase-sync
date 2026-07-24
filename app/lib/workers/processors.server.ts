@@ -474,6 +474,14 @@ export async function processInitialBulkSync(shopId: string, job: Job<any>): Pro
       },
     });
 
+    // Il piano con cui questa sync e' stata eseguita: se in futuro currentPlan
+    // differisce, la dashboard sa che c'e' altro da sincronizzare e riabilita il
+    // pulsante. Si riallinea da solo a ogni sync completata.
+    await prisma.shop.update({
+      where: { id: shop.id },
+      data: { lastSyncedPlan: shop.currentPlan },
+    });
+
     console.log(`Bulk sync completed: ${totalProducts} products, ${totalVariants} variants, ${totalCustomers} customers`);
 
   } catch (error) {
