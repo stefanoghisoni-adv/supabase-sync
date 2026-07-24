@@ -12,7 +12,6 @@ import {
   Box,
   IndexTable,
   Banner,
-  Button,
   Text,
   Link,
   Icon,
@@ -20,6 +19,7 @@ import {
   TextField,
   InlineStack,
   BlockStack,
+  Pagination,
 } from '@shopify/polaris';
 import { CheckCircleIcon } from '@shopify/polaris-icons';
 import { authenticate } from '~/shopify.server';
@@ -37,6 +37,9 @@ import {
   collectProblemVariants,
   type ProblemVariant,
 } from '~/lib/stats/product-readiness';
+import { filterProblemVariants, pageCount, pageSlice } from '~/lib/stats/problem-filter';
+
+const PER_PAGE = 20;
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const { session } = await authenticate.admin(request);
@@ -268,6 +271,7 @@ function CostRow({
       </IndexTable.Cell>
       <IndexTable.Cell>{row.variantTitle}</IndexTable.Cell>
       <IndexTable.Cell>{row.sku ?? '—'}</IndexTable.Cell>
+      <IndexTable.Cell>{row.price ?? '—'}</IndexTable.Cell>
       <IndexTable.Cell>
         <div
           style={{ maxWidth: 120 }}
@@ -322,6 +326,24 @@ export default function ProblemProducts() {
   const [values, setValues] = useState<Record<number, string>>({});
   const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
   const [removedCount, setRemovedCount] = useState(0);
+  const [query, setQuery] = useState('');
+  const [page, setPage] = useState(1);
+
+  const filtered = filterProblemVariants(rows, query);
+  const totalPages = pageCount(filtered.length, PER_PAGE);
+  const visibleRows = pageSlice(filtered, page, PER_PAGE);
+
+  // Cambiando la ricerca si riparte da pagina 1: restare a pagina 4 su un
+  // risultato di 2 pagine mostrerebbe una tabella vuota senza spiegazione.
+  useEffect(() => {
+    setPage(1);
+  }, [query]);
+
+  // Le righe risolte vengono rimosse dall'elenco: se cosi' la pagina corrente
+  // resta oltre la fine, si arretra.
+  useEffect(() => {
+    if (totalPages > 0 && page > totalPages) setPage(totalPages);
+  }, [totalPages, page]);
 
   const recheckFetcher = useFetcher<{
     ok?: boolean;
@@ -385,7 +407,16 @@ export default function ProblemProducts() {
   }, [recheckFetcher.data]);
 
   return (
-    <Page title="Prodotti con problemi" backAction={{ url: '/' }}>
+    <Page
+      title="Prodotti con problemi"
+      backAction={{ url: '/' }}
+      primaryAction={{
+        content: 'Ricontrolla e aggiorna',
+        onAction: runRecheck,
+        loading: rechecking,
+        disabled: !hasChanges || blocked,
+      }}
+    >
       <BlockStack gap="400">
         {error && <Banner tone="critical">{error}</Banner>}
 
@@ -418,36 +449,39 @@ export default function ProblemProducts() {
         {rows.length > 0 && (
           <Card padding="0">
             <Box padding="400">
-              <InlineStack align="space-between" blockAlign="center" gap="400">
+              <BlockStack gap="300">
+                <TextField
+                  label="Cerca"
+                  labelHidden
+                  value={query}
+                  onChange={setQuery}
+                  autoComplete="off"
+                  placeholder="Cerca per titolo, variante, SKU, ID prodotto o prezzo"
+                  clearButton
+                  onClearButtonClick={() => setQuery('')}
+                />
                 <Text as="p" tone="subdued">
-                  {rows.length}{' '}
-                  {rows.length === 1 ? 'variante' : 'varianti'} a cui manca il valore{' '}
+                  {filtered.length}{' '}
+                  {filtered.length === 1 ? 'variante' : 'varianti'} a cui manca il valore{' '}
                   <code>cost_per_item</code>. Inserisci il costo e premi Invio (o
                   esci dal campo): viene salvato su Shopify e Supabase.
                 </Text>
-                <Button
-                  variant="primary"
-                  onClick={runRecheck}
-                  loading={rechecking}
-                  disabled={!hasChanges || blocked}
-                >
-                  Ricontrolla e aggiorna
-                </Button>
-              </InlineStack>
+              </BlockStack>
             </Box>
             <IndexTable
               resourceName={{ singular: 'variante', plural: 'varianti' }}
-              itemCount={rows.length}
+              itemCount={visibleRows.length}
               selectable={false}
               headings={[
                 { title: 'Prodotto' },
                 { title: 'Variante' },
                 { title: 'SKU' },
+                { title: 'Prezzo' },
                 { title: 'cost_per_item' },
                 { title: '' },
               ]}
             >
-              {rows.map((r, i) => (
+              {visibleRows.map((r, i) => (
                 <CostRow
                   key={r.variantId}
                   row={r}
@@ -461,6 +495,19 @@ export default function ProblemProducts() {
                 />
               ))}
             </IndexTable>
+            {totalPages > 1 && (
+              <Box padding="400">
+                <InlineStack align="center">
+                  <Pagination
+                    hasPrevious={page > 1}
+                    onPrevious={() => setPage((p) => p - 1)}
+                    hasNext={page < totalPages}
+                    onNext={() => setPage((p) => p + 1)}
+                    label={`Pagina ${page} di ${totalPages}`}
+                  />
+                </InlineStack>
+              </Box>
+            )}
           </Card>
         )}
       </BlockStack>
