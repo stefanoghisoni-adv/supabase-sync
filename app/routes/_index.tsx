@@ -317,6 +317,11 @@ export default function Dashboard() {
   // - il flag persistente scritto dal loader impedisce che torni alla riapertura.
   // Nessuno dei due meccanismi da solo soddisfa entrambe le richieste.
   const BANNER_KEY = 'planChangeBannerShownAt';
+  // Anche la chiusura va nel sessionStorage: Dashboard e Logs sono route diverse,
+  // quindi cambiando tab il componente si smonta e uno useState si azzererebbe —
+  // il banner riapparirebbe pur essendo stato chiuso. Cosi' invece la chiusura
+  // sopravvive alla navigazione e muore con la sessione, come il banner stesso.
+  const DISMISSED_KEY = 'planChangeBannerDismissed';
   const FLOOR_MS = 120_000;
 
   const [bannerAt, setBannerAt] = useState<number | null>(null);
@@ -324,6 +329,10 @@ export default function Dashboard() {
   const [, forceTick] = useState(0);
 
   useEffect(() => {
+    if (sessionStorage.getItem(DISMISSED_KEY)) {
+      setBannerDismissed(true);
+      return;
+    }
     const stored = sessionStorage.getItem(BANNER_KEY);
     if (stored) {
       setBannerAt(Number(stored));
@@ -336,6 +345,11 @@ export default function Dashboard() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const dismissBanner = () => {
+    sessionStorage.setItem(DISMISSED_KEY, '1');
+    setBannerDismissed(true);
+  };
 
   // Al superamento dei 2 minuti il banner diventa chiudibile: serve un re-render
   // al momento giusto, altrimenti la X comparirebbe solo alla prossima
@@ -508,7 +522,7 @@ export default function Dashboard() {
           <Banner
             tone={planBanner.tone}
             title={planBanner.title}
-            onDismiss={bannerClosable ? () => setBannerDismissed(true) : undefined}
+            onDismiss={bannerClosable ? dismissBanner : undefined}
           >
             <Text as="p">{planBanner.message}</Text>
           </Banner>
