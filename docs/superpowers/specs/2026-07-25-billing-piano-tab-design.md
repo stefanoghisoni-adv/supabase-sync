@@ -15,18 +15,21 @@ placeholder. Il wiring del billing (creazione abbonamento, approvazione, stato)
 
 Dentro:
 - Nuova route `app/routes/plan.tsx` con la pricing table a 4 card.
-- Voce **Piano** nella `NavMenu` di `app/root.tsx`.
+- Voce **Piano** nella `NavMenu` di `app/root.tsx`, posizionata **subito prima di
+  Impostazioni** (ordine finale: Dashboard, Prodotti con problemi, Logs, Piano,
+  Impostazioni).
 - Catalogo piani/feature in un config tipizzato in codice.
 - Helper puro per l'ordinamento delle feature (verdi in alto) + test.
 - Azione "Impostazioni" a livello del titolo tab (coerente con Dashboard e Logs).
 - Spazio in fondo alla tab (`Box paddingBlockEnd`), come le altre tab.
+- **Allineamento frequenza Free a 7 giorni**: il cron reale del piano Free passa da
+  24h a 168h (7 giorni), così vetrina e comportamento coincidono. Vedi sezione
+  dedicata più sotto.
 
 Fuori:
 - Shopify Billing API / creazione o cambio abbonamento reale.
 - Toggle mensile/annuale (mostriamo solo il prezzo mensile).
-- Modifiche all'enforcement o al cron (es. allineare la frequenza reale del Free
-  a 7 giorni): il config è presentazione, la frequenza tecnica resta nel seed.
-- Lettura dei piani dal DB.
+- Lettura dei piani dal DB (per la vetrina; la frequenza Free resta nel `Plan`).
 
 ## Fonte dati: config in codice
 
@@ -112,17 +115,39 @@ l'id corrente alla vista; la card corrispondente mostra il badge "Piano attuale"
 il bottone disabilitato. Se `currentPlan` non è tra i 4 (es. `lifetime`), nessuna
 card risulta "attuale" (nessun crash).
 
+## Frequenza sync del Free → 7 giorni
+
+`Plan.maxSyncFrequencyHours` guida sia lo scheduler (`scheduler.server.ts`,
+`api.cron.sync.tsx`: `intervalMs = maxSyncFrequencyHours * 3600 * 1000`) sia la
+label mostrata in Impostazioni. Portare il Free a 7 giorni richiede tre passi:
+
+1. **Seed** (`prisma/seed.ts`): `maxSyncFrequencyHours` del Free da `24` a `168`.
+2. **DB live**: il seed usa `createMany({ skipDuplicates: true })`, quindi **non**
+   tocca la riga esistente. Serve una UPDATE manuale una tantum:
+   `UPDATE plans SET max_sync_frequency_hours = 168 WHERE plan_name = 'free';`
+3. **Label** (`account-format.ts` `syncFrequencyLabel`): oggi 168h renderebbe
+   "Ogni 168 ore". Estendere: se `hours` è multiplo di 24 e ≥ 24 → "Ogni N giorni"
+   ("Ogni 7 giorni" per 168, "Ogni giorno" per 24). Aggiornare il relativo test.
+
+Così la vetrina della tab Piano ("Free: ogni 7 giorni") coincide con il cron reale
+e con la label in Impostazioni.
+
 ## Testing
 
 - `plan-features.test.ts`: `sortFeatures` mette i verdi prima dei grigi, è stabile,
   gestisce liste tutte-verdi / tutte-grigie / vuote.
 - `plan-catalog.test.ts`: integrità del catalogo — 4 piani nell'ordine atteso,
   esattamente un `recommended` (Pro), ogni piano ha le 5 feature attese.
+- `account-format.test.ts`: aggiungere casi per `syncFrequencyLabel` con i giorni
+  (168 → "Ogni 7 giorni", 24 → "Ogni giorno"), senza rompere i casi ore/minuti.
 
 ## Rischi / note
 
-- **Copy vs realtà**: il config annuncia "Free: ogni 7 giorni" mentre il seed ha
-  Free a 24h. Finché non allineiamo l'enforcement (slice futura), la vetrina e il
-  comportamento reale del cron divergono per il Free. Annotato consapevolmente.
 - Il CTA non fa nulla: va chiarito nell'handoff che è un placeholder in attesa del
   wiring Billing, così non sembra un bug.
+- La UPDATE del DB live (passo 2 sopra) è manuale e va eseguita in produzione:
+  senza, i negozi Free continuerebbero a sincronizzare ogni 24h mentre la vetrina
+  annuncia 7 giorni.
+- Label piano: `account-format.ts` mappa `pro → "Pro+"`. La spec usa "Pro" nel
+  catalogo della vetrina; se si vuole coerenza, allineare a "Pro+" (punto minore,
+  da decidere in implementazione).
