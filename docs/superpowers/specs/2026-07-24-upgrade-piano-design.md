@@ -73,20 +73,33 @@ principale dell'upgrade.
 
 ## Banner di upgrade
 
-**Quando compare:** il piano corrente è a pagamento (`Plan.priceMonthly > 0`) e il
-banner non è mai stato mostrato.
+**Quando compare:** al cambio di piano (`currentPlan !== lastSyncedPlan`), la prima
+volta in assoluto che quel cambio viene visto.
 
-**Quando sparisce:** è chiudibile con la X, e **dalla seconda apertura dell'app non
-riappare più**. Per ottenerlo il flag viene scritto **al primo render** che lo
-mostra, non alla chiusura: così anche chi non lo chiude non se lo ritrova al
-caricamento successivo.
+**Ciclo di vita**, come richiesto dall'owner:
 
-Nuovo campo su `Shop`:
+| Momento | Comportamento |
+|---|---|
+| Primi 2 minuti | visibile e **non chiudibile** (nessuna X) |
+| Dopo 2 minuti | compare la X, il merchant può chiuderlo |
+| Navigazione fra tab dell'app | **resta vivo** |
+| App o Shopify chiusi | **non riappare mai più** |
 
-- `upgradeBannerShownAt DateTime?` → colonna `upgrade_banner_shown_at`
+Le ultime due voci richiedono **due meccanismi distinti**, perché nessuno dei due
+da solo le soddisfa entrambe:
 
-Compare una sola volta nella vita del negozio, alla prima attivazione di un piano
-a pagamento: un secondo upgrade (es. Pro → Business) non lo ripropone.
+- **`sessionStorage`** — sopravvive alla navigazione fra tab (è la stessa iframe,
+  navigazione client-side) ma muore alla chiusura della scheda. Tiene il banner in
+  vita durante la sessione e ne memorizza l'istante di comparsa per i 2 minuti.
+- **Flag persistente su `Shop`** — `planBannerShownAt DateTime?` (colonna
+  `plan_banner_shown_at`), scritto **dal loader al primo render** che lo mostra.
+  Garantisce che alla riapertura dell'app non torni.
+
+Col solo `sessionStorage` il banner tornerebbe a ogni riapertura; col solo flag
+persistente sparirebbe già cambiando tab.
+
+Compare una sola volta nella vita del negozio: un secondo cambio di piano non lo
+ripropone.
 
 **Contenuto** (`Banner tone="success"`, con `onDismiss`):
 
@@ -106,7 +119,7 @@ selezionerebbe in ogni query su `shops` facendole fallire tutte.
 
 ```sql
 ALTER TABLE "shops" ADD COLUMN IF NOT EXISTS "last_synced_plan" TEXT;
-ALTER TABLE "shops" ADD COLUMN IF NOT EXISTS "upgrade_banner_shown_at" TIMESTAMP;
+ALTER TABLE "shops" ADD COLUMN IF NOT EXISTS "plan_banner_shown_at" TIMESTAMP;
 ```
 
 ## Fuori scope
