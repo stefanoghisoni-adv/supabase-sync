@@ -19,6 +19,7 @@ import { ProductsCard } from '~/components/Dashboard/ProductsCard';
 import { CustomersCard } from '~/components/Dashboard/CustomersCard';
 import { PlanBanner } from '~/components/Dashboard/PlanBanner';
 import { Stepper, type StepperItem } from '~/components/Dashboard/Stepper';
+import { EligibilityChart } from '~/components/Dashboard/EligibilityChart';
 import { resolveStepStates } from '~/components/Dashboard/stepper-state';
 import { SupabaseConnect } from '~/components/Dashboard/SupabaseConnect';
 import { prisma } from '~/db.server';
@@ -214,6 +215,11 @@ interface CustomerStatsResponse {
   cached?: boolean;
 }
 
+interface ProductHistoryResponse {
+  points: { day: string; count: number }[];
+  planLimit: number | null;
+}
+
 export default function Dashboard() {
   const { shop, plan, supabaseConnected, customersEnabled, authorization, syncState, planChanged, currentMaxProducts, previousMaxProducts, bannerFirstShow } =
     useLoaderData<typeof loader>();
@@ -240,11 +246,13 @@ export default function Dashboard() {
   const readinessRefreshFetcher = useFetcher<ReadinessResponse>();
   const customerStatsFetcher = useFetcher<CustomerStatsResponse>();
   const customerStatsRefreshFetcher = useFetcher<CustomerStatsResponse>();
+  const historyFetcher = useFetcher<ProductHistoryResponse>();
 
   useEffect(() => {
     countsFetcher.load('/api/stats/counts');
     readinessFetcher.load('/api/stats/products');
     customerStatsFetcher.load('/api/stats/customers');
+    historyFetcher.load('/api/stats/product-history');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -562,6 +570,11 @@ export default function Dashboard() {
             tab dedicata "Logs". */}
         <InlineGrid columns={{ xs: 1, md: 2 }} gap="400">
           <Stepper steps={stepperItems} />
+          <EligibilityChart
+            points={historyFetcher.data?.points ?? []}
+            planLimit={historyFetcher.data?.planLimit ?? null}
+            loading={!historyFetcher.data}
+          />
         </InlineGrid>
       </BlockStack>
     </Page>
