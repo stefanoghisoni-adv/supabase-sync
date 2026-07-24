@@ -648,6 +648,9 @@ describe('Initial bulk sync processor', () => {
     vi.mocked(createSupabaseClient).mockReturnValue({
       from: () => ({
         upsert: (rows: any[]) => { upserted.push(...rows); return { error: null }; },
+        update: () => ({
+          in: () => ({ error: null }),
+        }),
         delete: () => ({
           gte: vi.fn().mockReturnValue({ error: null }),
           lt: vi.fn().mockReturnValue({ error: null }),
@@ -674,5 +677,67 @@ describe('Initial bulk sync processor', () => {
       .filter((r) => r.shopify_customer_id != null)
       .map((r) => r.shopify_customer_id);
     expect(customerIds).toEqual([1, 3]);
+  });
+
+  it('marca accepts_marketing=false sui clienti che hanno revocato, senza inserirli', async () => {
+    const mockShop = {
+      id: 'shop-1',
+      shopDomain: 'test-shop.myshopify.com',
+      accessToken: 'encrypted-token',
+      authorization: 'ENABLED',
+      currentPlan: 'pro',
+      supabaseConfig: {
+        syncEnabled: true,
+        tableNameProducts: 'products',
+        tableNameCustomers: 'customers',
+        supabaseUrl: 'https://test.supabase.co',
+        supabasePublicKey: 'k',
+        supabaseServiceRoleKey: 's',
+      },
+    };
+    vi.mocked(prisma.shop.findUnique).mockResolvedValue(mockShop as any);
+    vi.mocked(prisma.plan.findUnique).mockResolvedValue({ maxProducts: null, customersSyncEnabled: true } as any);
+    vi.mocked(prisma.syncJob.create).mockResolvedValue({ id: 'job-1' } as any);
+    vi.mocked(prisma.syncJob.update).mockResolvedValue({} as any);
+    vi.mocked(prisma.shop.update).mockResolvedValue({} as any);
+
+    const upserted: any[] = [];
+    const revokedUpdates: Array<{ payload: any; ids: any }> = [];
+    vi.mocked(createSupabaseClient).mockReturnValue({
+      from: () => ({
+        upsert: (rows: any[]) => { upserted.push(...rows); return { error: null }; },
+        update: (payload: any) => ({
+          in: (_col: string, ids: any) => {
+            revokedUpdates.push({ payload, ids });
+            return { error: null };
+          },
+        }),
+        delete: () => ({
+          gte: vi.fn().mockReturnValue({ error: null }),
+          lt: vi.fn().mockReturnValue({ error: null }),
+        }),
+      }),
+    } as any);
+
+    vi.mocked(ShopifyAPIClient).mockImplementation(() => ({
+      getProducts: vi.fn().mockResolvedValue({ products: [], nextPageInfo: null }),
+      getCustomers: vi.fn().mockResolvedValue({
+        customers: [
+          { id: 1, email: 'si@x.it', email_marketing_consent: { state: 'subscribed' } },
+          { id: 2, email: 'no@x.it', email_marketing_consent: { state: 'unsubscribed' } },
+          { id: 4, email: 'no2@x.it', email_marketing_consent: { state: 'unsubscribed' } },
+        ],
+        nextPageInfo: null,
+      }),
+    }) as any);
+
+    await processInitialBulkSync('shop-1', { updateProgress: vi.fn() } as any);
+
+    // I revocanti NON finiscono nell'upsert...
+    expect(upserted.map((r) => r.shopify_customer_id).filter((v) => v != null)).toEqual([1]);
+    // ...ma vengono marcati in una sola chiamata.
+    expect(revokedUpdates).toHaveLength(1);
+    expect(revokedUpdates[0].payload).toEqual({ accepts_marketing: false });
+    expect(revokedUpdates[0].ids).toEqual([2, 4]);
   });
 });
