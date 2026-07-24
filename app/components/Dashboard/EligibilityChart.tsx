@@ -1,7 +1,20 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { Card, Text, BlockStack, SkeletonBodyText } from '@shopify/polaris';
-import { LineChart, PolarisVizProvider } from '@shopify/polaris-viz';
-import type { DataSeries } from '@shopify/polaris-viz-core';
+
+// Import DINAMICO: il modulo che contiene polaris-viz non deve finire nel grafo
+// del server. Su Vercel il suo build CJS fa require('d3-scale'), che e' ESM-only,
+// e l'intero runtime muore con ERR_REQUIRE_ESM prima di servire qualunque pagina.
+// Con lazy() il chunk viene chiesto solo dal browser, dopo l'idratazione.
+const EligibilityChartCanvas = lazy(() => import('./EligibilityChartCanvas'));
+
+// Il tipo del canvas non si importa da polaris-viz-core: basterebbe un import
+// type per riportare il pacchetto nel grafo. Qui serve solo la forma dei dati.
+interface ChartSeries {
+  name: string;
+  data: { key: string; value: number }[];
+  color?: string;
+  styleOverride?: { line: { strokeDasharray: string; width: number; hasArea: boolean } };
+}
 
 interface EligibilityPoint {
   day: string; // YYYY-MM-DD
@@ -14,62 +27,56 @@ interface EligibilityChartProps {
   loading: boolean;
 }
 
+// Titolo e sottotitolo sono identici in tutti gli stati: la Card non deve
+// cambiare forma mentre i dati arrivano.
+function ChartCard({ children }: { children: React.ReactNode }) {
+  return (
+    <Card>
+      <BlockStack gap="200">
+        <Text as="h2" variant="headingMd">
+          Prodotti sincronizzabili
+        </Text>
+        <Text as="p" tone="subdued">
+          Ultimi 30 giorni
+        </Text>
+        {children}
+      </BlockStack>
+    </Card>
+  );
+}
+
 export function EligibilityChart({ points, planLimit, loading }: EligibilityChartProps) {
-  // polaris-viz tocca window in fase di render: in SSR fallirebbe con
-  // "window is not defined". Si monta solo dopo l'idratazione, con uno
-  // SkeletonBodyText al posto suo nel frattempo.
+  // Il grafico esiste solo nel browser: in SSR si rende lo scheletro.
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
-  // Lo skeleton si mostra durante il caricamento iniziale O prima dell'idratazione.
+  const skeleton = <SkeletonBodyText lines={8} />;
+
   if (loading || !mounted) {
-    return (
-      <Card>
-        <BlockStack gap="200">
-          <Text as="h2" variant="headingMd">
-            Prodotti sincronizzabili
-          </Text>
-          <Text as="p" tone="subdued">
-            Ultimi 30 giorni
-          </Text>
-          <div style={{ height: 260 }}>
-            <SkeletonBodyText lines={8} />
-          </div>
-        </BlockStack>
-      </Card>
-    );
+    return <ChartCard>{skeleton}</ChartCard>;
   }
 
-  // Stato vuoto: nessuno snapshot ancora. Con un solo punto il grafico si disegna
-  // comunque (un marker isolato): va bene, non è un caso speciale.
+  // Nessuno snapshot ancora: lo storico si costruisce un giorno alla volta.
+  // Con un solo punto il grafico si disegna comunque (un marker isolato).
   if (points.length === 0) {
     return (
-      <Card>
-        <BlockStack gap="200">
-          <Text as="h2" variant="headingMd">
-            Prodotti sincronizzabili
-          </Text>
-          <Text as="p" tone="subdued">
-            Ultimi 30 giorni
-          </Text>
-          <Text as="p" tone="subdued">
-            Lo storico si costruisce da qui in avanti, un punto al giorno.
-          </Text>
-        </BlockStack>
-      </Card>
+      <ChartCard>
+        <Text as="p" tone="subdued">
+          Lo storico si costruisce da qui in avanti, un punto al giorno.
+        </Text>
+      </ChartCard>
     );
   }
 
-  // Serie principale: i prodotti sincronizzabili.
-  const series: DataSeries[] = [
+  const series: ChartSeries[] = [
     {
       name: 'Prodotti sincronizzabili',
       data: points.map((p) => ({ key: p.day, value: p.count })),
     },
   ];
 
-  // La soglia del piano come seconda serie costante (non Annotation: le Annotation
-  // non espongono il colore, mentre una serie sì).
+  // La soglia del piano e' una seconda serie costante, non una Annotation: le
+  // Annotation di polaris-viz non espongono il colore, una serie si'.
   if (planLimit != null) {
     series.push({
       name: 'Limite del piano',
@@ -80,23 +87,10 @@ export function EligibilityChart({ points, planLimit, loading }: EligibilityChar
   }
 
   return (
-    <Card>
-      <BlockStack gap="200">
-        <Text as="h2" variant="headingMd">
-          Prodotti sincronizzabili
-        </Text>
-        <Text as="p" tone="subdued">
-          Ultimi 30 giorni
-        </Text>
-        {/* polaris-viz richiede un contenitore con altezza esplicita per disegnare:
-            nessun componente Polaris lo fornisce, quindi un div con style inline
-            è l'unica eccezione ammessa ai vincoli "solo Polaris". */}
-        <div style={{ height: 260 }}>
-          <PolarisVizProvider>
-            <LineChart data={series} />
-          </PolarisVizProvider>
-        </div>
-      </BlockStack>
-    </Card>
+    <ChartCard>
+      <Suspense fallback={skeleton}>
+        <EligibilityChartCanvas series={series} />
+      </Suspense>
+    </ChartCard>
   );
 }
