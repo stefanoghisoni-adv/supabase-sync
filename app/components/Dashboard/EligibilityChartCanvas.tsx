@@ -13,16 +13,22 @@ import type { DataSeries } from '@shopify/polaris-viz-core';
 
 interface Props {
   series: DataSeries[];
+  // Tetto dell'asse Y: forza polaris-viz a lasciare respiro sopra il limite del
+  // piano (vedi computeChartYMax). undefined = auto-scale.
+  maxY?: number;
 }
 
-export default function EligibilityChartCanvas({ series }: Props) {
+export default function EligibilityChartCanvas({ series, maxY }: Props) {
   return (
     // polaris-viz richiede un contenitore con altezza esplicita per disegnare:
     // nessun componente Polaris la impone, quindi qui lo style inline e' l'unica
     // eccezione ammessa al vincolo "solo Polaris".
     <div style={{ height: 260 }}>
       <PolarisVizProvider>
-        <LineChart data={series} />
+        <LineChart
+          data={series}
+          yAxisOptions={maxY != null ? { maxYOverride: maxY } : undefined}
+        />
       </PolarisVizProvider>
     </div>
   );

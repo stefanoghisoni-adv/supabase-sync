@@ -1,6 +1,7 @@
 import { useState, useEffect, lazy, Suspense, Component } from 'react';
 import type { ReactNode } from 'react';
 import { Card, Text, BlockStack, SkeletonBodyText } from '@shopify/polaris';
+import { computeChartYMax } from './chart-scale';
 
 // Import DINAMICO: il modulo che contiene polaris-viz non deve finire nel grafo
 // del server. Su Vercel il suo build CJS fa require('d3-scale'), che e' ESM-only,
@@ -117,11 +118,18 @@ export function EligibilityChart({ points, planLimit, loading }: EligibilityChar
     });
   }
 
+  // Tetto dell'asse Y sopra il limite del piano: senza, la linea tratteggiata
+  // arancione cadrebbe sul bordo superiore (con 3 sincronizzabili su un limite
+  // di 100 sarebbe quasi invisibile). Con il tetto un po' piu' alto resta a mezza
+  // altezza e ben leggibile.
+  const maxData = points.reduce((m, p) => Math.max(m, p.count), 0);
+  const maxY = computeChartYMax(planLimit, maxData);
+
   return (
     <ChartCard>
       <ChartErrorBoundary>
         <Suspense fallback={skeleton}>
-          <EligibilityChartCanvas series={series} />
+          <EligibilityChartCanvas series={series} maxY={maxY} />
         </Suspense>
       </ChartErrorBoundary>
     </ChartCard>
