@@ -21,6 +21,7 @@ import {
   getReadProxyTokenForDisplay,
   issueReadProxyToken,
 } from '~/lib/read-proxy/token.server';
+import { AccountCard } from '~/components/Dashboard/AccountCard';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const { session } = await authenticate.admin(request);
@@ -30,9 +31,22 @@ export async function loader({ request }: LoaderFunctionArgs) {
     include: { supabaseConfig: true },
   });
 
+  // Il piano serve alla card Account (frequenza di sync prevista dal piano).
+  const plan = await prisma.plan.findUnique({
+    where: { planName: shop?.currentPlan ?? '' },
+  });
+
+  // Informazioni di account: sempre presenti, anche senza collegamento — proprio
+  // in quel caso "Database: Non collegato" e' l'informazione piu' utile.
+  const account = {
+    connected: !!shop?.supabaseConfig?.connectionVerifiedAt,
+    planName: shop?.currentPlan ?? '',
+    syncFrequencyHours: plan?.maxSyncFrequencyHours ?? null,
+  };
+
   const config = shop?.supabaseConfig;
   if (!config) {
-    return json({ config: null });
+    return json({ account, config: null });
   }
 
   // Le letture di tracciamento non passano più dalla anon key del merchant ma
@@ -45,6 +59,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const proxyBaseUrl = process.env.SHOPIFY_APP_URL ?? '';
 
   return json({
+    account,
     config: {
       url: config.supabaseUrl,
       projectRef: config.supabaseProjectRef ?? null,
@@ -139,7 +154,7 @@ function CopyableField({ label, value }: { label: string; value: string }) {
 }
 
 export default function SupabaseSettings() {
-  const { config } = useLoaderData<typeof loader>();
+  const { account, config } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
 
   const successMessage =
@@ -167,6 +182,12 @@ export default function SupabaseSettings() {
           <BlockStack gap="400">
             {successMessage && <Banner tone="success">{successMessage}</Banner>}
             {errorMessage && <Banner tone="critical">{errorMessage}</Banner>}
+
+            <AccountCard
+              connected={account.connected}
+              planName={account.planName}
+              syncFrequencyHours={account.syncFrequencyHours}
+            />
 
             {!config ? (
               <Banner tone="info">
