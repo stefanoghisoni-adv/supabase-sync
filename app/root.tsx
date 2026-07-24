@@ -17,14 +17,11 @@ import { NavMenu } from '@shopify/app-bridge-react';
 import polarisStyles from '@shopify/polaris/build/esm/styles.css?url';
 // Caricato DOPO Polaris: neutralizza il tema scuro (vedi force-light.css).
 import forceLightStyles from './force-light.css?url';
-// Correzioni a mano ai difetti di rendering di Polaris (vedi polaris-fixes.css).
-import polarisFixes from './polaris-fixes.css?url';
 import { Page, Banner, Text, BlockStack } from '@shopify/polaris';
 
 export const links: LinksFunction = () => [
   { rel: 'stylesheet', href: polarisStyles },
   { rel: 'stylesheet', href: forceLightStyles },
-  { rel: 'stylesheet', href: polarisFixes },
 ];
 
 export async function loader() {

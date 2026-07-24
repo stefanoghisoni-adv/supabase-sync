@@ -18,6 +18,7 @@ import {
   Spinner,
   TextField,
   InlineStack,
+  InlineGrid,
   BlockStack,
   Pagination,
 } from '@shopify/polaris';
@@ -450,33 +451,41 @@ export default function ProblemProducts() {
           <Card padding="0">
             <Box padding="400">
               <BlockStack gap="300">
-                <TextField
-                  label="Cerca"
-                  labelHidden
-                  value={query}
-                  onChange={setQuery}
-                  autoComplete="off"
-                  placeholder="Cerca per titolo, variante, SKU, ID prodotto o prezzo"
-                  clearButton
-                  onClearButtonClick={() => setQuery('')}
-                />
-                {/* Con una ricerca senza risultati il conteggio direbbe "0
-                    varianti a cui manca il valore...", che si legge come "non ci
-                    sono problemi" mentre e' solo la ricerca a non aver trovato
-                    nulla. Meglio dirlo esplicitamente. */}
-                {query.trim() && filtered.length === 0 ? (
-                  <Text as="p" tone="subdued">
-                    Nessun risultato per &laquo;{query.trim()}&raquo;. Le varianti
-                    con problemi sono {rows.length}: prova a modificare la ricerca.
-                  </Text>
-                ) : (
-                  <Text as="p" tone="subdued">
-                    {filtered.length}{' '}
-                    {filtered.length === 1 ? 'variante' : 'varianti'} a cui manca il valore{' '}
-                    <code>cost_per_item</code>. Inserisci il costo e premi Invio (o
-                    esci dal campo): viene salvato su Shopify e Supabase.
-                  </Text>
-                )}
+                <Text as="h2" variant="headingMd">
+                  Elenco prodotti non idonei
+                </Text>
+                {/* Descrizione e ricerca affiancate a meta' larghezza ciascuna:
+                    la ricerca finisce a destra senza doverla dimensionare a mano.
+                    alignItems="center" le allinea sull'asse verticale, altrimenti
+                    il testo si appoggerebbe in cima al campo. */}
+                <InlineGrid columns={2} gap="400" alignItems="center">
+                  {/* Con una ricerca senza risultati il conteggio direbbe "0
+                      varianti a cui manca il valore...", che si legge come "non
+                      ci sono problemi" mentre e' solo la ricerca a non aver
+                      trovato nulla. Meglio dirlo esplicitamente. */}
+                  {query.trim() && filtered.length === 0 ? (
+                    <Text as="p" tone="subdued">
+                      Nessun risultato per &laquo;{query.trim()}&raquo;. Le varianti
+                      con problemi sono {rows.length}: prova a modificare la ricerca.
+                    </Text>
+                  ) : (
+                    <Text as="p" tone="subdued">
+                      {filtered.length}{' '}
+                      {filtered.length === 1 ? 'variante' : 'varianti'} a cui manca il valore{' '}
+                      <code>cost_per_item</code>.
+                    </Text>
+                  )}
+                  <TextField
+                    label="Cerca"
+                    labelHidden
+                    value={query}
+                    onChange={setQuery}
+                    autoComplete="off"
+                    placeholder="Cerca per titolo, variante, SKU, ID prodotto o prezzo"
+                    clearButton
+                    onClearButtonClick={() => setQuery('')}
+                  />
+                </InlineGrid>
               </BlockStack>
             </Box>
             <IndexTable
