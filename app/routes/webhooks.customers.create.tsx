@@ -4,6 +4,7 @@ import { verifyWebhook } from '~/lib/webhooks/verify.server';
 import { transformCustomer } from '~/lib/transformers/customer.server';
 import { createSupabaseClient } from '~/lib/supabase.server';
 import { prisma } from '~/db.server';
+import { isCustomerOptedIn } from '~/lib/stats/customer-consent-stats';
 import type { ShopifyCustomer } from '~/types/shopify';
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -48,15 +49,21 @@ export async function action({ request }: ActionFunctionArgs) {
       return json({ ok: true }, { status: 200 });
     }
 
-    const row = transformCustomer(customer);
     const supabase = createSupabaseClient(shop.supabaseConfig);
+    const table = shop.supabaseConfig.tableNameCustomers;
 
-    const { error } = await supabase
-      .from(shop.supabaseConfig.tableNameCustomers)
-      .upsert(row, {
-        onConflict: 'shopify_customer_id',
-        ignoreDuplicates: false,
-      });
+    // Consenziente: riga completa. Non consenziente: nessuna insert, solo la
+    // marcatura della colonna su cui il proxy decide il 403 (no-op se il cliente
+    // non era mai stato sincronizzato).
+    const { error } = isCustomerOptedIn(customer)
+      ? await supabase.from(table).upsert(transformCustomer(customer), {
+          onConflict: 'shopify_customer_id',
+          ignoreDuplicates: false,
+        })
+      : await supabase
+          .from(table)
+          .update({ accepts_marketing: false })
+          .eq('shopify_customer_id', customer.id);
 
     if (error) {
       console.error('Supabase customer upsert error:', error);
