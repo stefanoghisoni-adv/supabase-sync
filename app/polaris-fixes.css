@@ -1,0 +1,15 @@
+/* Correzioni a Polaris scritte a mano. Tenute FUORI da force-light.css, che e'
+   generato dai token del tema e va rigenerato a ogni aggiornamento della
+   libreria: quello che sta qui sopravvivrebbe. Caricato dopo Polaris. */
+
+/* Polaris disegna il bordo degli input a --p-border-width-0165, cioe' 0,66px,
+   e da' al solo lato superiore un colore proprio (#898f94). A quello spessore
+   il compositor GPU non riesce a dipingere la linea orizzontale superiore: il
+   campo appare aperto in alto, mentre le curve degli angoli sopravvivono
+   perche' anti-aliasate su piu' pixel. Verificato riproducendo il DOM reale in
+   Chrome headless: con rasterizzazione software la linea c'e' (grigio 142),
+   con la GPU attiva sparisce, a parita' di larghezza e device pixel ratio.
+   1px pieno regge in entrambi i casi. */
+.Polaris-TextField__Backdrop {
+  border-width: 0.0625rem;
+}
