@@ -268,7 +268,6 @@ export default function Dashboard() {
   // Il valore live (refresh) vince appena disponibile, altrimenti la cache/primo calcolo.
   const readiness = readinessRefreshFetcher.data ?? readinessFetcher.data;
   const customerStats = customerStatsRefreshFetcher.data ?? customerStatsFetcher.data;
-  const countsLoading = countsFetcher.state === 'loading' || !counts;
   const readinessLoading = !readiness;
   const customerStatsLoading = !customerStats;
 
@@ -387,11 +386,14 @@ export default function Dashboard() {
       {readiness?.readyCount ?? 0}
     </Text>
   );
-  const previewCustomers = countsLoading ? (
+  // Clienti opt-in, NON il totale: e' il numero che verra' davvero scritto su
+  // Supabase, ora che la sync filtra i non consenzienti. Stesso criterio gia'
+  // applicato ai prodotti, dove il recap mostra le varianti idonee.
+  const previewCustomers = customerStatsLoading ? (
     numberSkeleton
   ) : (
     <Text as="span" variant="headingMd">
-      {counts?.customerCount ?? 0}
+      {customerStats?.optIn ?? 0}
     </Text>
   );
 
