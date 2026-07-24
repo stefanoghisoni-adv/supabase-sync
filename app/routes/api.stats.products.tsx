@@ -4,7 +4,7 @@ import { json } from '@remix-run/node';
 import { authenticate } from '~/shopify.server';
 import { prisma } from '~/db.server';
 import { ShopifyAPIClient } from '~/lib/shopify-api.server';
-import { computeProductReadiness, countEligibleProducts } from '~/lib/stats/product-readiness';
+import { computeProductReadiness } from '~/lib/stats/product-readiness';
 import { enrichVariantCosts } from '~/lib/stats/inventory-cost.server';
 import { getReadinessCache, setReadinessCache } from '~/lib/cache/stats-cache.server';
 import { upsertTodayEligibilitySnapshot } from '~/lib/stats/eligibility-snapshot.server';
@@ -41,7 +41,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
   let totalProducts = 0;
   let readyCount = 0;
   let problemCount = 0;
-  let eligibleProducts = 0;
   let pageInfo: string | undefined;
 
   // Scomposizione pronti/problemi: richiede il dato per-variante, quindi la
@@ -61,7 +60,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
     totalProducts += counts.totalProducts;
     readyCount += counts.readyCount;
     problemCount += counts.problemCount;
-    eligibleProducts += countEligibleProducts(enriched);
     pageInfo = nextPageInfo ?? undefined;
   } while (pageInfo);
 
@@ -72,8 +70,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
   // giornata (il merchant inserisce i costi mancanti dalla tab "Prodotti con problemi"),
   // ma il cron passa una sola volta. Un problema sullo snapshot non deve far fallire
   // l'endpoint, che serve alla dashboard.
+  // Contiamo le VARIANTI idonee (readyCount), non i prodotti distinti: su Supabase
+  // scriviamo una riga per variante, quindi e' quello il numero "sincronizzabile"
+  // che il merchant vede nella card e nel recap.
   try {
-    await upsertTodayEligibilitySnapshot(shop.id, eligibleProducts);
+    await upsertTodayEligibilitySnapshot(shop.id, readyCount);
   } catch (err) {
     console.error('Failed to update today eligibility snapshot:', err);
   }

@@ -1,6 +1,6 @@
 import { prisma } from '~/db.server';
 import { ShopifyAPIClient } from '~/lib/shopify-api.server';
-import { countEligibleProducts } from './product-readiness';
+import { computeProductReadiness } from './product-readiness';
 import { enrichVariantCosts } from './inventory-cost.server';
 import type { Shop } from '@prisma/client';
 
@@ -31,6 +31,8 @@ export async function recordEligibilitySnapshotIfMissing(
 
   // Paginazione del catalogo come in api.stats.products: minimo indispensabile
   // (fields=id,variants), enrichVariantCosts per popolare i costi, poi il conteggio.
+  // Contiamo le VARIANTI idonee (readyCount): su Supabase scriviamo una riga per
+  // variante, quindi e' quello il numero "sincronizzabile" allineato a card e recap.
   do {
     const { products, nextPageInfo } = await client.getProducts({
       limit: 250,
@@ -38,7 +40,7 @@ export async function recordEligibilitySnapshotIfMissing(
       fields: 'id,variants',
     });
     const enriched = await enrichVariantCosts(client, products ?? []);
-    totalEligible += countEligibleProducts(enriched);
+    totalEligible += computeProductReadiness(enriched).readyCount;
     pageInfo = nextPageInfo ?? undefined;
   } while (pageInfo);
 
