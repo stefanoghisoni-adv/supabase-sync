@@ -17,7 +17,6 @@ import {
 import { ProductIcon, PersonIcon, SettingsIcon } from '@shopify/polaris-icons';
 import { ProductsCard } from '~/components/Dashboard/ProductsCard';
 import { CustomersCard } from '~/components/Dashboard/CustomersCard';
-import { SyncLog } from '~/components/Dashboard/SyncLog';
 import { PlanBanner } from '~/components/Dashboard/PlanBanner';
 import { Stepper, type StepperItem } from '~/components/Dashboard/Stepper';
 import { resolveStepStates } from '~/components/Dashboard/stepper-state';
@@ -45,15 +44,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
     // race durante l'embedded auth) invece di mandare l'app in 404.
     const shop = await getOrCreateShop(session);
 
-    // Il fuso del negozio si legge una volta sola e resta memorizzato: da qui in
-    // poi il costo e' zero. Best effort — se Shopify non risponde si usa UTC e
-    // la dashboard si carica comunque.
-    let shopTimezone = shop.ianaTimezone;
-    if (!shopTimezone) {
+    // Il fuso del negozio si legge una volta sola e resta memorizzato: lo consuma
+    // la tab Logs, che lo trova gia' pronto sullo shop. Best effort — se Shopify
+    // non risponde le date ricadranno su UTC e la dashboard si carica comunque.
+    if (!shop.ianaTimezone) {
       try {
         const info = await new ShopifyAPIClient(shop.shopDomain, shop.accessToken).getShopInfo();
         if (info.ianaTimezone) {
-          shopTimezone = info.ianaTimezone;
           await prisma.shop.update({
             where: { id: shop.id },
             data: { ianaTimezone: info.ianaTimezone },
@@ -111,12 +108,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
     return json({
       shop,
       plan,
-      recentJobs,
       supabaseConnected,
       customersEnabled,
       syncState,
       authorization,
-      shopTimezone,
     });
   } catch (err) {
     // Le Response (redirect di auth, 404) devono passare intatte.
@@ -197,7 +192,7 @@ interface CustomerStatsResponse {
 }
 
 export default function Dashboard() {
-  const { shop, plan, supabaseConnected, customersEnabled, authorization, syncState, recentJobs, shopTimezone } =
+  const { shop, plan, supabaseConnected, customersEnabled, authorization, syncState } =
     useLoaderData<typeof loader>();
   const blocked = authorization !== 'ENABLED';
   const navigate = useNavigate();
@@ -467,13 +462,10 @@ export default function Dashboard() {
           />
         </InlineGrid>
 
+        {/* Lo Stepper resta a meta' larghezza a sinistra: il log e' passato alla
+            tab dedicata "Logs". */}
         <InlineGrid columns={{ xs: 1, md: 2 }} gap="400">
           <Stepper steps={stepperItems} />
-          <SyncLog
-            jobs={recentJobs}
-            customersEnabled={customersEnabled}
-            timeZone={shopTimezone}
-          />
         </InlineGrid>
       </BlockStack>
     </Page>
