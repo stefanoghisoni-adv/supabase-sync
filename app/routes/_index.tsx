@@ -15,7 +15,6 @@ import {
   SkeletonDisplayText,
 } from '@shopify/polaris';
 import { ProductIcon, PersonIcon, SettingsIcon } from '@shopify/polaris-icons';
-import { AccountCard } from '~/components/Dashboard/AccountCard';
 import { ProductsCard } from '~/components/Dashboard/ProductsCard';
 import { CustomersCard } from '~/components/Dashboard/CustomersCard';
 import { SyncLog } from '~/components/Dashboard/SyncLog';
@@ -117,7 +116,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
       customersEnabled,
       syncState,
       authorization,
-      syncFrequencyHours: plan?.maxSyncFrequencyHours ?? null,
       shopTimezone,
     });
   } catch (err) {
@@ -199,7 +197,7 @@ interface CustomerStatsResponse {
 }
 
 export default function Dashboard() {
-  const { shop, plan, supabaseConnected, customersEnabled, authorization, syncState, recentJobs, syncFrequencyHours, shopTimezone } =
+  const { shop, plan, supabaseConnected, customersEnabled, authorization, syncState, recentJobs, shopTimezone } =
     useLoaderData<typeof loader>();
   const blocked = authorization !== 'ENABLED';
   const navigate = useNavigate();
@@ -453,12 +451,7 @@ export default function Dashboard() {
           />
         )}
 
-        <InlineGrid columns={{ xs: 1, md: 3 }} gap="400">
-          <AccountCard
-            connected={supabaseConnected}
-            planName={shop.currentPlan}
-            syncFrequencyHours={syncFrequencyHours}
-          />
+        <InlineGrid columns={{ xs: 1, md: 2 }} gap="400">
           <ProductsCard
             readyCount={readiness?.readyCount ?? 0}
             problemCount={readiness?.problemCount ?? 0}

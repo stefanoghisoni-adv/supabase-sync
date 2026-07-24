@@ -72,11 +72,21 @@ export function CustomersCard({
                 justifyContent: 'center',
               }}
             >
-              <Tooltip content="Presto disponibile">
-                <Button variant="primary" disabled>
-                  Aggiorna piano
-                </Button>
-              </Tooltip>
+              <BlockStack gap="200" inlineAlign="center">
+                <Tooltip content="Presto disponibile">
+                  <Button variant="primary" disabled>
+                    Aggiorna piano
+                  </Button>
+                </Tooltip>
+                {/* Sta nell'overlay insieme al pulsante, non fra le righe velate:
+                    quelle sono aria-hidden, questa deve restare leggibile. */}
+                <Box paddingInline="400">
+                  <Text as="p" tone="subdued" alignment="center" variant="bodySm">
+                    Potenzia la trasmissione dei dati utente monitorando anche il
+                    lifetime value (LTV) e lifetime profit (LTP).
+                  </Text>
+                </Box>
+              </BlockStack>
             </div>
           </Box>
         )}
