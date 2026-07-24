@@ -297,11 +297,15 @@ export default function Dashboard() {
       <SkeletonDisplayText size="small" />
     </Box>
   );
-  const previewProducts = countsLoading ? (
+  // Varianti idonee, NON il totale a catalogo: e' il numero che verra' davvero
+  // scritto su Supabase, coerente con la card Prodotti. Usare counts.totalProducts
+  // qui mostrava una grandezza diversa su due assi (prodotti vs varianti, tutti
+  // vs idonei), quindi non poteva coincidere con la card.
+  const previewProducts = readinessLoading ? (
     numberSkeleton
   ) : (
     <Text as="span" variant="headingMd">
-      {counts?.totalProducts ?? 0}
+      {readiness?.readyCount ?? 0}
     </Text>
   );
   const previewCustomers = countsLoading ? (
@@ -353,9 +357,7 @@ export default function Dashboard() {
                 <InlineStack align="space-between" blockAlign="center">
                   <InlineStack gap="200" blockAlign="center">
                     <Icon source={ProductIcon} tone="subdued" />
-                    <Text as="span">
-                      Prodotti → tabella <code>products</code>
-                    </Text>
+                    <Text as="span">Prodotti</Text>
                   </InlineStack>
                   {previewProducts}
                 </InlineStack>
@@ -363,9 +365,7 @@ export default function Dashboard() {
                   <InlineStack align="space-between" blockAlign="center">
                     <InlineStack gap="200" blockAlign="center">
                       <Icon source={PersonIcon} tone="subdued" />
-                      <Text as="span">
-                        Clienti → tabella <code>customers</code>
-                      </Text>
+                      <Text as="span">Clienti</Text>
                     </InlineStack>
                     {previewCustomers}
                   </InlineStack>

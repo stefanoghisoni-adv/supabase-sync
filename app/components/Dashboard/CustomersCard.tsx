@@ -48,17 +48,17 @@ export function CustomersCard({
           // CSS sia il contenuto inerte da rendere inaccessibile: resta solo
           // l'invito all'upgrade, tutto in Polaris.
           <BlockStack gap="200" inlineAlign="center">
-            <Tooltip content="Presto disponibile">
-              <Button variant="primary" disabled>
-                Aggiorna piano
-              </Button>
-            </Tooltip>
             <Box paddingInline="400">
               <Text as="p" tone="subdued" alignment="center" variant="bodySm">
                 Potenzia la trasmissione dei dati utente monitorando anche il
                 Lifetime Value (LTV) e Lifetime Profit (LTP).
               </Text>
             </Box>
+            <Tooltip content="Presto disponibile">
+              <Button variant="primary" disabled>
+                Aggiorna piano
+              </Button>
+            </Tooltip>
           </BlockStack>
         )}
       </BlockStack>
