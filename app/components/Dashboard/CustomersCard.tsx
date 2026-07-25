@@ -61,14 +61,17 @@ export function CustomersCard({
                 Lifetime Value (LTV) e Lifetime Profit (LTP).
               </Text>
             </Box>
-            <Button
-              variant="primary"
-              url="/plan"
-              disabled={loadingPlan}
-              loading={loadingPlan}
-            >
-              Aggiorna piano
-            </Button>
+            {/* Un filo piu' in basso: stacca il pulsante dal testo sopra. */}
+            <Box paddingBlockStart="200">
+              <Button
+                variant="primary"
+                url="/plan"
+                disabled={loadingPlan}
+                loading={loadingPlan}
+              >
+                Aggiorna piano
+              </Button>
+            </Box>
           </BlockStack>
         )}
       </BlockStack>

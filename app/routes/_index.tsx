@@ -13,8 +13,9 @@ import {
   Icon,
   Banner,
   SkeletonDisplayText,
+  Tooltip,
 } from '@shopify/polaris';
-import { ProductIcon, PersonIcon, SettingsIcon } from '@shopify/polaris-icons';
+import { ProductIcon, PersonIcon, SettingsIcon, LockIcon } from '@shopify/polaris-icons';
 import { ProductsCard } from '~/components/Dashboard/ProductsCard';
 import { CustomersCard } from '~/components/Dashboard/CustomersCard';
 import { PlanBanner } from '~/components/Dashboard/PlanBanner';
@@ -460,15 +461,24 @@ export default function Dashboard() {
                   </InlineStack>
                   {previewProducts}
                 </InlineStack>
-                {customersEnabled && (
-                  <InlineStack align="space-between" blockAlign="center">
-                    <InlineStack gap="200" blockAlign="center">
-                      <Icon source={PersonIcon} tone="subdued" />
-                      <Text as="span">Clienti</Text>
-                    </InlineStack>
-                    {previewCustomers}
+                {/* La riga Clienti c'e' sempre: se il piano non li include, al
+                    posto del numero mostriamo un lucchetto, cosi' si capisce che
+                    e' una funzione da sbloccare e non un dato fermo a zero. */}
+                <InlineStack align="space-between" blockAlign="center">
+                  <InlineStack gap="200" blockAlign="center">
+                    <Icon source={PersonIcon} tone="subdued" />
+                    <Text as="span" tone={customersEnabled ? undefined : 'subdued'}>
+                      Clienti
+                    </Text>
                   </InlineStack>
-                )}
+                  {customersEnabled ? (
+                    previewCustomers
+                  ) : (
+                    <Tooltip content="Sbloccalo passando a un piano superiore">
+                      <Icon source={LockIcon} tone="subdued" />
+                    </Tooltip>
+                  )}
+                </InlineStack>
               </BlockStack>
             </BlockStack>
           </Box>
