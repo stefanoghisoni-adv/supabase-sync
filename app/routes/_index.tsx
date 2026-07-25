@@ -475,7 +475,12 @@ export default function Dashboard() {
                     previewCustomers
                   ) : (
                     <Tooltip content="Sbloccalo passando a un piano superiore">
-                      <Icon source={LockIcon} tone="subdued" />
+                      {/* Il glifo del lucchetto e' disegnato dentro un viewBox 20
+                          con ~4px vuoti a destra: senza questo recupero l'icona
+                          sembra rientrata rispetto al numero della riga sopra. */}
+                      <span style={{ display: 'block', marginInlineEnd: '-4px' }}>
+                        <Icon source={LockIcon} tone="subdued" />
+                      </span>
                     </Tooltip>
                   )}
                 </InlineStack>

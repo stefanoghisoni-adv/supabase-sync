@@ -7,12 +7,14 @@ describe('computeChartYMax', () => {
     // linea tratteggiata resta visibile e non incollata al bordo superiore.
     const max = computeChartYMax(100, 3);
     expect(max).toBeGreaterThan(100);
-    expect(max).toBe(125);
+    expect(max).toBe(150);
   });
 
-  it('arrotonda a passi puliti per limiti piccoli', () => {
-    expect(computeChartYMax(50, 2)).toBe(60);
+  it('tiene una tacca intera sopra il limite', () => {
+    // Limite 50: l'asse arriva a 75, cosi' sopra la tratteggiata resta spazio.
+    expect(computeChartYMax(50, 2)).toBe(75);
     expect(computeChartYMax(10, 0)).toBe(20);
+    expect(computeChartYMax(400, 12)).toBe(600);
   });
 
   it('tiene conto dei dati quando superano il limite del piano', () => {
@@ -26,6 +28,7 @@ describe('computeChartYMax', () => {
   });
 
   it('scala anche senza limite di piano, sui soli dati', () => {
+    // Piano illimitato: nessuna tratteggiata da distanziare, solo i dati + 20%.
     expect(computeChartYMax(null, 8)).toBe(10);
     expect(computeChartYMax(null, 12)).toBe(20);
   });
