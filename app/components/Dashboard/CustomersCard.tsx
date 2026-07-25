@@ -1,4 +1,5 @@
-import { Card, BlockStack, Text, Button, Tooltip, Box } from '@shopify/polaris';
+import { useNavigation } from '@remix-run/react';
+import { Card, BlockStack, Text, Button, Box } from '@shopify/polaris';
 import { MetricRow } from './MetricRow';
 
 const OPT_IN_INFO = 'Qui vengono identificati i clienti che hanno acconsentito al marketing';
@@ -20,6 +21,12 @@ export function CustomersCard({
   loading,
 }: CustomersCardProps) {
   const value = (n: number) => (loading ? '—' : String(n));
+
+  // Stesso comportamento degli altri pulsanti-link della dashboard: mentre Remix
+  // carica /plan il pulsante mostra lo spinner e si disabilita.
+  const navigation = useNavigation();
+  const loadingPlan =
+    navigation.state === 'loading' && navigation.location?.pathname === '/plan';
 
   return (
     <Card>
@@ -54,11 +61,14 @@ export function CustomersCard({
                 Lifetime Value (LTV) e Lifetime Profit (LTP).
               </Text>
             </Box>
-            <Tooltip content="Presto disponibile">
-              <Button variant="primary" disabled>
-                Aggiorna piano
-              </Button>
-            </Tooltip>
+            <Button
+              variant="primary"
+              url="/plan"
+              disabled={loadingPlan}
+              loading={loadingPlan}
+            >
+              Aggiorna piano
+            </Button>
           </BlockStack>
         )}
       </BlockStack>
