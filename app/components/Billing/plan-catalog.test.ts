@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { PLAN_CATALOG } from './plan-catalog';
+import { PLAN_CATALOG, FEATURE_ORDER } from './plan-catalog';
 
 describe('PLAN_CATALOG', () => {
   it('contiene i 4 piani nell ordine free, pro, business, enterprise', () => {
@@ -16,26 +16,54 @@ describe('PLAN_CATALOG', () => {
     expect(PLAN_CATALOG.map((p) => p.priceMonthly)).toEqual([0, 29, 99, 299]);
   });
 
-  it('ogni piano ha 5 feature', () => {
-    for (const p of PLAN_CATALOG) expect(p.features).toHaveLength(5);
+  it('ogni piano elenca le stesse righe nello stesso ordine', () => {
+    for (const p of PLAN_CATALOG) {
+      expect(p.features.map((f) => f.key)).toEqual([...FEATURE_ORDER]);
+    }
+  });
+
+  // Con questo invariante sortFeatures (verdi in alto) e' un no-op: le righe delle
+  // 4 card restano allineate. Se un piano futuro lo rompe, il test lo intercetta.
+  it('in ogni piano le feature incluse precedono gia le non incluse', () => {
+    for (const p of PLAN_CATALOG) {
+      const firstExcluded = p.features.findIndex((f) => !f.included);
+      if (firstExcluded === -1) continue;
+      expect(p.features.slice(firstExcluded).every((f) => !f.included)).toBe(true);
+    }
+  });
+
+  // Nella griglia a 4 colonne una label lunga andrebbe a capo e alzerebbe solo
+  // quella card, disallineando i punti elenco.
+  it('nessuna label supera i 24 caratteri (altrimenti va a capo)', () => {
+    for (const p of PLAN_CATALOG) {
+      for (const f of p.features) expect(f.label.length).toBeLessThanOrEqual(24);
+    }
   });
 
   it('Free non include push manuale ne sync clienti', () => {
     const free = PLAN_CATALOG.find((p) => p.id === 'free')!;
-    const push = free.features.find((f) => f.label.toLowerCase().includes('push manuale'))!;
-    const cust = free.features.find((f) => f.label.toLowerCase().includes('sync clienti'))!;
-    expect(push.included).toBe(false);
-    expect(cust.included).toBe(false);
+    expect(free.features.find((f) => f.key === 'push')!.included).toBe(false);
+    expect(free.features.find((f) => f.key === 'customers')!.included).toBe(false);
   });
 
   it('Pro non include push manuale ma include sync clienti', () => {
     const pro = PLAN_CATALOG.find((p) => p.id === 'pro')!;
-    expect(pro.features.find((f) => f.label.toLowerCase().includes('push manuale'))!.included).toBe(false);
-    expect(pro.features.find((f) => f.label.toLowerCase().includes('sync clienti'))!.included).toBe(true);
+    expect(pro.features.find((f) => f.key === 'push')!.included).toBe(false);
+    expect(pro.features.find((f) => f.key === 'customers')!.included).toBe(true);
   });
 
-  it('Business include push manuale', () => {
-    const biz = PLAN_CATALOG.find((p) => p.id === 'business')!;
-    expect(biz.features.find((f) => f.label.toLowerCase().includes('push manuale'))!.included).toBe(true);
+  it('Business e Enterprise includono push manuale e chat dedicata', () => {
+    for (const id of ['business', 'enterprise'] as const) {
+      const plan = PLAN_CATALOG.find((p) => p.id === id)!;
+      expect(plan.features.find((f) => f.key === 'push')!.included).toBe(true);
+      expect(plan.features.find((f) => f.key === 'chat')!.included).toBe(true);
+    }
+  });
+
+  it('la chat dedicata e solo di Business ed Enterprise', () => {
+    for (const id of ['free', 'pro'] as const) {
+      const plan = PLAN_CATALOG.find((p) => p.id === id)!;
+      expect(plan.features.find((f) => f.key === 'chat')!.included).toBe(false);
+    }
   });
 });

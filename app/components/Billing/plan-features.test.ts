@@ -1,10 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { sortFeatures } from './plan-features';
-import type { PlanFeature } from './plan-catalog';
 
 describe('sortFeatures', () => {
   it('mette le incluse (verdi) prima delle non incluse (grigie)', () => {
-    const input: PlanFeature[] = [
+    const input = [
       { label: 'A', included: false },
       { label: 'B', included: true },
       { label: 'C', included: false },
@@ -14,7 +13,7 @@ describe('sortFeatures', () => {
   });
 
   it('e stabile: preserva l ordine originale dentro ciascun gruppo', () => {
-    const input: PlanFeature[] = [
+    const input = [
       { label: '1', included: true },
       { label: '2', included: true },
       { label: '3', included: true },
@@ -27,7 +26,7 @@ describe('sortFeatures', () => {
   });
 
   it('non muta l input', () => {
-    const input: PlanFeature[] = [
+    const input = [
       { label: 'X', included: false },
       { label: 'Y', included: true },
     ];
