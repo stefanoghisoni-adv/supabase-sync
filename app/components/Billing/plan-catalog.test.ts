@@ -52,18 +52,29 @@ describe('PLAN_CATALOG', () => {
     expect(pro.features.find((f) => f.key === 'customers')!.included).toBe(true);
   });
 
-  it('Business e Enterprise includono push manuale e chat dedicata', () => {
+  it('Business e Enterprise includono push manuale', () => {
     for (const id of ['business', 'enterprise'] as const) {
       const plan = PLAN_CATALOG.find((p) => p.id === id)!;
       expect(plan.features.find((f) => f.key === 'push')!.included).toBe(true);
-      expect(plan.features.find((f) => f.key === 'chat')!.included).toBe(true);
     }
   });
 
-  it('la chat dedicata e solo di Business ed Enterprise', () => {
-    for (const id of ['free', 'pro'] as const) {
-      const plan = PLAN_CATALOG.find((p) => p.id === id)!;
-      expect(plan.features.find((f) => f.key === 'chat')!.included).toBe(false);
+  it('la chat dedicata e solo di Enterprise', () => {
+    for (const plan of PLAN_CATALOG) {
+      expect(plan.features.find((f) => f.key === 'chat')!.included).toBe(
+        plan.id === 'enterprise',
+      );
     }
+  });
+
+  // Devono combaciare con Plan.maxSyncFrequencyHours (prisma/seed.ts): la dashboard
+  // legge la frequenza dal DB, la vetrina da qui, e il merchant vede entrambe.
+  it('le frequenze annunciate sono 7/4/2/1 giorni', () => {
+    expect(PLAN_CATALOG.map((p) => p.features.find((f) => f.key === 'sync')!.label)).toEqual([
+      'Sync ogni 7 giorni',
+      'Sync ogni 4 giorni',
+      'Sync ogni 2 giorni',
+      'Sync ogni giorno',
+    ]);
   });
 });

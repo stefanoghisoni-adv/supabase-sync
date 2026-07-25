@@ -55,7 +55,7 @@ export const PLAN_CATALOG: PlanCard[] = [
     recommended: true,
     features: [
       { key: 'products', label: 'Fino a 100 prodotti', included: true },
-      { key: 'sync', label: 'Sync ogni 6 ore', included: true },
+      { key: 'sync', label: 'Sync ogni 4 giorni', included: true },
       { key: 'email', label: 'Supporto via email', included: true },
       { key: 'customers', label: 'Fino a 5.000 clienti', included: true },
       { key: 'push', label: 'Push manuale', included: false },
@@ -69,11 +69,11 @@ export const PLAN_CATALOG: PlanCard[] = [
     recommended: false,
     features: [
       { key: 'products', label: 'Fino a 400 prodotti', included: true },
-      { key: 'sync', label: 'Sync ogni ora', included: true },
+      { key: 'sync', label: 'Sync ogni 2 giorni', included: true },
       { key: 'email', label: 'Supporto via email', included: true },
       { key: 'customers', label: 'Fino a 50.000 clienti', included: true },
       { key: 'push', label: 'Push manuale', included: true },
-      { key: 'chat', label: 'Chat dedicata', included: true },
+      { key: 'chat', label: 'Chat dedicata', included: false },
     ],
   },
   {
@@ -83,7 +83,7 @@ export const PLAN_CATALOG: PlanCard[] = [
     recommended: false,
     features: [
       { key: 'products', label: 'Prodotti illimitati', included: true },
-      { key: 'sync', label: 'Sync ogni 30 minuti', included: true },
+      { key: 'sync', label: 'Sync ogni giorno', included: true },
       { key: 'email', label: 'Supporto via email', included: true },
       { key: 'customers', label: 'Clienti illimitati', included: true },
       { key: 'push', label: 'Push manuale', included: true },

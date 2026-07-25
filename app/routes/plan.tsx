@@ -70,9 +70,11 @@ export default function Plan() {
             <Text as="p" tone="subdued">
               Più prodotti coperti, aggiornamenti più frequenti e dati cliente sempre
               allineati: salendo di piano il tuo tracking lavora su informazioni più
-              fresche e complete, con campagne e report più affidabili. Cambiando piano
-              non perdi quello che hai già raccolto: cambiano solo i limiti, la frequenza
-              di aggiornamento e le funzioni incluse.
+              fresche e complete, con campagne e report più affidabili.
+            </Text>
+            <Text as="p" tone="subdued">
+              Cambiando piano non perdi quello che hai già raccolto: cambiano solo i
+              limiti, la frequenza di aggiornamento e le funzioni incluse.
             </Text>
           </BlockStack>
         </Card>
@@ -117,7 +119,7 @@ export default function Plan() {
                         </InlineStack>
 
                         <InlineStack gap="100" blockAlign="baseline">
-                          <Text as="span" variant="heading2xl">
+                          <Text as="span" variant="heading3xl">
                             €{plan.priceMonthly}
                           </Text>
                           <Text as="span" tone="subdued">
