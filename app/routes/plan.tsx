@@ -59,17 +59,20 @@ export default function Plan() {
     >
       <BlockStack gap="500">
         {/* Intestazione informativa: riempie lo spazio sopra la griglia e dice
-            cosa NON cambia al cambio di piano (dubbio tipico prima di pagare). */}
+            cosa NON cambia al cambio di piano (dubbio tipico prima di pagare).
+            Copy solo in termini di beneficio per il merchant: nessun riferimento a
+            come l'app funziona dietro le quinte. */}
         <Card>
           <BlockStack gap="200">
             <Text as="h2" variant="headingMd">
               Scegli il piano adatto al tuo store
             </Text>
             <Text as="p" tone="subdued">
-              Tutti i piani sincronizzano i prodotti nel tuo progetto Supabase, con RLS
-              attiva e accesso in sola lettura tramite proxy. Cambiando piano i dati già
-              sincronizzati restano nel tuo database: cambiano solo i limiti, la frequenza
-              di aggiornamento e le funzioni disponibili.
+              Più prodotti coperti, aggiornamenti più frequenti e dati cliente sempre
+              allineati: salendo di piano il tuo tracking lavora su informazioni più
+              fresche e complete, con campagne e report più affidabili. Cambiando piano
+              non perdi quello che hai già raccolto: cambiano solo i limiti, la frequenza
+              di aggiornamento e le funzioni incluse.
             </Text>
           </BlockStack>
         </Card>
@@ -79,57 +82,68 @@ export default function Plan() {
             const isCurrent = plan.id === currentPlan;
             const isHighlighted = plan.recommended && highlightRecommended;
             return (
-              // Il consigliato usa la superficie "emphasis" (azzurrino tenue): la
-              // "selected" era grigia e faceva sembrare la card disabilitata.
-              <Card
+              // Il consigliato non ha uno sfondo diverso (sembrava disabilitato) ma un
+              // bordo piu' spesso nello stesso colore del pulsante primario. Polaris non
+              // espone bordi sulla Card: outline su un wrapper (non occupa spazio, quindi
+              // la card non si restringe) con il raggio della Card. display:grid fa
+              // stirare la Card all'altezza della riga, come le altre colonne.
+              <div
                 key={plan.id}
-                background={isHighlighted ? 'bg-surface-emphasis' : undefined}
-                padding="500"
+                style={{
+                  display: 'grid',
+                  height: '100%',
+                  borderRadius: 'var(--p-border-radius-300)',
+                  outline: isHighlighted
+                    ? '2px solid var(--p-color-bg-fill-brand)'
+                    : undefined,
+                }}
               >
-                {/* Colonna a tutta altezza con la CTA spinta in fondo. La garanzia
-                    vera dell'allineamento e' che tutte le card elencano le stesse 6
-                    righe senza andare a capo, quindi hanno la stessa altezza: il
-                    flex e' la rete di sicurezza. Polaris non espone un "pin in
-                    basso", questi style inline sono l'eccezione gia' adottata per
-                    il contenitore del grafico. */}
-                <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-                  <BlockStack gap="500">
-                    <BlockStack gap="200">
-                      <InlineStack gap="200" blockAlign="center" wrap={false}>
-                        <Text as="h2" variant="headingMd">
-                          {plan.name}
-                        </Text>
-                        {isHighlighted && <Badge tone="success">Consigliato</Badge>}
-                        {isCurrent && <Badge tone="info">Piano attuale</Badge>}
-                      </InlineStack>
+                <Card padding="500">
+                  {/* Colonna a tutta altezza con la CTA spinta in fondo. La garanzia
+                      vera dell'allineamento e' che tutte le card elencano le stesse 6
+                      righe senza andare a capo, quindi hanno la stessa altezza: il
+                      flex e' la rete di sicurezza. Polaris non espone un "pin in
+                      basso", questi style inline sono l'eccezione gia' adottata per
+                      il contenitore del grafico. */}
+                  <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+                    <BlockStack gap="500">
+                      <BlockStack gap="200">
+                        <InlineStack gap="200" blockAlign="center" wrap={false}>
+                          <Text as="h2" variant="headingMd">
+                            {plan.name}
+                          </Text>
+                          {isHighlighted && <Badge tone="success">Consigliato</Badge>}
+                          {isCurrent && <Badge tone="info">Piano attuale</Badge>}
+                        </InlineStack>
 
-                      <InlineStack gap="100" blockAlign="baseline">
-                        <Text as="span" variant="heading2xl">
-                          €{plan.priceMonthly}
-                        </Text>
-                        <Text as="span" tone="subdued">
-                          /mese
-                        </Text>
-                      </InlineStack>
+                        <InlineStack gap="100" blockAlign="baseline">
+                          <Text as="span" variant="heading2xl">
+                            €{plan.priceMonthly}
+                          </Text>
+                          <Text as="span" tone="subdued">
+                            /mese
+                          </Text>
+                        </InlineStack>
+                      </BlockStack>
+
+                      <PlanFeatureList features={plan.features} />
                     </BlockStack>
 
-                    <PlanFeatureList features={plan.features} />
-                  </BlockStack>
-
-                  {/* marginBlockStart:auto tiene la CTA in fondo alla colonna anche
-                      se il contenuto sopra e' piu' corto. CTA placeholder finche'
-                      non colleghiamo Shopify Billing (slice successiva). */}
-                  <div style={{ marginBlockStart: 'auto', paddingBlockStart: 'var(--p-space-500)' }}>
-                    <Button
-                      variant={isHighlighted ? 'primary' : undefined}
-                      disabled={isCurrent}
-                      fullWidth
-                    >
-                      {isCurrent ? 'Piano attuale' : `Scegli ${plan.name}`}
-                    </Button>
+                    {/* marginBlockStart:auto tiene la CTA in fondo alla colonna anche
+                        se il contenuto sopra e' piu' corto. CTA placeholder finche'
+                        non colleghiamo Shopify Billing (slice successiva). */}
+                    <div style={{ marginBlockStart: 'auto', paddingBlockStart: 'var(--p-space-500)' }}>
+                      <Button
+                        variant={isHighlighted ? 'primary' : undefined}
+                        disabled={isCurrent}
+                        fullWidth
+                      >
+                        {isCurrent ? 'Piano attuale' : `Scegli ${plan.name}`}
+                      </Button>
+                    </div>
                   </div>
-                </div>
-              </Card>
+                </Card>
+              </div>
             );
           })}
         </InlineGrid>
