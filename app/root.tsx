@@ -1,4 +1,4 @@
-import type { LinksFunction } from '@remix-run/node';
+import type { LinksFunction, LoaderFunctionArgs } from '@remix-run/node';
 import { json } from '@remix-run/node';
 import {
   Link,
@@ -19,6 +19,9 @@ import vizStyles from '@shopify/polaris-viz/build/esm/styles.css?url';
 // Caricato DOPO Polaris: neutralizza il tema scuro (vedi force-light.css).
 import forceLightStyles from './force-light.css?url';
 import { Page, Banner, Text, BlockStack } from '@shopify/polaris';
+import { authenticate } from './shopify.server';
+import { prisma } from './db.server';
+import { canAccessPlanTab } from './components/Billing/plan-access';
 
 export const links: LinksFunction = () => [
   { rel: 'stylesheet', href: polarisStyles },
@@ -26,13 +29,31 @@ export const links: LinksFunction = () => [
   { rel: 'stylesheet', href: forceLightStyles },
 ];
 
-export async function loader() {
+export async function loader({ request }: LoaderFunctionArgs) {
   // apiKey is the public Client ID; safe to expose to the embedded frontend.
-  return json({ apiKey: process.env.SHOPIFY_API_KEY || '' });
+  const apiKey = process.env.SHOPIFY_API_KEY || '';
+
+  // La NavMenu vive qui, quindi il piano corrente serve gia' in root per decidere
+  // se mostrare la voce "Piano". Ogni rotta UI autentica comunque, quindi non
+  // stiamo introducendo un controllo nuovo: qui aggiungiamo solo la lettura.
+  try {
+    const { session } = await authenticate.admin(request);
+    const shop = await prisma.shop.findUnique({
+      where: { shopDomain: session.shop },
+      select: { currentPlan: true },
+    });
+    return json({ apiKey, canSeePlanTab: canAccessPlanTab(shop?.currentPlan) });
+  } catch (error) {
+    // I redirect di OAuth/App Bridge sono Response lanciate: devono passare
+    // intatte. Un guasto diverso (es. DB irraggiungibile) non deve far fallire
+    // l'intera app per una voce di menu: la rotta /plan si difende comunque da se'.
+    if (error instanceof Response) throw error;
+    return json({ apiKey, canSeePlanTab: true });
+  }
 }
 
 export default function App() {
-  const { apiKey } = useLoaderData<typeof loader>();
+  const { apiKey, canSeePlanTab } = useLoaderData<typeof loader>();
 
   return (
     // className p-theme-light nel JSX, non solo via App Bridge a runtime: così
@@ -62,7 +83,8 @@ export default function App() {
             </Link>
             <Link to="/products/issues">Prodotti con problemi</Link>
             <Link to="/logs">Logs</Link>
-            <Link to="/plan">Piano</Link>
+            {/* Nascosta sui piani senza nulla da acquistare (lifetime). */}
+            {canSeePlanTab && <Link to="/plan">Piano</Link>}
             <Link to="/settings/supabase">Impostazioni</Link>
           </NavMenu>
           <Outlet />
@@ -80,6 +102,10 @@ export function ErrorBoundary() {
   // recuperiamo apiKey per mantenere il frame embedded (App Bridge + NavMenu).
   const rootData = useRouteLoaderData<typeof loader>('root');
   const apiKey = rootData?.apiKey || '';
+  // Se anche il loader di root e' saltato non sappiamo il piano: meglio mostrare
+  // la voce (chi non deve entrarci trova comunque la rotta bloccata) che toglierla
+  // a chi invece vuole fare upgrade.
+  const canSeePlanTab = rootData?.canSeePlanTab ?? true;
 
   let title = 'Si è verificato un errore';
   let detail = 'Errore sconosciuto';
@@ -127,7 +153,7 @@ export function ErrorBoundary() {
             </Link>
             <Link to="/products/issues">Prodotti con problemi</Link>
             <Link to="/logs">Logs</Link>
-            <Link to="/plan">Piano</Link>
+            {canSeePlanTab && <Link to="/plan">Piano</Link>}
             <Link to="/settings/supabase">Impostazioni</Link>
           </NavMenu>
           <Page title="Supabase Tracking Sync">

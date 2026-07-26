@@ -11,12 +11,14 @@ import {
   Text,
   Badge,
   Button,
+  Banner,
 } from '@shopify/polaris';
 import { SettingsIcon } from '@shopify/polaris-icons';
 import { authenticate } from '~/shopify.server';
 import { prisma } from '~/db.server';
 import { PLAN_CATALOG } from '~/components/Billing/plan-catalog';
 import { shouldHighlightRecommended } from '~/components/Billing/plan-highlight';
+import { canAccessPlanTab } from '~/components/Billing/plan-access';
 import { PlanFeatureList } from '~/components/Billing/PlanFeatureList';
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -26,11 +28,19 @@ export async function loader({ request }: LoaderFunctionArgs) {
   });
   // Normalizzato in minuscolo per combaciare con gli id del catalogo. Se il piano
   // corrente non e' tra i 4 (es. 'lifetime'), nessuna card risultera' "attuale".
-  return json({ currentPlan: (shop?.currentPlan ?? '').toLowerCase() });
+  const currentPlan = (shop?.currentPlan ?? '').toLowerCase();
+
+  // Il link sparisce dalla NavMenu, ma /plan resta digitabile: il blocco vero sta
+  // qui. 403 anche nello status, non solo a schermo.
+  if (!canAccessPlanTab(currentPlan)) {
+    return json({ currentPlan, blocked: true as const }, { status: 403 });
+  }
+
+  return json({ currentPlan, blocked: false as const });
 }
 
 export default function Plan() {
-  const { currentPlan } = useLoaderData<typeof loader>();
+  const { currentPlan, blocked } = useLoaderData<typeof loader>();
 
   // Il "Consigliato" si risalta solo se e' un upgrade rispetto al piano attuale.
   const highlightRecommended = shouldHighlightRecommended(currentPlan);
@@ -41,6 +51,22 @@ export default function Plan() {
   const loadingSettings =
     navigation.state === 'loading' &&
     navigation.location?.pathname === '/settings/supabase';
+
+  // Sezione non disponibile: pagina vuota, ritorno alla dashboard e avviso rosso.
+  // Nessuna card e nessun prezzo, cosi' non si suggerisce un upgrade che non serve.
+  if (blocked) {
+    return (
+      <Page title="Piano" backAction={{ url: '/', content: 'Dashboard' }}>
+        <Banner tone="critical" title="Non hai accesso a questa sezione">
+          <Text as="p">
+            Il tuo piano è senza limiti e non prevede rinnovi: non c'è nessun
+            aggiornamento da fare. Torna alla dashboard per continuare.
+          </Text>
+        </Banner>
+        <Box paddingBlockEnd="800" />
+      </Page>
+    );
+  }
 
   return (
     <Page
