@@ -113,17 +113,18 @@ async function syncCustomersIfEnabled(opts: {
   if (!opts.customersSyncEnabled) return 0;
 
   const table = await ensureCustomersTable(opts.shopId, opts.config, opts.supabase);
-  if (table === 'unavailable') {
+  if (table.status === 'unavailable') {
     console.warn(
       `Tabella clienti non disponibile per lo shop ${opts.shopId}: sync clienti saltata`,
     );
     return 0;
   }
 
-  // Tabella appena creata: non c'e' nessuno storico da aggiornare in delta, quindi
-  // si ignora updatedAtMin e si recuperano TUTTI i clienti. E' esattamente il caso
-  // dell'upgrade di piano, dove il delta lascerebbe la tabella quasi vuota.
-  const updatedAtMin = table === 'created' ? undefined : opts.updatedAtMin;
+  // Tabella ancora vuota (appena creata, o creata in una corsa precedente): non
+  // c'e' nessuno storico da aggiornare in delta, quindi si ignora updatedAtMin e
+  // si recuperano TUTTI i clienti. E' il caso dell'upgrade di piano, dove il
+  // delta lascerebbe la tabella quasi vuota.
+  const updatedAtMin = table.empty ? undefined : opts.updatedAtMin;
 
   return syncCustomers(
     opts.shopifyClient,

@@ -136,17 +136,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
       triggerSyncDrain();
     }
 
-    // Il banner si mostra una volta sola nella vita del negozio: lo si marca qui,
-    // al primo render che lo mostrerebbe, cosi' alla riapertura dell'app non
-    // torna. Dentro la sessione resta vivo grazie al sessionStorage lato client.
-    const bannerFirstShow = planChanged && shop.planBannerShownAt == null;
-    if (bannerFirstShow) {
-      await prisma.shop.update({
-        where: { id: shop.id },
-        data: { planBannerShownAt: new Date() },
-      });
-    }
-
+    // Il banner del cambio di piano si mostra finche' c'e' un cambio da
+    // annunciare, non una volta sola nella vita del negozio: ogni passaggio di
+    // piano ne ha uno suo da comunicare (clienti sbloccati, oppure sync clienti
+    // sospesa). La chiusura vale per la sessione, con un minimo di due minuti
+    // prima che compaia la X.
     return json({
       shop,
       plan,
@@ -158,7 +152,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
       currentMaxProducts: plan?.maxProducts ?? null,
       previousMaxProducts: previousPlan?.maxProducts ?? null,
       previousCustomersEnabled: previousPlan?.customersSyncEnabled ?? false,
-      bannerFirstShow,
     });
   } catch (err) {
     // Le Response (redirect di auth, 404) devono passare intatte.
@@ -244,7 +237,7 @@ interface ProductHistoryResponse {
 }
 
 export default function Dashboard() {
-  const { shop, plan, supabaseConnected, customersEnabled, authorization, syncState, planChanged, currentMaxProducts, previousMaxProducts, previousCustomersEnabled, bannerFirstShow } =
+  const { shop, plan, supabaseConnected, customersEnabled, authorization, syncState, planChanged, currentMaxProducts, previousMaxProducts, previousCustomersEnabled } =
     useLoaderData<typeof loader>();
   const blocked = authorization !== 'ENABLED';
   const navigate = useNavigate();
@@ -371,20 +364,32 @@ export default function Dashboard() {
   const steps = resolveStepStates(supabaseConnected);
   const syncTitle = syncButtonLabel({ customersEnabled });
 
-  // Ciclo di vita del banner:
-  // - sessionStorage lo tiene vivo navigando fra le tab (stessa iframe) e muore
-  //   con la chiusura di app/Shopify, che e' esattamente il comportamento voluto;
-  // - il flag persistente scritto dal loader impedisce che torni alla riapertura.
-  // Nessuno dei due meccanismi da solo soddisfa entrambe le richieste.
-  const BANNER_KEY = 'planChangeBannerShownAt';
+  const planBanner = planChangeBanner({
+    currentMax: currentMaxProducts,
+    previousMax: previousMaxProducts,
+    customersEnabled,
+    previousCustomersEnabled,
+  });
+
+  // Ciclo di vita del banner. Compare appena c'e' un cambio di piano da
+  // annunciare e, una volta comparso, resta per tutta la sessione: il
+  // sessionStorage lo tiene vivo navigando fra le tab (stessa iframe) e
+  // soprattutto NON lo fa sparire quando l'allineamento automatico finisce e
+  // planChanged torna falso — altrimenti il merchant potrebbe non leggerlo mai.
+  // Ci muore insieme, cioe' alla chiusura dell'app.
+  const BANNER_KEY = 'planChangeBanner';
   // Anche la chiusura va nel sessionStorage: Dashboard e Logs sono route diverse,
   // quindi cambiando tab il componente si smonta e uno useState si azzererebbe —
-  // il banner riapparirebbe pur essendo stato chiuso. Cosi' invece la chiusura
-  // sopravvive alla navigazione e muore con la sessione, come il banner stesso.
+  // il banner riapparirebbe pur essendo stato chiuso.
   const DISMISSED_KEY = 'planChangeBannerDismissed';
   const FLOOR_MS = 120_000;
 
-  const [bannerAt, setBannerAt] = useState<number | null>(null);
+  // Il contenuto viene congelato insieme all'istante di comparsa: dopo
+  // l'allineamento il loader non conosce piu' il piano precedente, quindi il
+  // messaggio va conservato com'era quando il cambio e' stato rilevato.
+  const [banner, setBanner] = useState<
+    { at: number; value: typeof planBanner } | null
+  >(null);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [, forceTick] = useState(0);
 
@@ -395,16 +400,20 @@ export default function Dashboard() {
     }
     const stored = sessionStorage.getItem(BANNER_KEY);
     if (stored) {
-      setBannerAt(Number(stored));
-      return;
+      try {
+        setBanner(JSON.parse(stored));
+        return;
+      } catch {
+        sessionStorage.removeItem(BANNER_KEY);
+      }
     }
-    if (bannerFirstShow) {
-      const now = Date.now();
-      sessionStorage.setItem(BANNER_KEY, String(now));
-      setBannerAt(now);
+    if (planChanged) {
+      const fresh = { at: Date.now(), value: planBanner };
+      sessionStorage.setItem(BANNER_KEY, JSON.stringify(fresh));
+      setBanner(fresh);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [planChanged]);
 
   const dismissBanner = () => {
     sessionStorage.setItem(DISMISSED_KEY, '1');
@@ -415,21 +424,15 @@ export default function Dashboard() {
   // al momento giusto, altrimenti la X comparirebbe solo alla prossima
   // interazione.
   useEffect(() => {
-    if (bannerAt === null) return;
-    const remaining = FLOOR_MS - (Date.now() - bannerAt);
+    if (banner === null) return;
+    const remaining = FLOOR_MS - (Date.now() - banner.at);
     if (remaining <= 0) return;
     const id = setTimeout(() => forceTick((n) => n + 1), remaining);
     return () => clearTimeout(id);
-  }, [bannerAt]);
+  }, [banner]);
 
-  const showPlanBanner = bannerAt !== null && !bannerDismissed;
-  const bannerClosable = bannerAt !== null && Date.now() - bannerAt >= FLOOR_MS;
-  const planBanner = planChangeBanner({
-    currentMax: currentMaxProducts,
-    previousMax: previousMaxProducts,
-    customersEnabled,
-    previousCustomersEnabled,
-  });
+  const showPlanBanner = banner !== null && !bannerDismissed;
+  const bannerClosable = banner !== null && Date.now() - banner.at >= FLOOR_MS;
 
   // Skeleton per i numeri di anteprima finché i conteggi non sono pronti.
   const numberSkeleton = (
@@ -607,16 +610,16 @@ export default function Dashboard() {
           </Banner>
         )}
 
-        {showPlanBanner && (
+        {showPlanBanner && banner && (
           <Banner
-            tone={planBanner.tone}
-            title={planBanner.title}
+            tone={banner.value.tone}
+            title={banner.value.title}
             onDismiss={bannerClosable ? dismissBanner : undefined}
           >
             {/* Un paragrafo per argomento: prodotti e clienti cambiano per
                 motivi diversi e vanno letti separatamente. */}
             <BlockStack gap="200">
-              {planBanner.messages.map((message) => (
+              {banner.value.messages.map((message) => (
                 <Text as="p" key={message}>
                   {message}
                 </Text>

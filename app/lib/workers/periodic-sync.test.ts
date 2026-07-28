@@ -42,7 +42,7 @@ vi.mock('../stats/inventory-cost.server', () => ({
 // La tabella clienti viene garantita prima di sincronizzarla: qui interessa
 // solo COSA fa il processor a seconda dell'esito, non come la tabella nasce.
 vi.mock('../supabase/ensure-customers-table.server', () => ({
-  ensureCustomersTable: vi.fn(async () => 'already_present'),
+  ensureCustomersTable: vi.fn(async () => ({ status: 'already_present', empty: false })),
 }));
 
 // Import after mocks
@@ -606,7 +606,7 @@ describe('Periodic sync check processor', () => {
 
   it('tabella clienti appena creata → recupera TUTTI i clienti, non il delta', async () => {
     mockShopWithCustomers();
-    (ensureCustomersTable as any).mockResolvedValue('created');
+    (ensureCustomersTable as any).mockResolvedValue({ status: 'created', empty: true });
 
     const getCustomers = vi.fn().mockResolvedValue({ customers: [], nextPageInfo: null });
     (ShopifyAPIClient as any).mockImplementation(() => ({
@@ -624,7 +624,7 @@ describe('Periodic sync check processor', () => {
 
   it('tabella clienti gia\' presente → sync incrementale', async () => {
     mockShopWithCustomers();
-    (ensureCustomersTable as any).mockResolvedValue('already_present');
+    (ensureCustomersTable as any).mockResolvedValue({ status: 'already_present', empty: false });
 
     const getCustomers = vi.fn().mockResolvedValue({ customers: [], nextPageInfo: null });
     (ShopifyAPIClient as any).mockImplementation(() => ({
@@ -639,7 +639,7 @@ describe('Periodic sync check processor', () => {
 
   it('tabella clienti non disponibile → clienti saltati, prodotti comunque completati', async () => {
     mockShopWithCustomers();
-    (ensureCustomersTable as any).mockResolvedValue('unavailable');
+    (ensureCustomersTable as any).mockResolvedValue({ status: 'unavailable', empty: false });
 
     const getCustomers = vi.fn().mockResolvedValue({ customers: [], nextPageInfo: null });
     (ShopifyAPIClient as any).mockImplementation(() => ({
