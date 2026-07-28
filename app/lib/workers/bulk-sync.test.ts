@@ -648,6 +648,8 @@ describe('Initial bulk sync processor', () => {
     vi.mocked(createSupabaseClient).mockReturnValue({
       from: () => ({
         upsert: (rows: any[]) => { upserted.push(...rows); return { error: null }; },
+        // Verifica di esistenza della tabella clienti: qui c'e' gia'.
+        select: () => ({ limit: () => ({ error: null }) }),
         update: () => ({
           in: () => ({ error: null }),
         }),
@@ -706,6 +708,7 @@ describe('Initial bulk sync processor', () => {
     vi.mocked(createSupabaseClient).mockReturnValue({
       from: () => ({
         upsert: (rows: any[]) => { upserted.push(...rows); return { error: null }; },
+        select: () => ({ limit: () => ({ error: null }) }),
         update: (payload: any) => ({
           in: (_col: string, ids: any) => {
             revokedUpdates.push({ payload, ids });

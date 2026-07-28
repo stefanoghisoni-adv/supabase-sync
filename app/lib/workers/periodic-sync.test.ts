@@ -39,12 +39,19 @@ vi.mock('../stats/inventory-cost.server', () => ({
   enrichVariantCosts: vi.fn(async (_client: unknown, products: unknown) => products),
 }));
 
+// La tabella clienti viene garantita prima di sincronizzarla: qui interessa
+// solo COSA fa il processor a seconda dell'esito, non come la tabella nasce.
+vi.mock('../supabase/ensure-customers-table.server', () => ({
+  ensureCustomersTable: vi.fn(async () => 'already_present'),
+}));
+
 // Import after mocks
 import { processPeriodicSyncCheck } from './processors.server';
 import { ShopifyAPIClient } from '../shopify-api.server';
 import { createSupabaseClient } from '../supabase.server';
 import { transformProduct } from '../transformers/product.server';
 import { prisma } from '../../db.server';
+import { ensureCustomersTable } from '../supabase/ensure-customers-table.server';
 
 describe('Periodic sync check processor', () => {
   beforeEach(() => {
@@ -557,5 +564,98 @@ describe('Periodic sync check processor', () => {
     // La 11 (persa idoneità) viene cancellata come orfana; solo la 12 è upsertata.
     expect(deletedInIds).toContain(11);
     expect(upserted.map((r) => r.shopify_variant_id)).toEqual([12]);
+  });
+
+  // Scenario del passaggio a un piano che include i clienti: al collegamento la
+  // tabella non era prevista, quindi qui nasce ora.
+  function mockShopWithCustomers() {
+    (prisma.shop.findUnique as any).mockResolvedValue({
+      id: 'shop-1',
+      shopDomain: 'test-shop.myshopify.com',
+      accessToken: 'encrypted-token',
+      authorization: 'ENABLED',
+      currentPlan: 'pro',
+      supabaseConfig: {
+        syncEnabled: true,
+        tableNameProducts: 'products',
+        tableNameCustomers: 'customers',
+        supabaseUrl: 'https://test.supabase.co',
+        supabaseServiceRoleKey: 'encrypted-service',
+        supabaseProjectRef: 'abcdefghijklmnopqrst',
+        updatedAt: new Date('2026-07-01T00:00:00Z'),
+      },
+    });
+    (prisma.plan.findUnique as any).mockResolvedValue({
+      maxProducts: null,
+      customersSyncEnabled: true,
+    });
+    (prisma.syncJob.findFirst as any).mockResolvedValue({
+      completedAt: new Date('2026-07-20T00:00:00Z'),
+    });
+    (prisma.syncJob.create as any).mockResolvedValue({ id: 'job-1' });
+    (prisma.syncJob.update as any).mockResolvedValue({});
+    (createSupabaseClient as any).mockReturnValue({
+      from: () => ({
+        select: () => ({ eq: async () => ({ data: [] }), limit: () => ({ error: null }) }),
+        upsert: async () => ({ error: null }),
+        update: () => ({ in: async () => ({ error: null }) }),
+        delete: () => ({ eq: () => ({ in: async () => ({ error: null }), is: async () => ({ error: null }) }) }),
+      }),
+    });
+  }
+
+  it('tabella clienti appena creata → recupera TUTTI i clienti, non il delta', async () => {
+    mockShopWithCustomers();
+    (ensureCustomersTable as any).mockResolvedValue('created');
+
+    const getCustomers = vi.fn().mockResolvedValue({ customers: [], nextPageInfo: null });
+    (ShopifyAPIClient as any).mockImplementation(() => ({
+      getProducts: vi.fn().mockResolvedValue({ products: [], nextPageInfo: null }),
+      getCustomers,
+    }));
+
+    await processPeriodicSyncCheck('shop-1');
+
+    // Senza updatedAtMin: su una tabella vuota il delta lascerebbe fuori tutto
+    // lo storico dei clienti.
+    expect(getCustomers).toHaveBeenCalled();
+    expect(getCustomers.mock.calls[0][0].updatedAtMin).toBeUndefined();
+  });
+
+  it('tabella clienti gia\' presente → sync incrementale', async () => {
+    mockShopWithCustomers();
+    (ensureCustomersTable as any).mockResolvedValue('already_present');
+
+    const getCustomers = vi.fn().mockResolvedValue({ customers: [], nextPageInfo: null });
+    (ShopifyAPIClient as any).mockImplementation(() => ({
+      getProducts: vi.fn().mockResolvedValue({ products: [], nextPageInfo: null }),
+      getCustomers,
+    }));
+
+    await processPeriodicSyncCheck('shop-1');
+
+    expect(getCustomers.mock.calls[0][0].updatedAtMin).toBe('2026-07-20T00:00:00.000Z');
+  });
+
+  it('tabella clienti non disponibile → clienti saltati, prodotti comunque completati', async () => {
+    mockShopWithCustomers();
+    (ensureCustomersTable as any).mockResolvedValue('unavailable');
+
+    const getCustomers = vi.fn().mockResolvedValue({ customers: [], nextPageInfo: null });
+    (ShopifyAPIClient as any).mockImplementation(() => ({
+      getProducts: vi.fn().mockResolvedValue({ products: [], nextPageInfo: null }),
+      getCustomers,
+    }));
+
+    await processPeriodicSyncCheck('shop-1');
+
+    // Nessuna chiamata ai clienti, e la corsa NON fallisce: i prodotti sono
+    // sincronizzati comunque.
+    expect(getCustomers).not.toHaveBeenCalled();
+    expect(prisma.syncJob.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ status: 'completed', customersSynced: 0 }),
+      }),
+    );
   });
 });

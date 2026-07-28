@@ -8,6 +8,8 @@ import {
   processManualSync,
 } from '~/lib/workers/processors.server';
 import { recordEligibilitySnapshotIfMissing } from '~/lib/stats/eligibility-snapshot.server';
+import { hasPlanChanged } from '~/components/Dashboard/plan-upgrade';
+import { isAuthorized } from '~/utils/authorization.server';
 
 /**
  * Cron-triggered sync endpoint (replaces the long-running BullMQ worker on the
@@ -27,7 +29,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
     return json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const results = { drained: 0, periodicChecks: 0, snapshots: 0, errors: [] as string[] };
+  const results = {
+    drained: 0,
+    periodicChecks: 0,
+    planCatchUps: 0,
+    snapshots: 0,
+    errors: [] as string[],
+  };
 
   // 1. Drain jobs enqueued from the UI (manual-sync, initial-bulk-sync, periodic-sync-check)
   const syncQueue = await getSyncQueue();
@@ -80,6 +88,20 @@ export async function loader({ request }: LoaderFunctionArgs) {
         where: { planName: shop.currentPlan },
       });
       if (!plan) continue;
+
+      // Il piano e' cambiato dopo l'ultima sync completa: allineamento automatico
+      // subito, senza aspettare la cadenza del piano e senza che il merchant
+      // debba avviare nulla a mano. E' la corsa completa, non il delta, perche'
+      // c'e' da recuperare cio' che il piano precedente non copriva (prodotti
+      // oltre il vecchio tetto e, se ora inclusa, l'intera tabella clienti).
+      // Al termine il bulk riallinea lastSyncedPlan, quindi non si ripete.
+      // isAuthorized: senza questo controllo un negozio sospeso finirebbe qui a
+      // ogni giro solo per far lanciare il processor e riempire di errori il log.
+      if (isAuthorized(shop.authorization) && hasPlanChanged(shop.currentPlan, shop.lastSyncedPlan)) {
+        await processInitialBulkSync(shop.id);
+        results.planCatchUps++;
+        continue;
+      }
 
       const lastCheck = await prisma.syncJob.findFirst({
         where: { shopId: shop.id, jobType: 'periodic_check', status: 'completed' },

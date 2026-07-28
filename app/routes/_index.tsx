@@ -30,7 +30,13 @@ import { resolveSyncState } from '~/components/Dashboard/sync-state';
 import { enqueueManualSync, triggerSyncDrain } from '~/lib/queue/trigger.server';
 import { authenticate } from '~/shopify.server';
 import { ShopifyAPIClient } from '~/lib/shopify-api.server';
-import { hasPlanChanged, syncButtonLabel, planChangeBanner } from '~/components/Dashboard/plan-upgrade';
+import {
+  hasPlanChanged,
+  syncButtonLabel,
+  planChangeBanner,
+  shouldTriggerPlanCatchUp,
+  syncCtaState,
+} from '~/components/Dashboard/plan-upgrade';
 
 // Solo per questo store mostriamo il messaggio d'errore reale (utile in debug),
 // invece del generico "Errore interno": gli altri merchant non devono vedere
@@ -115,6 +121,21 @@ export async function loader({ request }: LoaderFunctionArgs) {
       ? await prisma.plan.findUnique({ where: { planName: shop.lastSyncedPlan } })
       : null;
 
+    // Cambio di piano: l'allineamento non lo chiediamo al merchant, parte da solo.
+    // Qui non si accoda nulla (la dashboard non deve toccare la coda): si innesca
+    // il giro di sincronizzazione, che riconosce da se' il negozio da recuperare.
+    // Best effort e senza attesa: se non parte, ci pensa il giro programmato.
+    if (
+      shouldTriggerPlanCatchUp({
+        planChanged,
+        syncInProgress: syncState === 'in_progress',
+        lastBulkStartedAt:
+          recentJobs.find((job) => job.jobType === 'initial_bulk')?.startedAt ?? null,
+      })
+    ) {
+      triggerSyncDrain();
+    }
+
     // Il banner si mostra una volta sola nella vita del negozio: lo si marca qui,
     // al primo render che lo mostrerebbe, cosi' alla riapertura dell'app non
     // torna. Dentro la sessione resta vivo grazie al sessionStorage lato client.
@@ -136,6 +157,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       planChanged,
       currentMaxProducts: plan?.maxProducts ?? null,
       previousMaxProducts: previousPlan?.maxProducts ?? null,
+      previousCustomersEnabled: previousPlan?.customersSyncEnabled ?? false,
       bannerFirstShow,
     });
   } catch (err) {
@@ -222,7 +244,7 @@ interface ProductHistoryResponse {
 }
 
 export default function Dashboard() {
-  const { shop, plan, supabaseConnected, customersEnabled, authorization, syncState, planChanged, currentMaxProducts, previousMaxProducts, bannerFirstShow } =
+  const { shop, plan, supabaseConnected, customersEnabled, authorization, syncState, planChanged, currentMaxProducts, previousMaxProducts, previousCustomersEnabled, bannerFirstShow } =
     useLoaderData<typeof loader>();
   const blocked = authorization !== 'ENABLED';
   const navigate = useNavigate();
@@ -320,14 +342,34 @@ export default function Dashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [inProgress, syncCompleted]);
 
-  // A sync completata il pulsante resta disabilitato FINCHE' il piano non cambia:
-  // al cambio c'e' altro da sincronizzare (clienti e/o prodotti oltre il vecchio
-  // tetto), quindi torna disponibile. Dopo la nuova sync lastSyncedPlan si
-  // riallinea e il pulsante si ridisabilita da solo.
-  const syncDisabled = blocked || inProgress || (syncCompleted && !planChanged);
+  // Allineamento automatico dopo un cambio di piano: si conclude fuori dalla
+  // pagina, quindi si ricontrolla a intervalli piu' larghi finche' il piano
+  // dell'ultima sync non torna allineato (allora planChanged diventa falso).
+  // Il tetto di tentativi evita di continuare all'infinito se il recupero non
+  // riesce: la dashboard resta comunque aggiornabile ricaricandola.
+  const [catchUpTicks, setCatchUpTicks] = useState(0);
+  useEffect(() => {
+    if (!planChanged || catchUpTicks >= 20) return;
+    const id = setTimeout(() => {
+      setCatchUpTicks((n) => n + 1);
+      revalidator.revalidate();
+    }, 15000);
+    return () => clearTimeout(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [planChanged, catchUpTicks]);
+
+  // A sync completata il pulsante resta disabilitato: al cambio di piano
+  // l'allineamento (clienti e/o prodotti oltre il vecchio tetto) parte da solo,
+  // quindi non c'e' nulla da premere — si mostra solo che sta succedendo.
+  const cta = syncCtaState({
+    blocked,
+    inProgress,
+    completed: syncCompleted,
+    planChanged,
+  });
 
   const steps = resolveStepStates(supabaseConnected);
-  const syncTitle = syncButtonLabel({ planChanged, customersEnabled });
+  const syncTitle = syncButtonLabel({ customersEnabled });
 
   // Ciclo di vita del banner:
   // - sessionStorage lo tiene vivo navigando fra le tab (stessa iframe) e muore
@@ -386,6 +428,7 @@ export default function Dashboard() {
     currentMax: currentMaxProducts,
     previousMax: previousMaxProducts,
     customersEnabled,
+    previousCustomersEnabled,
   });
 
   // Skeleton per i numeri di anteprima finché i conteggi non sono pronti.
@@ -493,14 +536,10 @@ export default function Dashboard() {
               <Button
                 submit
                 variant="primary"
-                disabled={syncDisabled}
-                loading={inProgress}
+                disabled={cta.disabled}
+                loading={cta.loading}
               >
-                {syncCompleted
-                  ? 'Sincronizzazione completata'
-                  : inProgress
-                    ? 'Sincronizzazione in corso…'
-                    : 'Avvia sincronizzazione'}
+                {cta.label}
               </Button>
               {syncCompleted ? (
                 <>
@@ -509,9 +548,15 @@ export default function Dashboard() {
                   <Button url="/logs" disabled={loadingLogs} loading={loadingLogs}>
                     Vedi logs
                   </Button>
-                  <Text as="span" tone="success">
-                    Le sincronizzazioni successive avvengono in automatico.
-                  </Text>
+                  {planChanged ? (
+                    <Text as="span" tone="subdued">
+                      Stiamo allineando i dati al nuovo piano: non devi fare nulla.
+                    </Text>
+                  ) : (
+                    <Text as="span" tone="success">
+                      Le sincronizzazioni successive avvengono in automatico.
+                    </Text>
+                  )}
                 </>
               ) : inProgress ? (
                 <Text as="span" tone="subdued">
@@ -568,7 +613,15 @@ export default function Dashboard() {
             title={planBanner.title}
             onDismiss={bannerClosable ? dismissBanner : undefined}
           >
-            <Text as="p">{planBanner.message}</Text>
+            {/* Un paragrafo per argomento: prodotti e clienti cambiano per
+                motivi diversi e vanno letti separatamente. */}
+            <BlockStack gap="200">
+              {planBanner.messages.map((message) => (
+                <Text as="p" key={message}>
+                  {message}
+                </Text>
+              ))}
+            </BlockStack>
           </Banner>
         )}
 

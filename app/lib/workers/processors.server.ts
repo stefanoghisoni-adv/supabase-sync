@@ -1,5 +1,4 @@
 // Processor implementations for background sync jobs
-import type { Job } from 'bullmq';
 import type { SyncJobData } from '../queue/queues.server';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { ShopifyAPIClient } from '../shopify-api.server';
@@ -13,6 +12,14 @@ import { enrichVariantCosts } from '../stats/inventory-cost.server';
 import { filterEligibleProductRows } from '../eligibility/product-eligibility';
 import type { ShopifyCustomer } from '~/types/shopify';
 import { isCustomerOptedIn } from '../stats/customer-consent-stats';
+import { ensureCustomersTable } from '../supabase/ensure-customers-table.server';
+
+// Solo la parte del Job BullMQ che i processor usano davvero. Tipandola cosi'
+// il bulk sync puo' girare anche senza coda (allineamento automatico dal cron),
+// e un Job vero resta compatibile senza cast.
+interface ProgressReporter {
+  updateProgress(value: unknown): Promise<unknown> | unknown;
+}
 
 /**
  * Syncs customers from Shopify into the merchant's Supabase `customers` table.
@@ -80,6 +87,50 @@ async function syncCustomers(
   } while (nextPageInfo);
 
   return total;
+}
+
+/**
+ * Sincronizza i clienti se — e solo se — il piano corrente li include.
+ *
+ * Regge da sola il passaggio di piano in entrambe le direzioni:
+ * - salendo a un piano che include i clienti la tabella puo' non esistere (al
+ *   collegamento viene creata solo se il piano di allora la prevedeva): qui
+ *   viene creata al volo e popolata da zero, senza sync manuale;
+ * - scendendo a un piano che non li include non si scrive piu' nulla, e le
+ *   righe gia' presenti restano dove sono (lo storico non si butta).
+ *
+ * Se la tabella manca e non si riesce a crearla, i clienti vengono saltati con
+ * un avviso: la sync dei prodotti deve arrivare in fondo comunque.
+ */
+async function syncCustomersIfEnabled(opts: {
+  shopId: string;
+  config: Parameters<typeof ensureCustomersTable>[1];
+  customersSyncEnabled: boolean;
+  shopifyClient: ShopifyAPIClient;
+  supabase: SupabaseClient;
+  updatedAtMin?: string;
+}): Promise<number> {
+  if (!opts.customersSyncEnabled) return 0;
+
+  const table = await ensureCustomersTable(opts.shopId, opts.config, opts.supabase);
+  if (table === 'unavailable') {
+    console.warn(
+      `Tabella clienti non disponibile per lo shop ${opts.shopId}: sync clienti saltata`,
+    );
+    return 0;
+  }
+
+  // Tabella appena creata: non c'e' nessuno storico da aggiornare in delta, quindi
+  // si ignora updatedAtMin e si recuperano TUTTI i clienti. E' esattamente il caso
+  // dell'upgrade di piano, dove il delta lascerebbe la tabella quasi vuota.
+  const updatedAtMin = table === 'created' ? undefined : opts.updatedAtMin;
+
+  return syncCustomers(
+    opts.shopifyClient,
+    opts.supabase,
+    opts.config.tableNameCustomers,
+    updatedAtMin,
+  );
 }
 
 /**
@@ -287,15 +338,14 @@ export async function processPeriodicSyncCheck(shopId: string): Promise<void> {
     } while (nextPageInfo);
 
     // Incremental customer sync (delta) if the shop's plan includes customer sync
-    let totalCustomers = 0;
-    if (plan?.customersSyncEnabled) {
-      totalCustomers = await syncCustomers(
-        shopifyClient,
-        supabase,
-        shop.supabaseConfig.tableNameCustomers,
-        lastSyncTime.toISOString()
-      );
-    }
+    const totalCustomers = await syncCustomersIfEnabled({
+      shopId: shop.id,
+      config: shop.supabaseConfig,
+      customersSyncEnabled: plan?.customersSyncEnabled ?? false,
+      shopifyClient,
+      supabase,
+      updatedAtMin: lastSyncTime.toISOString(),
+    });
 
     // Mark completed
     await prisma.syncJob.update({
@@ -339,7 +389,12 @@ export async function processPeriodicSyncCheck(shopId: string): Promise<void> {
  * This prevents infinite duplicates for single-variant products (where shopify_variant_id = NULL
  * and SQL NULL != NULL means onConflict never matches).
  */
-export async function processInitialBulkSync(shopId: string, job: Job<any>): Promise<void> {
+export async function processInitialBulkSync(
+  shopId: string,
+  // Opzionale: l'allineamento automatico dopo un cambio di piano parte dal cron,
+  // senza un job BullMQ a cui riportare l'avanzamento.
+  job?: ProgressReporter,
+): Promise<void> {
   const shop = await prisma.shop.findUnique({
     where: { id: shopId },
     include: { supabaseConfig: true },
@@ -431,7 +486,7 @@ export async function processInitialBulkSync(shopId: string, job: Job<any>): Pro
       }
 
       // Update job progress
-      await job.updateProgress({
+      await job?.updateProgress({
         products: totalProducts,
         variants: totalVariants,
       });
@@ -475,14 +530,13 @@ export async function processInitialBulkSync(shopId: string, job: Job<any>): Pro
     }
 
     // Sync customers if the shop's plan includes customer sync
-    let totalCustomers = 0;
-    if (plan?.customersSyncEnabled) {
-      totalCustomers = await syncCustomers(
-        shopifyClient,
-        supabase,
-        shop.supabaseConfig.tableNameCustomers
-      );
-    }
+    const totalCustomers = await syncCustomersIfEnabled({
+      shopId: shop.id,
+      config: shop.supabaseConfig,
+      customersSyncEnabled: plan?.customersSyncEnabled ?? false,
+      shopifyClient,
+      supabase,
+    });
 
     // Mark sync job as completed
     await prisma.syncJob.update({
@@ -526,7 +580,7 @@ export async function processInitialBulkSync(shopId: string, job: Job<any>): Pro
  * Process manual sync for a shop
  * Task 10: Reuses initial bulk sync logic
  */
-export async function processManualSync(shopId: string, job: Job<any>): Promise<void> {
+export async function processManualSync(shopId: string, job?: ProgressReporter): Promise<void> {
   // Manual sync reuses the same logic as initial bulk sync
   await processInitialBulkSync(shopId, job);
 }
