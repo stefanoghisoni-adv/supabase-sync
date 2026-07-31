@@ -649,7 +649,7 @@ describe('Initial bulk sync processor', () => {
       from: () => ({
         upsert: (rows: any[]) => { upserted.push(...rows); return { error: null }; },
         // Verifica della tabella clienti: qui c'e' gia' ed e' popolata.
-        select: async () => ({ count: 5, error: null }),
+        select: () => ({ limit: async () => ({ data: [{ shopify_customer_id: 1 }], error: null }) }),
         update: () => ({
           in: () => ({ error: null }),
         }),
@@ -708,7 +708,7 @@ describe('Initial bulk sync processor', () => {
     vi.mocked(createSupabaseClient).mockReturnValue({
       from: () => ({
         upsert: (rows: any[]) => { upserted.push(...rows); return { error: null }; },
-        select: async () => ({ count: 5, error: null }),
+        select: () => ({ limit: async () => ({ data: [{ shopify_customer_id: 1 }], error: null }) }),
         update: (payload: any) => ({
           in: (_col: string, ids: any) => {
             revokedUpdates.push({ payload, ids });

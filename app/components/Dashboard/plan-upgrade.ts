@@ -39,13 +39,16 @@ export function syncCtaState(opts: {
   if (opts.inProgress) {
     return { label: 'Sincronizzazione in corso…', disabled: true, loading: true };
   }
+  // Il cambio di piano viene prima di tutto il resto: appena e' rilevato il
+  // recupero parte da solo, quindi il pulsante non deve mai invitare a un clic —
+  // nemmeno quando l'ultima corsa e' fallita e sembrerebbe "mai completata".
+  if (opts.planChanged) {
+    return { label: 'Aggiornamento in corso…', disabled: true, loading: true };
+  }
   // Mai sincronizzato su questa connessione (anche dopo un ricollegamento):
   // qui il primo avvio resta manuale.
   if (!opts.completed) {
     return { label: 'Avvia sincronizzazione', disabled: opts.blocked, loading: false };
-  }
-  if (opts.planChanged) {
-    return { label: 'Aggiornamento in corso…', disabled: true, loading: true };
   }
   return { label: 'Sincronizzazione completata', disabled: true, loading: false };
 }
@@ -91,29 +94,48 @@ export interface PlanChangeBanner {
 }
 
 /**
- * Che cosa comporta il cambio di piano, nei termini che interessano al merchant:
+ * Che cosa comporta il piano attuale, nei termini che interessano al merchant:
  * quanti prodotti restano sincronizzabili e che fine fanno i clienti.
  *
+ * La parte prodotti e' un confronto fra piani, quindi ha senso solo quando c'e'
+ * davvero un passaggio da annunciare. La parte clienti guarda invece lo stato di
+ * fatto — i clienti sono inclusi nel piano? esiste gia' la tabella? — perche'
+ * l'avviso deve arrivare anche quando la sincronizzazione sotto il piano
+ * precedente non era mai andata a buon fine e il confronto fra piani non
+ * segnalerebbe nulla.
+ *
  * Il tono e' warning appena qualcosa si restringe (tetto prodotti piu' basso o
- * clienti non piu' inclusi), success negli altri casi.
+ * clienti non piu' inclusi), success negli altri casi. `null` quando non c'e'
+ * nulla da comunicare.
  */
 export function planChangeBanner(opts: {
+  planChanged: boolean;
   currentMax: number | null;
   previousMax: number | null;
   customersEnabled: boolean;
-  previousCustomersEnabled: boolean;
-}): PlanChangeBanner {
-  const productsDowngrade = cap(opts.currentMax) < cap(opts.previousMax);
-  const customersGained = opts.customersEnabled && !opts.previousCustomersEnabled;
-  const customersLost = !opts.customersEnabled && opts.previousCustomersEnabled;
+  /** La tabella dei clienti risulta gia' creata nel progetto del merchant. */
+  customersTableCreated: boolean;
+}): PlanChangeBanner | null {
+  const productsDowngrade = opts.planChanged && cap(opts.currentMax) < cap(opts.previousMax);
+  // Clienti inclusi dal piano ma tabella ancora da creare: sta per essere
+  // provveduta in automatico.
+  const customersGained = opts.customersEnabled && !opts.customersTableCreated;
+  // Clienti non piu' inclusi ma tabella gia' popolata: sync sospesa, dati fermi.
+  const customersLost = !opts.customersEnabled && opts.customersTableCreated;
 
-  const messages: string[] = [
-    productsDowngrade
-      ? `Alcuni prodotti verranno rimossi per rispettare il limite del piano: ` +
-        `${capLabel(opts.currentMax)} prodotti sincronizzabili.`
-      : `La sincronizzazione rispetterà automaticamente i nuovi limiti del piano: ` +
-        `${capLabel(opts.currentMax)} prodotti sincronizzabili.`,
-  ];
+  if (!opts.planChanged && !customersGained && !customersLost) return null;
+
+  const messages: string[] = [];
+
+  if (opts.planChanged) {
+    messages.push(
+      productsDowngrade
+        ? `Alcuni prodotti verranno rimossi per rispettare il limite del piano: ` +
+            `${capLabel(opts.currentMax)} prodotti sincronizzabili.`
+        : `La sincronizzazione rispetterà automaticamente i nuovi limiti del piano: ` +
+            `${capLabel(opts.currentMax)} prodotti sincronizzabili.`,
+    );
+  }
 
   if (customersGained) {
     messages.push(

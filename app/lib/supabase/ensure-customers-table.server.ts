@@ -51,14 +51,20 @@ type Probe =
 
 /**
  * Interroga la tabella come farebbe la sync: una sola chiamata dice se e'
- * raggiungibile e quante righe contiene (`head` non scarica dati).
+ * raggiungibile e se contiene gia' qualche riga.
+ *
+ * La richiesta e' volutamente una lettura vera di una riga sola, non un
+ * conteggio "a vuoto": su una richiesta senza corpo l'API REST risponde alla
+ * tabella mancante con un 404 privo di dettagli, che il client non riconosce
+ * come errore. Il risultato sarebbe una tabella inesistente riportata come
+ * presente e vuota — quindi mai creata, con la sync clienti destinata a
+ * fallire. Chiedendo una riga il 404 arriva con il suo codice e la tabella
+ * mancante viene vista per quello che e'.
  */
 async function probeTable(supabase: SupabaseClient, table: string): Promise<Probe> {
-  const { count, error } = await supabase
-    .from(table)
-    .select('*', { head: true, count: 'exact' });
+  const { data, error } = await supabase.from(table).select('shopify_customer_id').limit(1);
 
-  if (!error) return { state: 'present', empty: (count ?? 0) === 0 };
+  if (!error) return { state: 'present', empty: (data ?? []).length === 0 };
 
   const code = (error as { code?: string }).code ?? '';
   const message = error.message ?? '';

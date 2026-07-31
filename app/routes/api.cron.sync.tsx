@@ -23,6 +23,10 @@ import { isAuthorized } from '~/utils/authorization.server';
  * initial-bulk / periodic) and (2) runs periodic checks for shops whose plan
  * interval has elapsed. A single failing shop/job never aborts the whole run.
  */
+// Distanza minima fra due tentativi di provvedere la tabella clienti quando il
+// piano la include ma non risulta ancora creata.
+const CUSTOMERS_RETRY_MS = 3_600_000;
+
 export async function loader({ request }: LoaderFunctionArgs) {
   const authHeader = request.headers.get('Authorization');
   if (!process.env.CRON_SECRET || authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -109,9 +113,31 @@ export async function loader({ request }: LoaderFunctionArgs) {
       });
 
       const intervalMs = plan.maxSyncFrequencyHours * 3600 * 1000;
-      const due =
+      let due =
         !lastCheck?.completedAt ||
         Date.now() - lastCheck.completedAt.getTime() >= intervalMs;
+
+      // Piano con clienti inclusi ma tabella clienti mai provveduta: non si
+      // aspetta la cadenza del piano (che sul piano base e' di giorni), si
+      // riprova alla prima occasione utile. Il nuovo tentativo e' distanziato di
+      // almeno un'ora, cosi' un progetto che continua a rifiutare la creazione
+      // non si tira dietro una sync completa a ogni giro del cron.
+      if (!due && plan.customersSyncEnabled && isAuthorized(shop.authorization)) {
+        const elapsed = Date.now() - (lastCheck?.completedAt?.getTime() ?? 0);
+        if (elapsed >= CUSTOMERS_RETRY_MS) {
+          const provisioned = await prisma.syncJob.findFirst({
+            where: {
+              shopId: shop.id,
+              OR: [
+                { jobType: { in: ['table_create_customers', 'table_create_both'] } },
+                { customersSynced: { gt: 0 } },
+              ],
+            },
+            select: { id: true },
+          });
+          due = provisioned === null;
+        }
+      }
 
       if (due) {
         await processPeriodicSyncCheck(shop.id);

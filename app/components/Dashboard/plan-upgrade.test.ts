@@ -58,11 +58,16 @@ describe('syncCtaState', () => {
     expect(cta.loading).toBe(true);
   });
 
-  it('mai sincronizzato su questa connessione → primo avvio manuale', () => {
-    // Anche a piano cambiato: dopo un ricollegamento non c'e' nulla da
-    // "allineare", si riparte da zero e l'avvio resta del merchant.
-    const cta = syncCtaState({ ...base, planChanged: true });
+  it('mai sincronizzato e piano invariato → primo avvio manuale', () => {
+    const cta = syncCtaState({ ...base });
     expect(cta).toEqual({ label: 'Avvia sincronizzazione', disabled: false, loading: false });
+  });
+
+  it('piano cambiato e ultima corsa non riuscita → niente clic da chiedere', () => {
+    // Il recupero riparte da solo: se qui comparisse "Avvia sincronizzazione"
+    // abilitato, il merchant crederebbe di dover intervenire a mano.
+    const cta = syncCtaState({ ...base, completed: false, planChanged: true });
+    expect(cta).toEqual({ label: 'Aggiornamento in corso…', disabled: true, loading: true });
   });
 
   it('negozio sospeso → pulsante disabilitato', () => {
@@ -131,41 +136,45 @@ describe('shouldTriggerPlanCatchUp', () => {
 });
 
 describe('planChangeBanner', () => {
-  const noCustomers = { customersEnabled: false, previousCustomersEnabled: false };
-  const withCustomers = { customersEnabled: true, previousCustomersEnabled: true };
-  const text = (b: { messages: string[] }) => b.messages.join(' ');
+  // Piano senza clienti e nessuna tabella clienti in giro: solo la parte prodotti.
+  const noCustomers = { customersEnabled: false, customersTableCreated: false };
+  // Clienti inclusi e tabella gia' provveduta: niente da annunciare sui clienti.
+  const withCustomers = { customersEnabled: true, customersTableCreated: true };
+  const changed = { planChanged: true };
+  const text = (b: { messages: string[] } | null) => (b?.messages ?? []).join(' ');
 
   it('tetto che sale → success e nuovo limite', () => {
-    const b = planChangeBanner({ currentMax: 400, previousMax: 50, ...noCustomers });
+    const b = planChangeBanner({ ...changed, currentMax: 400, previousMax: 50, ...noCustomers })!;
     expect(b.tone).toBe('success');
     expect(text(b)).toContain('400');
   });
   it('tetto illimitato → success e "senza limite"', () => {
-    const b = planChangeBanner({ currentMax: null, previousMax: 50, ...noCustomers });
+    const b = planChangeBanner({ ...changed, currentMax: null, previousMax: 50, ...noCustomers })!;
     expect(b.tone).toBe('success');
     expect(text(b)).toContain('senza limite');
   });
   it('tetto che scende → warning e avviso di rimozione', () => {
-    const b = planChangeBanner({ currentMax: 50, previousMax: 400, ...noCustomers });
+    const b = planChangeBanner({ ...changed, currentMax: 50, previousMax: 400, ...noCustomers })!;
     expect(b.tone).toBe('warning');
     expect(text(b)).toContain('rimossi');
   });
   it('da illimitato a limitato → warning', () => {
-    const b = planChangeBanner({ currentMax: 50, previousMax: null, ...noCustomers });
+    const b = planChangeBanner({ ...changed, currentMax: 50, previousMax: null, ...noCustomers })!;
     expect(b.tone).toBe('warning');
   });
   it('tetto invariato → success', () => {
-    const b = planChangeBanner({ currentMax: 50, previousMax: 50, ...withCustomers });
+    const b = planChangeBanner({ ...changed, currentMax: 50, previousMax: 50, ...withCustomers })!;
     expect(b.tone).toBe('success');
   });
 
-  it('clienti appena sbloccati → success, tabella creata e popolata subito', () => {
+  it('clienti inclusi e tabella ancora da creare → success, creata e popolata subito', () => {
     const b = planChangeBanner({
+      ...changed,
       currentMax: 400,
       previousMax: 50,
       customersEnabled: true,
-      previousCustomersEnabled: false,
-    });
+      customersTableCreated: false,
+    })!;
     expect(b.tone).toBe('success');
     expect(b.messages).toHaveLength(2);
     expect(text(b)).toContain('acconsentito al marketing');
@@ -174,13 +183,14 @@ describe('planChangeBanner', () => {
     expect(text(b)).toContain('periodica dei prodotti');
   });
 
-  it('clienti persi → warning: sync sospesa ma dati non cancellati', () => {
+  it('clienti non piu\' inclusi ma tabella esistente → warning: sync sospesa, dati intatti', () => {
     const b = planChangeBanner({
+      ...changed,
       currentMax: 50,
       previousMax: 400,
       customersEnabled: false,
-      previousCustomersEnabled: true,
-    });
+      customersTableCreated: true,
+    })!;
     expect(b.tone).toBe('warning');
     expect(text(b)).toContain('si interrompe');
     expect(text(b)).toContain('non vengono cancellati');
@@ -190,16 +200,67 @@ describe('planChangeBanner', () => {
   it('clienti persi con tetto prodotti invariato → resta warning', () => {
     // Il tetto non cambia, ma perdere la sync clienti e' comunque un passo indietro.
     const b = planChangeBanner({
+      ...changed,
       currentMax: 400,
       previousMax: 400,
       customersEnabled: false,
-      previousCustomersEnabled: true,
-    });
+      customersTableCreated: true,
+    })!;
     expect(b.tone).toBe('warning');
   });
 
-  it('clienti gia\' inclusi prima e dopo → nessun paragrafo sui clienti', () => {
-    const b = planChangeBanner({ currentMax: 400, previousMax: 100, ...withCustomers });
+  it('clienti inclusi e tabella gia\' provveduta → nessun paragrafo sui clienti', () => {
+    const b = planChangeBanner({ ...changed, currentMax: 400, previousMax: 100, ...withCustomers })!;
     expect(b.messages).toHaveLength(1);
+  });
+
+  it('sync clienti sospesa: l\'avviso arriva anche senza un cambio di piano rilevato', () => {
+    // E' il caso del downgrade dopo una sync mai riuscita sul piano precedente:
+    // il confronto fra piani non segnalerebbe nulla, ma la tabella clienti c'e'
+    // e da adesso resta ferma. Va detto lo stesso.
+    const b = planChangeBanner({
+      planChanged: false,
+      currentMax: 50,
+      previousMax: null,
+      customersEnabled: false,
+      customersTableCreated: true,
+    })!;
+    expect(b.tone).toBe('warning');
+    expect(b.messages).toHaveLength(1);
+    expect(text(b)).toContain('si interrompe');
+    // Nessun confronto fra tetti prodotti: non c'e' un piano precedente da citare.
+    expect(text(b)).not.toContain('prodotti sincronizzabili');
+  });
+
+  it('tabella clienti ancora da provvedere → l\'avviso arriva anche senza cambio di piano', () => {
+    const b = planChangeBanner({
+      planChanged: false,
+      currentMax: 400,
+      previousMax: null,
+      customersEnabled: true,
+      customersTableCreated: false,
+    })!;
+    expect(b.tone).toBe('success');
+    expect(b.messages).toHaveLength(1);
+    expect(text(b)).toContain('acconsentito al marketing');
+  });
+
+  it('niente da annunciare → nessun banner', () => {
+    expect(
+      planChangeBanner({
+        planChanged: false,
+        currentMax: 50,
+        previousMax: null,
+        ...noCustomers,
+      }),
+    ).toBeNull();
+    expect(
+      planChangeBanner({
+        planChanged: false,
+        currentMax: 400,
+        previousMax: null,
+        ...withCustomers,
+      }),
+    ).toBeNull();
   });
 });

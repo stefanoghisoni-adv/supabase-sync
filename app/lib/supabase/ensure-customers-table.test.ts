@@ -29,17 +29,37 @@ const CONFIG = {
 };
 
 interface ProbeResult {
-  count?: number | null;
+  data?: unknown[] | null;
   error: unknown;
 }
 
-// Client Supabase ridotto a cio' che serve: from().select() con head+count.
+interface FakeSupabase {
+  from: (table: string) => unknown;
+  /** Argomenti di ogni select(), per verificare come viene interrogata la tabella. */
+  selectCalls: unknown[][];
+  /** Argomenti di ogni limit(). */
+  limitCalls: unknown[][];
+}
+
+// Client Supabase ridotto a cio' che serve: from().select().limit().
 // Ogni chiamata consuma un esito; l'ultimo resta valido per le successive.
-function supabaseProbing(...results: ProbeResult[]) {
+function supabaseProbing(...results: ProbeResult[]): FakeSupabase & any {
   const queue = [...results];
+  const selectCalls: unknown[][] = [];
+  const limitCalls: unknown[][] = [];
   return {
+    selectCalls,
+    limitCalls,
     from: () => ({
-      select: async () => (queue.length > 1 ? queue.shift()! : queue[0]),
+      select: (...selectArgs: unknown[]) => {
+        selectCalls.push(selectArgs);
+        return {
+          limit: async (...limitArgs: unknown[]) => {
+            limitCalls.push(limitArgs);
+            return queue.length > 1 ? queue.shift()! : queue[0];
+          },
+        };
+      },
     }),
   } as any;
 }
@@ -59,11 +79,24 @@ describe('ensureCustomersTable', () => {
     const result = await ensureCustomersTable(
       'shop-1',
       CONFIG,
-      supabaseProbing({ count: 12, error: null }),
+      supabaseProbing({ data: [{ shopify_customer_id: 1 }], error: null }),
     );
 
     expect(result).toEqual({ status: 'already_present', empty: false });
     expect(runQuery).not.toHaveBeenCalled();
+  });
+
+  it('la verifica legge davvero una riga, non un conteggio a vuoto', async () => {
+    // Regressione: con una richiesta senza corpo (head+count) l'API REST risponde
+    // alla tabella mancante con un 404 vuoto, che il client non riporta come
+    // errore. La tabella inesistente passerebbe per presente e non verrebbe mai
+    // creata — che e' esattamente il guasto da cui nasce questo controllo.
+    const supabase = supabaseProbing({ data: [], error: null });
+    await ensureCustomersTable('shop-1', CONFIG, supabase);
+
+    expect(supabase.selectCalls).toHaveLength(1);
+    expect(supabase.selectCalls[0]).toEqual(['shopify_customer_id']);
+    expect(supabase.limitCalls[0]).toEqual([1]);
   });
 
   it('tabella presente ma vuota → recupero completo', async () => {
@@ -71,7 +104,7 @@ describe('ensureCustomersTable', () => {
     const result = await ensureCustomersTable(
       'shop-1',
       CONFIG,
-      supabaseProbing({ count: 0, error: null }),
+      supabaseProbing({ data: [], error: null }),
     );
 
     expect(result).toEqual({ status: 'already_present', empty: true });
@@ -83,7 +116,7 @@ describe('ensureCustomersTable', () => {
     const result = await ensureCustomersTable(
       'shop-1',
       CONFIG,
-      supabaseProbing(MISSING, { count: 0, error: null }),
+      supabaseProbing(MISSING, { data: [], error: null }),
     );
 
     expect(result).toEqual({ status: 'created', empty: true });
@@ -107,7 +140,7 @@ describe('ensureCustomersTable', () => {
     const result = await ensureCustomersTable(
       'shop-1',
       CONFIG,
-      supabaseProbing(CACHE_MISS, { count: 0, error: null }),
+      supabaseProbing(CACHE_MISS, { data: [], error: null }),
     );
 
     expect(result.status).toBe('created');
@@ -120,7 +153,7 @@ describe('ensureCustomersTable', () => {
     const result = await ensureCustomersTable(
       'shop-1',
       CONFIG,
-      supabaseProbing(MISSING, { count: 0, error: null }),
+      supabaseProbing(MISSING, { data: [], error: null }),
     );
 
     expect(result.status).toBe('created');
@@ -164,7 +197,7 @@ describe('ensureCustomersTable', () => {
     const result = await ensureCustomersTable(
       'shop-1',
       CONFIG,
-      supabaseProbing({ error: { code: 'PGRST301', message: 'JWT expired' } }, { count: 0, error: null }),
+      supabaseProbing({ error: { code: 'PGRST301', message: 'JWT expired' } }, { data: [], error: null }),
     );
 
     expect(result.status).toBe('created');

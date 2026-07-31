@@ -77,7 +77,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     // il loader costa due round-trip in profondità invece di tre. Su Vercel il
     // DB è remoto, quindi ogni round-trip risparmiato è latenza in meno sul TTFB
     // — che è ciò che domina l'LCP di questa pagina.
-    const [plan, recentJobs] = await Promise.all([
+    const [plan, recentJobs, customersTableJob] = await Promise.all([
       prisma.plan.findUnique({
         where: { planName: shop.currentPlan },
       }),
@@ -85,6 +85,20 @@ export async function loader({ request }: LoaderFunctionArgs) {
         where: { shopId: shop.id },
         orderBy: { startedAt: 'desc' },
         take: 10,
+      }),
+      // La tabella dei clienti risulta gia' provveduta? Vale sia l'evento di
+      // creazione sia una sincronizzazione che ci ha davvero scritto dentro (la
+      // tabella poteva esistere gia' nel progetto, e in quel caso nessuno ha
+      // registrato una creazione).
+      prisma.syncJob.findFirst({
+        where: {
+          shopId: shop.id,
+          OR: [
+            { jobType: { in: ['table_create_customers', 'table_create_both'] } },
+            { customersSynced: { gt: 0 } },
+          ],
+        },
+        select: { id: true },
       }),
     ]);
 
@@ -125,9 +139,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
     // Qui non si accoda nulla (la dashboard non deve toccare la coda): si innesca
     // il giro di sincronizzazione, che riconosce da se' il negozio da recuperare.
     // Best effort e senza attesa: se non parte, ci pensa il giro programmato.
+    // Anche la sola tabella clienti mancante fa scattare il recupero: dopo un
+    // upgrade il piano dell'ultima sync puo' gia' risultare allineato mentre la
+    // tabella non e' ancora stata provveduta.
+    const customersPending =
+      supabaseConnected && customersEnabled && customersTableJob === null;
+
     if (
       shouldTriggerPlanCatchUp({
-        planChanged,
+        planChanged: planChanged || customersPending,
         syncInProgress: syncState === 'in_progress',
         lastBulkStartedAt:
           recentJobs.find((job) => job.jobType === 'initial_bulk')?.startedAt ?? null,
@@ -151,7 +171,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       planChanged,
       currentMaxProducts: plan?.maxProducts ?? null,
       previousMaxProducts: previousPlan?.maxProducts ?? null,
-      previousCustomersEnabled: previousPlan?.customersSyncEnabled ?? false,
+      customersTableCreated: customersTableJob !== null,
     });
   } catch (err) {
     // Le Response (redirect di auth, 404) devono passare intatte.
@@ -237,7 +257,7 @@ interface ProductHistoryResponse {
 }
 
 export default function Dashboard() {
-  const { shop, plan, supabaseConnected, customersEnabled, authorization, syncState, planChanged, currentMaxProducts, previousMaxProducts, previousCustomersEnabled } =
+  const { shop, plan, supabaseConnected, customersEnabled, authorization, syncState, planChanged, currentMaxProducts, previousMaxProducts, customersTableCreated } =
     useLoaderData<typeof loader>();
   const blocked = authorization !== 'ENABLED';
   const navigate = useNavigate();
@@ -341,15 +361,19 @@ export default function Dashboard() {
   // Il tetto di tentativi evita di continuare all'infinito se il recupero non
   // riesce: la dashboard resta comunque aggiornabile ricaricandola.
   const [catchUpTicks, setCatchUpTicks] = useState(0);
+  // Anche la tabella clienti ancora mancante e' un allineamento in corso: si
+  // ricontrolla finche' non risulta provveduta.
+  const catchUpPending =
+    planChanged || (supabaseConnected && customersEnabled && !customersTableCreated);
   useEffect(() => {
-    if (!planChanged || catchUpTicks >= 20) return;
+    if (!catchUpPending || catchUpTicks >= 20) return;
     const id = setTimeout(() => {
       setCatchUpTicks((n) => n + 1);
       revalidator.revalidate();
     }, 15000);
     return () => clearTimeout(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [planChanged, catchUpTicks]);
+  }, [catchUpPending, catchUpTicks]);
 
   // A sync completata il pulsante resta disabilitato: al cambio di piano
   // l'allineamento (clienti e/o prodotti oltre il vecchio tetto) parte da solo,
@@ -365,11 +389,13 @@ export default function Dashboard() {
   const syncTitle = syncButtonLabel({ customersEnabled });
 
   const planBanner = planChangeBanner({
+    planChanged,
     currentMax: currentMaxProducts,
     previousMax: previousMaxProducts,
     customersEnabled,
-    previousCustomersEnabled,
+    customersTableCreated,
   });
+  const hasPlanBanner = planBanner !== null;
 
   // Ciclo di vita del banner. Compare appena c'e' un cambio di piano da
   // annunciare e, una volta comparso, resta per tutta la sessione: il
@@ -388,7 +414,7 @@ export default function Dashboard() {
   // l'allineamento il loader non conosce piu' il piano precedente, quindi il
   // messaggio va conservato com'era quando il cambio e' stato rilevato.
   const [banner, setBanner] = useState<
-    { at: number; value: typeof planBanner } | null
+    { at: number; value: NonNullable<typeof planBanner> } | null
   >(null);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [, forceTick] = useState(0);
@@ -407,13 +433,13 @@ export default function Dashboard() {
         sessionStorage.removeItem(BANNER_KEY);
       }
     }
-    if (planChanged) {
+    if (planBanner) {
       const fresh = { at: Date.now(), value: planBanner };
       sessionStorage.setItem(BANNER_KEY, JSON.stringify(fresh));
       setBanner(fresh);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [planChanged]);
+  }, [hasPlanBanner]);
 
   const dismissBanner = () => {
     sessionStorage.setItem(DISMISSED_KEY, '1');
