@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { Card, BlockStack, Text, Button, Tooltip } from '@shopify/polaris';
+import { Card, BlockStack, InlineStack, Text, Button, Tooltip } from '@shopify/polaris';
 import { MetricRow } from './MetricRow';
 import { middleTruncate } from './copy-value';
 
@@ -12,11 +12,16 @@ export interface DatabaseCardProps {
 }
 
 /**
- * Valore che si copia con un clic: niente pulsante accanto, il valore stesso e'
- * il bersaglio. Il tooltip dice cosa succede prima del clic e conferma dopo,
- * cosi' non serve spostare l'occhio altrove per sapere se ha funzionato.
+ * Riga con il valore che si copia con un clic: niente pulsante accanto, il
+ * valore stesso e' il bersaglio. Il tooltip dice cosa succede prima del clic e
+ * conferma dopo, cosi' non serve spostare l'occhio altrove per sapere se ha
+ * funzionato.
+ *
+ * Stessa impaginazione di MetricRow — etichetta a sinistra, valore a destra —
+ * cosi' i valori cadono nella colonna del badge dello stato e la card si legge
+ * per colonne invece che a blocchi.
  */
-function CopyableValue({ label, value }: { label: string; value: string }) {
+function CopyableRow({ label, value }: { label: string; value: string }) {
   const [copied, setCopied] = useState(false);
 
   const copy = useCallback(() => {
@@ -29,7 +34,7 @@ function CopyableValue({ label, value }: { label: string; value: string }) {
   }, [value]);
 
   return (
-    <BlockStack gap="100">
+    <InlineStack align="space-between" blockAlign="center" gap="200" wrap={false}>
       <Text as="span" variant="bodyMd">
         {label}
       </Text>
@@ -37,11 +42,11 @@ function CopyableValue({ label, value }: { label: string; value: string }) {
         {/* monochromePlain: e' un valore da leggere, non un link da seguire, e
             del blu non ha bisogno. Il testo mostrato puo' essere accorciato,
             quello copiato e' sempre intero. */}
-        <Button variant="monochromePlain" onClick={copy} fullWidth textAlign="left">
+        <Button variant="monochromePlain" onClick={copy} textAlign="right">
           {middleTruncate(value)}
         </Button>
       </Tooltip>
-    </BlockStack>
+    </InlineStack>
   );
 }
 
@@ -61,8 +66,8 @@ export function DatabaseCard({ connected, appUrl, readKey }: DatabaseCardProps) 
         />
         {/* Senza collegamento non esistono ne' indirizzo ne' chiave: la card
             resta alla sola riga di stato. */}
-        {appUrl && <CopyableValue label="App URL" value={appUrl} />}
-        {readKey && <CopyableValue label="Publishable API Key" value={readKey} />}
+        {appUrl && <CopyableRow label="App URL" value={appUrl} />}
+        {readKey && <CopyableRow label="Publishable API Key" value={readKey} />}
       </BlockStack>
     </Card>
   );
