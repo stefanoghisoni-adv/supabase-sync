@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { planLabel, syncFrequencyLabel } from './account-format';
+import {
+  planLabel,
+  syncFrequencyLabel,
+  syncStatusBadge,
+  firstPlanWithCustomersSync,
+} from './account-format';
 
 describe('planLabel', () => {
   it('mappa i piani noti', () => {
@@ -18,6 +23,52 @@ describe('planLabel', () => {
   it('valore assente → trattino', () => {
     expect(planLabel(null)).toBe('—');
     expect(planLabel('')).toBe('—');
+  });
+});
+
+describe('syncStatusBadge', () => {
+  it('attiva → verde', () => {
+    expect(syncStatusBadge(true)).toEqual({ tone: 'success', content: 'Attiva' });
+  });
+  it('non attiva → grigio, senza tono', () => {
+    expect(syncStatusBadge(false)).toEqual({ content: 'Non attiva' });
+  });
+});
+
+describe('firstPlanWithCustomersSync', () => {
+  const plans = [
+    { planName: 'free', priceMonthly: 0, customersSyncEnabled: false },
+    { planName: 'enterprise', priceMonthly: 99, customersSyncEnabled: true },
+    { planName: 'pro', priceMonthly: 19, customersSyncEnabled: true },
+    { planName: 'business', priceMonthly: 49, customersSyncEnabled: true },
+  ];
+
+  it("propone il piu' economico fra quelli che includono i clienti", () => {
+    expect(firstPlanWithCustomersSync(plans, 'free')).toBe('pro');
+  });
+
+  it("salta il piano gia' in uso", () => {
+    expect(firstPlanWithCustomersSync(plans, 'pro')).toBe('business');
+  });
+
+  it('ignora i piani non acquistabili', () => {
+    // Lifetime include i clienti e costa 0, ma non ha una pagina di acquisto:
+    // proporlo manderebbe il merchant su una tab che per lui non esiste.
+    const withLifetime = [
+      { planName: 'lifetime', priceMonthly: 0, customersSyncEnabled: true },
+      ...plans,
+    ];
+    expect(firstPlanWithCustomersSync(withLifetime, 'free')).toBe('pro');
+  });
+
+  it('nessun piano da proporre → null', () => {
+    expect(firstPlanWithCustomersSync([], 'free')).toBeNull();
+    expect(
+      firstPlanWithCustomersSync(
+        [{ planName: 'free', priceMonthly: 0, customersSyncEnabled: false }],
+        'free',
+      ),
+    ).toBeNull();
   });
 });
 

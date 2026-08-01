@@ -10,6 +10,7 @@ import {
   Banner,
   BlockStack,
   InlineStack,
+  InlineGrid,
   Box,
   Modal,
   Text,
@@ -22,6 +23,8 @@ import {
   issueReadProxyToken,
 } from '~/lib/read-proxy/token.server';
 import { AccountCard } from '~/components/Dashboard/AccountCard';
+import { DatabaseCard } from '~/components/Dashboard/DatabaseCard';
+import { firstPlanWithCustomersSync } from '~/components/Dashboard/account-format';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const { session } = await authenticate.admin(request);
@@ -31,17 +34,39 @@ export async function loader({ request }: LoaderFunctionArgs) {
     include: { supabaseConfig: true },
   });
 
-  // Il piano serve alla card Account (frequenza di sync prevista dal piano).
-  const plan = await prisma.plan.findUnique({
-    where: { planName: shop?.currentPlan ?? '' },
-  });
+  // Tutti i piani: da qui esce sia quello in uso (i clienti sono inclusi?) sia
+  // quello da proporre a chi non li ha.
+  const plans = await prisma.plan.findMany();
+  const plan = plans.find((p) => p.planName === (shop?.currentPlan ?? '')) ?? null;
+
+  const connected = !!shop?.supabaseConfig?.connectionVerifiedAt;
+  // Una sincronizzazione "attiva" ha bisogno di tre cose insieme: il progetto
+  // collegato, l'interruttore acceso e il negozio autorizzato (a trial scaduto
+  // e' tutto sospeso, per quanto l'interruttore resti su acceso).
+  const syncRunning =
+    connected &&
+    !!shop?.supabaseConfig?.syncEnabled &&
+    shop?.authorization === 'ENABLED';
+  const customersIncluded = plan?.customersSyncEnabled ?? false;
 
   // Informazioni di account: sempre presenti, anche senza collegamento — proprio
-  // in quel caso "Database: Non collegato" e' l'informazione piu' utile.
+  // in quel caso "Stato: Non collegato" e' l'informazione piu' utile.
   const account = {
-    connected: !!shop?.supabaseConfig?.connectionVerifiedAt,
+    connected,
     planName: shop?.currentPlan ?? '',
-    syncFrequencyHours: plan?.maxSyncFrequencyHours ?? null,
+    productsSyncActive: syncRunning,
+    customersSyncActive: syncRunning && customersIncluded,
+    // Il piano da proporre si calcola solo quando serve davvero.
+    customersUpgradePlan: customersIncluded
+      ? null
+      : firstPlanWithCustomersSync(
+          plans.map((p) => ({
+            planName: p.planName,
+            priceMonthly: Number(p.priceMonthly),
+            customersSyncEnabled: p.customersSyncEnabled,
+          })),
+          shop?.currentPlan ?? null,
+        ),
   };
 
   const config = shop?.supabaseConfig;
@@ -61,8 +86,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
   return json({
     account,
     config: {
-      url: config.supabaseUrl,
-      projectRef: config.supabaseProjectRef ?? null,
       readToken,
       proxyBaseUrl,
       syncEnabled: config.syncEnabled,
@@ -109,50 +132,6 @@ export async function action({ request }: ActionFunctionArgs) {
   return json({ success: 'Impostazioni salvate.' });
 }
 
-function CopyableField({ label, value }: { label: string; value: string }) {
-  const [copied, setCopied] = useState(false);
-  const copy = () => {
-    navigator.clipboard?.writeText(value).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    });
-  };
-  return (
-    <BlockStack gap="100">
-      <Text as="span" variant="headingSm">
-        {label}
-      </Text>
-      {/* flex:1 + minWidth:0 + ellipsis: i due campi hanno la STESSA larghezza; i
-          valori lunghi (anon key) sono troncati con "…" a fine riga, ma il pulsante
-          copia sempre il valore intero. */}
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-        <div
-          title={value}
-          style={{
-            flex: 1,
-            minWidth: 0,
-            background: 'var(--p-color-bg-surface-secondary)',
-            border: '1px solid var(--p-color-border)',
-            borderRadius: 8,
-            padding: '6px 10px',
-            fontFamily: 'var(--p-font-family-mono, monospace)',
-            fontSize: 13,
-            color: 'var(--p-color-text-secondary)',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-          }}
-        >
-          {value}
-        </div>
-        <Button onClick={copy} disabled={!value}>
-          {copied ? 'Copiato' : 'Copia'}
-        </Button>
-      </div>
-    </BlockStack>
-  );
-}
-
 export default function SupabaseSettings() {
   const { account, config } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
@@ -183,11 +162,21 @@ export default function SupabaseSettings() {
             {successMessage && <Banner tone="success">{successMessage}</Banner>}
             {errorMessage && <Banner tone="critical">{errorMessage}</Banner>}
 
-            <AccountCard
-              connected={account.connected}
-              planName={account.planName}
-              syncFrequencyHours={account.syncFrequencyHours}
-            />
+            {/* Account e Database affiancati: sono due letture dello stesso
+                colpo d'occhio (cosa prevede il piano, cosa risponde il progetto). */}
+            <InlineGrid columns={{ xs: 1, md: 2 }} gap="400">
+              <AccountCard
+                planName={account.planName}
+                productsSyncActive={account.productsSyncActive}
+                customersSyncActive={account.customersSyncActive}
+                customersUpgradePlan={account.customersUpgradePlan}
+              />
+              <DatabaseCard
+                connected={account.connected}
+                appUrl={config?.proxyBaseUrl || null}
+                readKey={config?.readToken ?? null}
+              />
+            </InlineGrid>
 
             {!config ? (
               <Banner tone="info">
@@ -196,70 +185,29 @@ export default function SupabaseSettings() {
               </Banner>
             ) : (
               <>
-                <Card>
-                  <BlockStack gap="400">
-                    <Text as="h2" variant="headingMd">
-                      Progetto collegato
-                    </Text>
-                    {config.projectRef && (
-                      <Text as="p" tone="subdued">
-                        Riferimento progetto: <code>{config.projectRef}</code>
-                      </Text>
-                    )}
-                    <CopyableField label="URL del progetto" value={config.url} />
-                    <Text as="p" tone="subdued">
-                      Serve solo per riconoscere il progetto: per il tracciamento
-                      si usano l&apos;URL e la chiave di lettura qui sotto.
-                    </Text>
-                    <Box
-                      background="bg-surface-secondary"
-                      borderRadius="200"
-                      padding="300"
-                    >
-                      <Text as="p" tone="subdued">
-                        🔒 La <strong>service role key</strong> è salvata cifrata e
-                        gestita in modo sicuro dall'app: per motivi di sicurezza non
-                        viene mostrata.
-                      </Text>
-                    </Box>
-                  </BlockStack>
-                </Card>
+                {!config.readToken && (
+                  <Banner tone="warning">
+                    Chiave di lettura non ancora generata. Usa &laquo;Rigenera
+                    chiave di lettura&raquo; per crearne una.
+                  </Banner>
+                )}
+                {!config.proxyBaseUrl && (
+                  <Banner tone="critical">
+                    Indirizzo di lettura non disponibile: manca la configurazione
+                    del dominio dell&apos;app. Contatta il supporto prima di
+                    impostare il tracciamento.
+                  </Banner>
+                )}
 
                 <Card>
                   <BlockStack gap="400">
                     <Text as="h2" variant="headingMd">
-                      Lettura dei dati
+                      Chiave di lettura
                     </Text>
-                    <CopyableField
-                      label="URL di lettura"
-                      value={config.proxyBaseUrl}
-                    />
-                    <CopyableField
-                      label="Chiave di lettura"
-                      value={config.readToken ?? ''}
-                    />
                     <Text as="p" tone="subdued">
-                      Nel tuo tool di tracciamento, dove viene chiesto l&apos;URL del
-                      progetto inserisci l&apos;<strong>URL di lettura</strong> qui
-                      sopra — non l&apos;URL del progetto Supabase — e come chiave
-                      la <strong>chiave di lettura</strong>. Nome tabella e
-                      condizioni restano invariati. Se il tool tiene un elenco di
-                      indirizzi a cui può inviare richieste, aggiungi l&apos;URL di
-                      lettura anche lì.
+                      Rigenerandola, la chiave attuale smette di funzionare: va
+                      sostituita nel tuo tool di tracciamento.
                     </Text>
-                    {!config.readToken && (
-                      <Banner tone="warning">
-                        Chiave di lettura non ancora generata. Usa
-                        &laquo;Rigenera chiave di lettura&raquo; per crearne una.
-                      </Banner>
-                    )}
-                    {!config.proxyBaseUrl && (
-                      <Banner tone="critical">
-                        URL di lettura non disponibile: manca la configurazione
-                        del dominio dell&apos;app. Contatta il supporto prima di
-                        impostare il tracciamento.
-                      </Banner>
-                    )}
                     <InlineStack align="start">
                       <Button
                         tone="critical"
