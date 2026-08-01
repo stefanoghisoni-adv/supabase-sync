@@ -20,6 +20,7 @@ import {
 } from '@shopify/polaris';
 import { SearchIcon } from '@shopify/polaris-icons';
 import { groupRegionsByContinent } from '~/lib/supabase-regions';
+import { projectConfirmationName, matchesProjectName } from './disconnect-confirm';
 
 interface SupabaseProject {
   id: string;
@@ -56,6 +57,10 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
   const [query, setQuery] = useState('');
   const [popupRef, setPopupRef] = useState<Window | null>(null);
   const [showDisconnect, setShowDisconnect] = useState(false);
+  // Secondo passaggio dell'eliminazione: il nome del progetto va scritto a
+  // mano, cosi' un clic distratto non porta via tabelle e dati.
+  const [askingName, setAskingName] = useState(false);
+  const [typedName, setTypedName] = useState('');
   // True se l'ultimo tentativo di collegamento è fallito (popup chiuso senza
   // confermare l'integrazione, o errore OAuth): guida il badge "Fallito".
   const [connectFailed, setConnectFailed] = useState(false);
@@ -93,6 +98,12 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
   const planLimitHit = Boolean(limits?.limitReached || planLimitFromCreate);
   const planLimitBillingUrl = createFetcher.data?.billingUrl ?? limits?.billingUrl ?? null;
   const disconnecting = disconnectFetcher.state !== 'idle';
+
+  const confirmationName = projectConfirmationName({ projectName, projectUrl });
+  // Senza un nome da confrontare non si puo' chiedere conferma: in quel caso il
+  // passaggio non compare e resta il comportamento diretto.
+  const nameConfirmed =
+    confirmationName != null && matchesProjectName(typedName, confirmationName);
 
   const [regionPopoverActive, setRegionPopoverActive] = useState(false);
   // Se la richiesta delle region non arriva mai in porto (rete giù, 500), dopo
@@ -220,6 +231,14 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
       { method: 'post', action: '/api/supabase/select-project', encType: 'application/json' },
     );
   }, [selectFetcher, selectedRef]);
+
+  // Chiudendo il modal si riparte dal principio: riaprirlo non deve ritrovare
+  // il campo gia' compilato dalla volta prima.
+  const closeDisconnect = useCallback(() => {
+    setShowDisconnect(false);
+    setAskingName(false);
+    setTypedName('');
+  }, []);
 
   const disconnect = useCallback(
     (deleteData: boolean) => {
@@ -399,14 +418,22 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
 
         <Modal
           open={showDisconnect}
-          onClose={() => setShowDisconnect(false)}
+          onClose={closeDisconnect}
           title="Scollegare Supabase?"
           primaryAction={{
             content: 'Elimina tabelle e dati',
             destructive: true,
-            onAction: () => disconnect(true),
+            // Primo clic: chiede di scrivere il nome del progetto. Il secondo
+            // cancella davvero, e arriva solo se il nome corrisponde.
+            onAction: () => {
+              if (confirmationName && !askingName) {
+                setAskingName(true);
+                return;
+              }
+              disconnect(true);
+            },
             loading: disconnectFetcher.state !== 'idle' && disconnectMode === 'delete',
-            disabled: disconnectFetcher.state !== 'idle',
+            disabled: disconnectFetcher.state !== 'idle' || (askingName && !nameConfirmed),
           }}
           secondaryActions={[
             {
@@ -417,17 +444,39 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
             },
             {
               content: 'Annulla',
-              onAction: () => setShowDisconnect(false),
+              onAction: closeDisconnect,
               disabled: disconnectFetcher.state !== 'idle',
             },
           ]}
         >
           <Modal.Section>
-            <Text as="p">
-              Puoi <strong>eliminare</strong> le tabelle e i dati sincronizzati dal tuo
-              progetto Supabase, oppure <strong>mantenerli</strong> (verrà interrotta solo la
-              sincronizzazione). In entrambi i casi il collegamento verrà rimosso.
-            </Text>
+            <BlockStack gap="400">
+              <Text as="p">
+                Puoi <strong>eliminare</strong> le tabelle e i dati sincronizzati dal tuo
+                progetto Supabase, oppure <strong>mantenerli</strong> (verrà interrotta solo la
+                sincronizzazione). In entrambi i casi il collegamento verrà rimosso.
+              </Text>
+
+              {askingName && (
+                <BlockStack gap="200">
+                  <Text as="p">
+                    Inserisci qui sotto il nome del progetto{' '}
+                    <strong>{confirmationName}</strong>
+                  </Text>
+                  <TextField
+                    label="Nome del progetto"
+                    labelHidden
+                    value={typedName}
+                    onChange={setTypedName}
+                    autoComplete="off"
+                    autoFocus
+                    placeholder={confirmationName ?? ''}
+                    disabled={disconnectFetcher.state !== 'idle'}
+                    helpText="L'eliminazione parte solo se il nome corrisponde."
+                  />
+                </BlockStack>
+              )}
+            </BlockStack>
           </Modal.Section>
         </Modal>
       </BlockStack>
