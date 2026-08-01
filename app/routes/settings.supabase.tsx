@@ -207,6 +207,10 @@ export default function SupabaseSettings() {
                       </Text>
                     )}
                     <CopyableField label="URL del progetto" value={config.url} />
+                    <Text as="p" tone="subdued">
+                      Serve solo per riconoscere il progetto: per il tracciamento
+                      si usano l&apos;URL e la chiave di lettura qui sotto.
+                    </Text>
                     <Box
                       background="bg-surface-secondary"
                       borderRadius="200"
@@ -235,9 +239,13 @@ export default function SupabaseSettings() {
                       value={config.readToken ?? ''}
                     />
                     <Text as="p" tone="subdued">
-                      Nel tuo tool di tracciamento imposta <code>projectUrl</code> con
-                      l&apos;URL di lettura e <code>apiKey</code> con la chiave di
-                      lettura. Nome tabella e condizioni restano invariati.
+                      Nel tuo tool di tracciamento, dove viene chiesto l&apos;URL del
+                      progetto inserisci l&apos;<strong>URL di lettura</strong> qui
+                      sopra — non l&apos;URL del progetto Supabase — e come chiave
+                      la <strong>chiave di lettura</strong>. Nome tabella e
+                      condizioni restano invariati. Se il tool tiene un elenco di
+                      indirizzi a cui può inviare richieste, aggiungi l&apos;URL di
+                      lettura anche lì.
                     </Text>
                     {!config.readToken && (
                       <Banner tone="warning">
