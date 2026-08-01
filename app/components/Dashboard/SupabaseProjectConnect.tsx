@@ -1,22 +1,21 @@
-// app/components/Dashboard/SupabaseConnect.tsx
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useFetcher, useRevalidator } from '@remix-run/react';
 import {
   BlockStack,
-  InlineStack,
   Box,
   Button,
-  Text,
   Banner,
   Combobox,
-  Listbox,
-  Labelled,
-  Popover,
-  OptionList,
   Icon,
-  TextField,
-  Spinner,
+  InlineStack,
+  Labelled,
+  Listbox,
   Modal,
+  OptionList,
+  Popover,
+  Spinner,
+  Text,
+  TextField,
 } from '@shopify/polaris';
 import { SearchIcon } from '@shopify/polaris-icons';
 import { groupRegionsByContinent } from '~/lib/supabase-regions';
@@ -29,7 +28,8 @@ interface SupabaseProject {
   region: string;
 }
 
-interface SupabaseConnectProps {
+export interface SupabaseProjectConnectProps {
+  /** Un database e' gia' collegato e le tabelle sono pronte. */
   connected: boolean;
   projectName?: string;
   projectUrl?: string;
@@ -37,43 +37,52 @@ interface SupabaseConnectProps {
   disabled?: boolean;
   // Stato di autorizzazione: guida il banner nello stato "collegato".
   authorization?: 'ENABLED' | 'PENDING' | 'DISABLED';
-  // Notifica il parent lo stato del flusso di collegamento (guida il badge del
-  // primo step: In corso / Fallito / Non collegato).
-  onConnectStatusChange?: (status: SupabaseConnectStatus) => void;
   // Disconnessione riuscita: il parent mostra il banner di conferma in cima alla
   // dashboard. Qui non lo si puo' fare, il componente viene rimontato subito dopo.
   onDisconnected?: (mode: 'delete' | 'keep') => void;
 }
 
-export type SupabaseConnectStatus = 'idle' | 'in_progress' | 'failed';
-
-export function SupabaseConnect({ connected, projectName, projectUrl, disabled, authorization = 'ENABLED', onConnectStatusChange, onDisconnected }: SupabaseConnectProps) {
+/**
+ * Secondo passo: scelta o creazione del database.
+ *
+ * Arriva a questo punto chi ha gia' fatto l'accesso, quindi l'elenco dei
+ * progetti si carica da solo: non ha senso far premere un altro pulsante per
+ * vedere qualcosa che a questo punto e' dovuto.
+ */
+export function SupabaseProjectConnect({
+  connected,
+  projectName,
+  projectUrl,
+  disabled,
+  authorization = 'ENABLED',
+  onDisconnected,
+}: SupabaseProjectConnectProps) {
   const revalidator = useRevalidator();
-  const urlFetcher = useFetcher<{ url?: string; error?: string }>();
   const projectsFetcher = useFetcher<{ projects: SupabaseProject[]; error?: string }>();
   const selectFetcher = useFetcher<{ ok?: boolean; error?: string }>();
   const disconnectFetcher = useFetcher<{ ok?: boolean }>();
 
-  const [connecting, setConnecting] = useState(false);
-  const [oauthError, setOauthError] = useState<string | null>(null);
   const [selectedRef, setSelectedRef] = useState<string>('');
   const [query, setQuery] = useState('');
-  const [popupRef, setPopupRef] = useState<Window | null>(null);
   const [showDisconnect, setShowDisconnect] = useState(false);
   // Secondo passaggio dell'eliminazione: il nome del progetto va scritto a
   // mano, cosi' un clic distratto non porta via tabelle e dati.
   const [askingName, setAskingName] = useState(false);
   const [typedName, setTypedName] = useState('');
-  // True se l'ultimo tentativo di collegamento è fallito (popup chiuso senza
-  // confermare l'integrazione, o errore OAuth): guida il badge "Fallito".
-  const [connectFailed, setConnectFailed] = useState(false);
-  // Quale azione di disconnessione è in corso: così il loader appare SOLO sul
+  // Quale azione di disconnessione e' in corso: cosi' il loader appare SOLO sul
   // bottone cliccato ("Elimina" o "Mantieni"), mentre entrambi restano disabilitati.
   const [disconnectMode, setDisconnectMode] = useState<'delete' | 'keep' | null>(null);
 
-  // State for create-project form
+  // Creazione di un nuovo progetto.
   const regionsFetcher = useFetcher<{ regions: { id: string; name: string }[] }>();
-  const createFetcher = useFetcher<{ ok?: boolean; ref?: string; password?: string; error?: string; code?: string; billingUrl?: string | null }>();
+  const createFetcher = useFetcher<{
+    ok?: boolean;
+    ref?: string;
+    password?: string;
+    error?: string;
+    code?: string;
+    billingUrl?: string | null;
+  }>();
   const regenFetcher = useFetcher<{ ok?: boolean; password?: string; error?: string }>();
 
   const [showCreate, setShowCreate] = useState(false);
@@ -114,6 +123,21 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
   // statica: meglio un default utilizzabile di uno spinner infinito.
   const [regionsTimedOut, setRegionsTimedOut] = useState(false);
 
+  const [genPassword, setGenPassword] = useState('');
+  const [creatingRef, setCreatingRef] = useState<string | null>(null);
+  const [provisioning, setProvisioning] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+
+  // L'elenco dei progetti si carica appena il passo e' raggiungibile: chi e' qui
+  // ha gia' dato il consenso, quindi non c'e' altro da chiedergli.
+  useEffect(() => {
+    if (connected) return;
+    if (projectsFetcher.state === 'idle' && !projectsFetcher.data) {
+      projectsFetcher.load('/api/supabase/projects');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connected]);
+
   useEffect(() => {
     if (!showCreate || regionsFetcher.data || regionsFetcher.state === 'loading') return;
     const timer = setTimeout(() => setRegionsTimedOut(true), 8000);
@@ -153,80 +177,6 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
       })),
     [regionGroups],
   );
-  const [genPassword, setGenPassword] = useState('');
-  const [creatingRef, setCreatingRef] = useState<string | null>(null);
-  const [provisioning, setProvisioning] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
-
-  // Ricezione esito OAuth dal popup (origine validata).
-  useEffect(() => {
-    const appOrigin = window.location.origin;
-    function onMessage(event: MessageEvent) {
-      if (event.origin !== appOrigin) return;
-      const data = event.data as { type?: string; ok?: boolean; error?: string };
-      if (!data || data.type !== 'supabase-oauth') return;
-      setConnecting(false);
-      setPopupRef(null);
-      if (data.ok) {
-        setOauthError(null);
-        setConnectFailed(false);
-        projectsFetcher.load('/api/supabase/projects');
-      } else {
-        setConnectFailed(true);
-        setOauthError('Collegamento a Supabase non riuscito. Riprova.');
-      }
-    }
-    window.addEventListener('message', onMessage);
-    return () => window.removeEventListener('message', onMessage);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Reindirizza il popup quando l'URL di authorize è pronto.
-  useEffect(() => {
-    if (urlFetcher.data?.url && popupRef) {
-      popupRef.location.href = urlFetcher.data.url;
-    } else if (urlFetcher.data?.error && popupRef) {
-      popupRef.close();
-      setPopupRef(null);
-      setConnecting(false);
-      setConnectFailed(true);
-      setOauthError(urlFetcher.data.error);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [urlFetcher.data]);
-
-  // Rileva la chiusura del popup senza esito: se l'utente chiude la finestra
-  // OAuth senza confermare l'integrazione, nessun messaggio arriva → il flusso
-  // è fallito. (Alla connessione riuscita `connecting` è già false: niente fallito.)
-  useEffect(() => {
-    if (!popupRef) return;
-    const timer = setInterval(() => {
-      if (popupRef.closed) {
-        clearInterval(timer);
-        setConnecting((isConnecting) => {
-          if (isConnecting) setConnectFailed(true);
-          return false;
-        });
-        setPopupRef(null);
-      }
-    }, 500);
-    return () => clearInterval(timer);
-  }, [popupRef]);
-
-  const startConnect = useCallback(() => {
-    setOauthError(null);
-    setConnectFailed(false);
-    // Un nuovo collegamento riparte pulito, anche dopo una disconnessione.
-    setDismissedFlow(false);
-    const popup = window.open('', 'supabase-oauth', 'width=600,height=760');
-    if (!popup) {
-      setOauthError('Consenti i popup per collegare Supabase.');
-      return;
-    }
-    setPopupRef(popup);
-    setConnecting(true);
-    urlFetcher.submit(null, { method: 'post', action: '/api/supabase/oauth-url' });
-  }, [urlFetcher]);
 
   const confirmSelection = useCallback(() => {
     selectFetcher.submit(
@@ -257,10 +207,7 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
   // Al successo di selezione o disconnessione, ricarica il loader.
   useEffect(() => {
     if (selectFetcher.data?.ok || disconnectFetcher.data?.ok) {
-      // Disconnessione a flusso non completato: riporta il componente allo
-      // stato iniziale (la revalidation da sola non basta, vedi dismissedFlow).
       if (disconnectFetcher.data?.ok) {
-        setDismissedFlow(true);
         // disconnectMode dice quale delle due strade e' stata presa: il testo
         // del banner cambia se i dati sono stati eliminati o mantenuti.
         onDisconnected?.(disconnectMode ?? 'keep');
@@ -271,36 +218,7 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
   }, [selectFetcher.data, disconnectFetcher.data]);
 
   const projects = projectsFetcher.data?.projects;
-  // dismissedFlow: dopo una disconnessione a flusso non completato (OAuth fatto
-  // ma nessun progetto scelto) lo stato server non cambia — `connected` era già
-  // false — quindi la revalidation non azzera nulla e il fetcher locale resta
-  // popolato. Questo flag riporta a mano il componente allo stato iniziale
-  // ("Collega Supabase"); startConnect lo rimette a false per un nuovo tentativo.
-  const [dismissedFlow, setDismissedFlow] = useState(false);
-  const projectsLoaded =
-    !dismissedFlow && projectsFetcher.state === 'idle' && projects !== undefined;
-
-  // "In corso": il flusso di collegamento è partito ma non ancora completato
-  // (OAuth, caricamento/scelta progetto, creazione tabelle).
-  const flowActive =
-    !connected &&
-    (connecting ||
-      projectsFetcher.state === 'loading' ||
-      projectsLoaded ||
-      provisioning ||
-      selectFetcher.state !== 'idle' ||
-      createFetcher.state !== 'idle');
-
-  // Stato notificato al parent per il badge del primo step:
-  // Non collegato (idle) → In corso → Fallito → (Collegato lo decide il parent).
-  const connectStatus: SupabaseConnectStatus = connectFailed
-    ? 'failed'
-    : flowActive
-      ? 'in_progress'
-      : 'idle';
-  useEffect(() => {
-    onConnectStatusChange?.(connectStatus);
-  }, [connectStatus, onConnectStatusChange]);
+  const projectsLoaded = projectsFetcher.state === 'idle' && projects !== undefined;
 
   const filtered = useMemo(() => {
     if (!projects) return [];
@@ -363,14 +281,20 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
         return;
       }
       try {
-        const res = await fetch(`/api/supabase/project-status?ref=${encodeURIComponent(creatingRef)}`);
+        const res = await fetch(
+          `/api/supabase/project-status?ref=${encodeURIComponent(creatingRef)}`,
+        );
         const data = (await res.json()) as { ready?: boolean };
         if (data.ready && !cancelled) {
           clearInterval(timer);
           setProvisioning(false);
           selectFetcher.submit(
             { ref: creatingRef },
-            { method: 'post', action: '/api/supabase/select-project', encType: 'application/json' },
+            {
+              method: 'post',
+              action: '/api/supabase/select-project',
+              encType: 'application/json',
+            },
           );
         }
       } catch {
@@ -396,7 +320,7 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
     regenFetcher.submit(null, { method: 'post', action: '/api/supabase/regenerate-password' });
   }, [regenFetcher]);
 
-  // STATO: collegato
+  // STATO: database collegato
   if (connected) {
     return (
       <BlockStack gap="300">
@@ -405,19 +329,16 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
         ) : authorization === 'PENDING' ? (
           <Banner tone="warning">Sincronizzazione sospesa.</Banner>
         ) : null}
-        {projectUrl && (
+        {projectName && (
           <Text as="p" tone="subdued">
-            URL: <code>{projectUrl}</code>
+            Database collegato: <strong>{projectName}</strong>
           </Text>
         )}
         <InlineStack gap="200">
-          <Button variant="primary" disabled>
-            Collega Supabase
-          </Button>
           <Button
             tone="critical"
             onClick={() => setShowDisconnect(true)}
-            loading={disconnectFetcher.state !== 'idle'}
+            loading={disconnecting}
             disabled={disabled}
           >
             Disconnetti
@@ -440,20 +361,20 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
               }
               disconnect(true);
             },
-            loading: disconnectFetcher.state !== 'idle' && disconnectMode === 'delete',
-            disabled: disconnectFetcher.state !== 'idle' || (askingName && !nameConfirmed),
+            loading: disconnecting && disconnectMode === 'delete',
+            disabled: disconnecting || (askingName && !nameConfirmed),
           }}
           secondaryActions={[
             {
               content: 'Mantieni i dati',
               onAction: () => disconnect(false),
-              loading: disconnectFetcher.state !== 'idle' && disconnectMode === 'keep',
-              disabled: disconnectFetcher.state !== 'idle',
+              loading: disconnecting && disconnectMode === 'keep',
+              disabled: disconnecting,
             },
             {
               content: 'Annulla',
               onAction: closeDisconnect,
-              disabled: disconnectFetcher.state !== 'idle',
+              disabled: disconnecting,
             },
           ]}
         >
@@ -479,7 +400,7 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
                     autoComplete="off"
                     autoFocus
                     placeholder={confirmationName ?? ''}
-                    disabled={disconnectFetcher.state !== 'idle'}
+                    disabled={disconnecting}
                     helpText="L'eliminazione parte solo se il nome corrisponde."
                   />
                 </BlockStack>
@@ -508,32 +429,23 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
           </Text>
         </Banner>
       )}
-      <Text as="p" tone="subdued">
-        Accedi a Supabase o crea un nuovo account. Subito dopo l'accesso ti verrà chiesto di
-        accettare l'integrazione e, proseguendo, potrai selezionare o creare un nuovo database
-        da collegare.
-      </Text>
 
-      {oauthError && <Banner tone="critical">{oauthError}</Banner>}
+      {projectsFetcher.data?.error && (
+        <Banner tone="critical">{projectsFetcher.data.error}</Banner>
+      )}
 
       {!projectsLoaded && (
-        <InlineStack>
-          <Button
-            variant="primary"
-            onClick={startConnect}
-            // Resta in loading da quando parte OAuth fino al caricamento dei
-            // progetti: torna attivo solo se il collegamento fallisce (oauthError).
-            loading={connecting || projectsFetcher.state === 'loading'}
-            disabled={disabled || connecting || projectsFetcher.state === 'loading'}
-          >
-            Collega Supabase
-          </Button>
+        <InlineStack gap="200" blockAlign="center">
+          <Spinner accessibilityLabel="Caricamento dei database" size="small" />
+          <Text as="span" tone="subdued">
+            Caricamento dei database del tuo account…
+          </Text>
         </InlineStack>
       )}
 
       {projectsLoaded && projects && projects.length === 0 && (
         <Banner tone="warning">
-          Nessun progetto trovato nel tuo account Supabase. Puoi crearne uno qui sotto.
+          Nessun database trovato nel tuo account Supabase. Puoi crearne uno qui sotto.
         </Banner>
       )}
 
@@ -549,9 +461,9 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
                   // campo mostra ciò che si sta cercando e la lista si rifiltra.
                   if (selectedRef) setSelectedRef('');
                 }}
-                label="Progetto Supabase"
+                label="Database"
                 value={selectedRef ? selectedName : query}
-                placeholder="Seleziona un progetto…"
+                placeholder="Seleziona un database…"
                 autoComplete="off"
               />
             }
@@ -576,9 +488,8 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
 
       {projectsLoaded && projects && !showCreate && (
         // Disconnessione SEMPLICE in entrambi i rami: qui non è stato creato né
-        // collegato alcun progetto, quindi non c'è nulla da eliminare — si
-        // scollega e basta, senza il modal "mantieni/elimina dati". Pulsante
-        // con bordo ma testo rosso (tone critical), come "Rimuovi negozio".
+        // collegato alcun database, quindi non c'è nulla da eliminare — si
+        // scollega e basta, senza il modal "mantieni/elimina dati".
         <InlineStack gap="300" blockAlign="center">
           {planLimitHit ? (
             // Limite raggiunto: creare non è possibile, quindi offriamo l'upgrade.
@@ -597,7 +508,7 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
               loading={limitsChecking}
               disabled={disabled || limitsChecking || disconnecting}
             >
-              ➕ Crea nuovo progetto
+              ➕ Crea nuovo database
             </Button>
           )}
           <Button
@@ -618,7 +529,7 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
         <Box maxWidth="420px">
           <BlockStack gap="300">
             <TextField
-              label="Nome del nuovo progetto"
+              label="Nome del nuovo database"
               value={newName}
               onChange={setNewName}
               autoComplete="off"
@@ -683,7 +594,9 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
                 </Text>
                 <InlineStack gap="200" blockAlign="center">
                   <code>{genPassword}</code>
-                  <Button onClick={() => navigator.clipboard?.writeText(genPassword)}>Copia</Button>
+                  <Button onClick={() => navigator.clipboard?.writeText(genPassword)}>
+                    Copia
+                  </Button>
                   <Button
                     onClick={regenerate}
                     loading={regenFetcher.state !== 'idle'}
@@ -701,7 +614,9 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
             {provisioning ? (
               <InlineStack gap="200" blockAlign="center">
                 <Spinner accessibilityLabel="Creazione in corso" size="small" />
-                <Text as="span">Creazione del progetto in corso… (può richiedere 1-2 minuti)</Text>
+                <Text as="span">
+                  Creazione del database in corso… (può richiedere 1-2 minuti)
+                </Text>
               </InlineStack>
             ) : (
               <InlineStack gap="200">
@@ -711,7 +626,7 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
                   loading={createFetcher.state !== 'idle'}
                   disabled={!newName || disabled}
                 >
-                  Crea progetto
+                  Crea database
                 </Button>
                 <Button onClick={() => setShowCreate(false)}>Annulla</Button>
               </InlineStack>
@@ -723,11 +638,12 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
       {selectedRef && (
         <BlockStack gap="200">
           <Text as="p" tone="subdued">
-            Progetto: <strong>{selectedName}</strong> — URL:{' '}
-            <code>https://{selectedRef}.supabase.co</code>. Confermando, l'app salverà le chiavi
-            e creerà le tabelle <code>products</code>/<code>customers</code>.
+            Database: <strong>{selectedName}</strong>. Confermando, l&apos;app preparerà le
+            tabelle e collegherà il database.
           </Text>
-          {selectFetcher.data?.error && <Banner tone="critical">{selectFetcher.data.error}</Banner>}
+          {selectFetcher.data?.error && (
+            <Banner tone="critical">{selectFetcher.data.error}</Banner>
+          )}
           <InlineStack>
             <Button
               variant="primary"
@@ -735,7 +651,7 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
               loading={selectFetcher.state !== 'idle'}
               disabled={disabled}
             >
-              Conferma e crea tabelle
+              Conferma e prepara le tabelle
             </Button>
           </InlineStack>
         </BlockStack>

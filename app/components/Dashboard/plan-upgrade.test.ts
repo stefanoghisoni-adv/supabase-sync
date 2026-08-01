@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   hasPlanChanged,
-  syncButtonLabel,
+  syncStepTitle,
   planChangeBanner,
   shouldTriggerPlanCatchUp,
   syncCtaState,
@@ -22,12 +22,12 @@ describe('hasPlanChanged', () => {
   });
 });
 
-describe('syncButtonLabel', () => {
+describe('syncStepTitle', () => {
   it('con clienti inclusi', () => {
-    expect(syncButtonLabel({ customersEnabled: true })).toBe('Sincronizza prodotti e clienti');
+    expect(syncStepTitle({ customersEnabled: true })).toBe('Sincronizzazione prodotti e clienti');
   });
   it('senza clienti', () => {
-    expect(syncButtonLabel({ customersEnabled: false })).toBe('Sincronizza prodotti');
+    expect(syncStepTitle({ customersEnabled: false })).toBe('Sincronizzazione prodotti');
   });
 });
 

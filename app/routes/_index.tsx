@@ -22,7 +22,8 @@ import { PlanBanner } from '~/components/Dashboard/PlanBanner';
 import { Stepper, type StepperItem } from '~/components/Dashboard/Stepper';
 import { EligibilityChart } from '~/components/Dashboard/EligibilityChart';
 import { resolveStepStates } from '~/components/Dashboard/stepper-state';
-import { SupabaseConnect } from '~/components/Dashboard/SupabaseConnect';
+import { SupabaseAccountConnect } from '~/components/Dashboard/SupabaseAccountConnect';
+import { SupabaseProjectConnect } from '~/components/Dashboard/SupabaseProjectConnect';
 import { prisma } from '~/db.server';
 import { getOrCreateShop } from '~/utils/shop.server';
 import { normalizeAuthorization, isAuthorized } from '~/utils/authorization.server';
@@ -32,7 +33,7 @@ import { authenticate } from '~/shopify.server';
 import { ShopifyAPIClient } from '~/lib/shopify-api.server';
 import {
   hasPlanChanged,
-  syncButtonLabel,
+  syncStepTitle,
   planChangeBanner,
   shouldTriggerPlanCatchUp,
   syncCtaState,
@@ -77,7 +78,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     // il loader costa due round-trip in profondità invece di tre. Su Vercel il
     // DB è remoto, quindi ogni round-trip risparmiato è latenza in meno sul TTFB
     // — che è ciò che domina l'LCP di questa pagina.
-    const [plan, recentJobs, customersTableJob] = await Promise.all([
+    const [plan, recentJobs, customersTableJob, oauthToken] = await Promise.all([
       prisma.plan.findUnique({
         where: { planName: shop.currentPlan },
       }),
@@ -100,6 +101,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
         },
         select: { id: true },
       }),
+      // Accesso a Supabase gia' fatto? E' il primo dei tre passi, e vale anche
+      // senza un database scelto: chi chiude l'app a meta' flusso lo ritrova
+      // concluso. Del token non serve altro che l'esistenza.
+      prisma.supabaseOAuthToken.findUnique({
+        where: { shopId: shop.id },
+        select: { id: true },
+      }),
     ]);
 
     // Autorizzazione: se il trial (giorni definiti nel piano) è scaduto e il
@@ -117,6 +125,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     }
 
     const supabaseConnected = !!shop.supabaseConfig?.connectionVerifiedAt;
+    const supabaseAccountConnected = oauthToken !== null;
     const customersEnabled = plan?.customersSyncEnabled ?? false;
 
     // Stato della sync iniziale/manuale, legato alla connessione CORRENTE
@@ -165,6 +174,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       shop,
       plan,
       supabaseConnected,
+      supabaseAccountConnected,
       customersEnabled,
       syncState,
       authorization,
@@ -259,7 +269,7 @@ interface ProductHistoryResponse {
 }
 
 export default function Dashboard() {
-  const { shop, plan, supabaseConnected, customersEnabled, authorization, syncState, planChanged, currentMaxProducts, previousMaxProducts, customersTableCreated } =
+  const { shop, plan, supabaseConnected, supabaseAccountConnected, customersEnabled, authorization, syncState, planChanged, currentMaxProducts, previousMaxProducts, customersTableCreated } =
     useLoaderData<typeof loader>();
   const blocked = authorization !== 'ENABLED';
   const navigate = useNavigate();
@@ -277,11 +287,13 @@ export default function Dashboard() {
   // Stato del collegamento Supabase per il badge del primo step: Non collegato
   // (grigio) → In corso (arancione) → Fallito (rosso) / Collegato (verde).
   const [connectStatus, setConnectStatus] = useState<'idle' | 'in_progress' | 'failed'>('idle');
-  // Esito dell'ultima disconnessione. Vive qui e non dentro SupabaseConnect
+  // Esito dell'ultima disconnessione. Vive qui e non dentro SupabaseProjectConnect
   // perche' quel componente viene rimontato appena il collegamento cade: il
   // banner sparirebbe nello stesso istante in cui deve comparire.
   const [disconnectDone, setDisconnectDone] = useState<'delete' | 'keep' | null>(null);
-  const connectBadge = supabaseConnected
+  // Badge del primo passo. "Collegato" lo decide il server (l'accesso risulta
+  // fatto); gli stati intermedi li conosce solo il componente, che li riporta.
+  const connectBadge = supabaseAccountConnected || supabaseConnected
     ? { tone: 'success' as const, label: 'Collegato' }
     : connectStatus === 'failed'
       ? { tone: 'critical' as const, label: 'Fallito' }
@@ -391,8 +403,8 @@ export default function Dashboard() {
     planChanged,
   });
 
-  const steps = resolveStepStates(supabaseConnected);
-  const syncTitle = syncButtonLabel({ customersEnabled });
+  const steps = resolveStepStates(supabaseAccountConnected, supabaseConnected);
+  const syncTitle = syncStepTitle({ customersEnabled });
 
   const planBanner = planChangeBanner({
     planChanged,
@@ -498,21 +510,34 @@ export default function Dashboard() {
     {
       id: 'connect-supabase',
       title: 'Collega Supabase',
-      state: steps.connectSupabase,
+      state: steps.connectAccount,
       completeLabel: 'Collegato',
       badge: connectBadge,
       content: (
-        // key sullo stato di connessione: rimonta il componente quando ci si
-        // collega/scollega, azzerando lo state locale (evita il modal disconnetti
-        // che riappare da solo e il flow rimasto "sporco" dopo un disconnect).
-        <SupabaseConnect
+        // key sullo stato: rimonta il componente quando ci si collega o si
+        // scollega, azzerando lo state locale (errori del tentativo precedente).
+        <SupabaseAccountConnect
+          key={supabaseAccountConnected ? 'connected' : 'disconnected'}
+          connected={supabaseAccountConnected}
+          disabled={blocked}
+          onStatusChange={setConnectStatus}
+        />
+      ),
+    },
+    {
+      id: 'connect-database',
+      title: 'Crea o collega un database',
+      state: steps.connectDatabase,
+      completeLabel: 'Collegato',
+      lockedHint: 'Accedi a Supabase per scegliere il database da collegare.',
+      content: (
+        <SupabaseProjectConnect
           key={supabaseConnected ? 'connected' : 'disconnected'}
           connected={supabaseConnected}
           projectName={shop.supabaseConfig?.supabaseProjectRef ?? undefined}
           projectUrl={shop.supabaseConfig?.supabaseUrl ?? undefined}
           disabled={blocked}
           authorization={authorization}
-          onConnectStatusChange={setConnectStatus}
           onDisconnected={setDisconnectDone}
         />
       ),
@@ -524,7 +549,7 @@ export default function Dashboard() {
       // A sync completata: nessun badge sullo step (né "In corso" né altro).
       hideBadge: syncCompleted,
       lockedHint:
-        'Completa il collegamento a Supabase per sbloccare la sincronizzazione.',
+        'Collega un database per sbloccare la sincronizzazione.',
       content: (
         <BlockStack gap="400">
           <Box background="bg-surface-secondary" borderRadius="200" padding="400">

@@ -136,6 +136,27 @@ export async function listProjects(accessToken: string): Promise<SupabaseProject
   }));
 }
 
+/**
+ * Email dell'account Supabase a cui si e' fatto accesso.
+ *
+ * Serve solo a dire al merchant con quale account e' entrato, quindi un
+ * fallimento non e' un errore da propagare: si restituisce null e la frase si
+ * accorcia. Non tutti i token hanno il permesso di leggere il profilo.
+ */
+export async function getAccountEmail(accessToken: string): Promise<string | null> {
+  try {
+    const res = await fetch(`${MGMT_BASE}/v1/profile`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { primary_email?: unknown; email?: unknown };
+    const email = data.primary_email ?? data.email;
+    return typeof email === 'string' && email ? email : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function getProjectApiKeys(
   accessToken: string,
   ref: string,

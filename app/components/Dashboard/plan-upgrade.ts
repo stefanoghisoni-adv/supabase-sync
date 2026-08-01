@@ -8,11 +8,13 @@ export function hasPlanChanged(
   return currentPlan !== lastSyncedPlan;
 }
 
-// Titolo dello step: dice che cosa copre, non che cosa manca. Dopo un cambio di
+// Titolo del passo: dice che cosa copre, non che cosa manca. Dopo un cambio di
 // piano il recupero parte da solo, quindi non c'e' piu' un'azione diversa da
-// annunciare.
-export function syncButtonLabel(opts: { customersEnabled: boolean }): string {
-  return opts.customersEnabled ? 'Sincronizza prodotti e clienti' : 'Sincronizza prodotti';
+// annunciare. Cosa entra nella sincronizzazione dipende dal piano attivo.
+export function syncStepTitle(opts: { customersEnabled: boolean }): string {
+  return opts.customersEnabled
+    ? 'Sincronizzazione prodotti e clienti'
+    : 'Sincronizzazione prodotti';
 }
 
 export interface SyncCta {
