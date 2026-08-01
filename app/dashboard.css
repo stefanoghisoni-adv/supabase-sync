@@ -15,6 +15,34 @@
   height: 100%;
 }
 
+/* Modal di conferma. Di suo sta al centro esatto della finestra: dentro
+   l'admin di Shopify l'app e' incorniciata e quel centro cade lontano dal
+   pulsante appena premuto, in fondo allo schermo. Qui scende dal bordo alto di
+   una misura fissa, restando nella parte alta della pagina. */
+:root {
+  --app-modal-offset: min(8vh, 5rem);
+}
+
+/* Sotto i 768px il modal e' ancorato al fondo (comportamento a foglio mobile):
+   la stessa media query di Polaris tiene fuori quel caso. */
+@media (min-width: 48em) {
+  .Polaris-Modal-Dialog__Container {
+    justify-content: flex-start;
+    padding-block-start: var(--app-modal-offset);
+  }
+
+  /* L'altezza massima va ridotta di quanto il modal e' sceso, altrimenti uno
+     alto finirebbe tagliato in fondo. Il secondo selettore ha la specificita'
+     della regola di Polaris che impone il tetto di 600px. */
+  .Polaris-Modal-Dialog__Modal,
+  .Polaris-Modal-Dialog__Modal.Polaris-Modal-Dialog--limitHeight {
+    max-height: calc(
+      min(37.5rem, 100vh - var(--pc-modal-dialog-vertical-spacing)) -
+        var(--app-modal-offset)
+    );
+  }
+}
+
 /* Il grafico occupa lo spazio che avanza sotto al titolo e ci sta in mezzo.
    Lo spazio in alto e' piu' generoso di proposito: il titolo pesa sulla parte
    alta della card, e a centratura esatta il grafico sembra ancora appeso in
