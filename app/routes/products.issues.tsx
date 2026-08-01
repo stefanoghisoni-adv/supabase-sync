@@ -5,7 +5,7 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from '@remix-run/node';
 import { json } from '@remix-run/node';
 import { useLoaderData, useFetcher } from '@remix-run/react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Page,
   Card,
@@ -39,6 +39,12 @@ import {
   type ProblemVariant,
 } from '~/lib/stats/product-readiness';
 import { filterProblemVariants, pageCount, pageSlice } from '~/lib/stats/problem-filter';
+import {
+  normalizeCost,
+  costFieldDisabled,
+  isCostSaved,
+  shouldSaveCost,
+} from '~/lib/stats/cost-edit';
 
 const PER_PAGE = 20;
 
@@ -226,37 +232,44 @@ function CostRow({
   index,
   shopDomain,
   blocked,
+  rechecking,
   value,
   onChangeValue,
-  saved,
+  savedValue,
   onSaved,
 }: {
   row: ProblemVariant;
   index: number;
   shopDomain: string;
   blocked: boolean;
+  rechecking: boolean;
   value: string;
   onChangeValue: (variantId: number, value: string) => void;
-  saved: boolean;
-  onSaved: (variantId: number) => void;
+  /** Il costo gia' scritto su Shopify per questa riga, se c'e' stato. */
+  savedValue: string | undefined;
+  onSaved: (variantId: number, value: string) => void;
 }) {
   const fetcher = useFetcher<{ ok?: boolean; error?: string }>();
   const [localError, setLocalError] = useState<string | null>(null);
+  // Il valore mandato al server: la risposta non lo riporta indietro, ma serve
+  // per sapere che cosa risulta salvato una volta arrivato l'esito positivo.
+  const submitted = useRef('');
 
   const saving = fetcher.state !== 'idle';
+  const saved = isCostSaved(savedValue, value);
   const serverError =
     fetcher.data && fetcher.data.ok === false ? fetcher.data.error : null;
 
   // Notifica il parent quando il salvataggio va a buon fine (tic verde + stato).
   useEffect(() => {
-    if (fetcher.data?.ok === true) onSaved(row.variantId);
+    if (fetcher.data?.ok === true) onSaved(row.variantId, submitted.current);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetcher.data]);
 
   const trySave = () => {
-    if (saved) return;
-    const normalized = value.trim().replace(',', '.');
-    if (normalized === '') return; // campo vuoto: non salvare
+    const normalized = normalizeCost(value);
+    // Campo vuoto o valore identico a quello gia' salvato: niente da scrivere.
+    if (!shouldSaveCost({ value, savedValue })) return;
     const n = Number(normalized);
     if (!Number.isFinite(n) || n < 0) {
       setLocalError('Costo non valido');
@@ -267,6 +280,7 @@ function CostRow({
       return;
     }
     setLocalError(null);
+    submitted.current = normalized;
     fetcher.submit(
       {
         variantId: row.variantId,
@@ -315,7 +329,7 @@ function CostRow({
             onBlur={trySave}
             placeholder="0.00"
             autoComplete="off"
-            disabled={saving || blocked || saved}
+            disabled={costFieldDisabled({ saving, rechecking, blocked })}
             error={localError ?? serverError ?? undefined}
             connectedRight={
               saving ? (
@@ -342,7 +356,9 @@ export default function ProblemProducts() {
 
   const [rows, setRows] = useState<ProblemVariant[]>(loaderData.rows);
   const [values, setValues] = useState<Record<number, string>>({});
-  const [savedIds, setSavedIds] = useState<Set<number>>(new Set());
+  // Per ogni variante, il costo effettivamente scritto su Shopify: serve a
+  // mostrare il tic solo finche' il campo non viene modificato di nuovo.
+  const [savedValues, setSavedValues] = useState<Record<number, string>>({});
   const [removedCount, setRemovedCount] = useState(0);
   const [query, setQuery] = useState('');
   const [page, setPage] = useState(1);
@@ -374,19 +390,16 @@ export default function ProblemProducts() {
     setValues((prev) => ({ ...prev, [variantId]: value }));
   }, []);
 
-  const onSaved = useCallback((variantId: number) => {
-    setSavedIds((prev) => {
-      if (prev.has(variantId)) return prev;
-      const next = new Set(prev);
-      next.add(variantId);
-      return next;
-    });
+  const onSaved = useCallback((variantId: number, value: string) => {
+    setSavedValues((prev) =>
+      prev[variantId] === value ? prev : { ...prev, [variantId]: value },
+    );
   }, []);
 
   // Il pulsante globale è attivo solo se almeno un valore differisce dall'iniziale
   // (le righe partono vuote) — o è già stato salvato qualcosa.
   const hasChanges =
-    savedIds.size > 0 ||
+    Object.keys(savedValues).length > 0 ||
     Object.values(values).some((v) => v.trim() !== '');
 
   const runRecheck = () => {
@@ -418,7 +431,11 @@ export default function ProblemProducts() {
         for (const id of keptIds) if (v[id] !== undefined) next[id] = v[id];
         return next;
       });
-      setSavedIds((s) => new Set([...s].filter((id) => keptIds.has(id))));
+      setSavedValues((s) => {
+        const next: Record<number, string> = {};
+        for (const id of keptIds) if (s[id] !== undefined) next[id] = s[id];
+        return next;
+      });
       return kept;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -525,9 +542,10 @@ export default function ProblemProducts() {
                   index={i}
                   shopDomain={shopDomain}
                   blocked={blocked}
+                  rechecking={rechecking}
                   value={values[r.variantId] ?? ''}
                   onChangeValue={onChangeValue}
-                  saved={savedIds.has(r.variantId)}
+                  savedValue={savedValues[r.variantId]}
                   onSaved={onSaved}
                 />
               ))}
