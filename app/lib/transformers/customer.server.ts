@@ -26,8 +26,8 @@ export function transformCustomer(customer: ShopifyCustomer): SupabaseCustomerRo
 
   return {
     shopify_customer_id: customer.id,
-    email: customer.email || null,
-    phone: customer.phone || null,
+    email_address: customer.email || null,
+    phone_number: customer.phone || null,
     first_name: customer.first_name || null,
     last_name: customer.last_name || null,
     accepts_marketing: acceptsMarketing,

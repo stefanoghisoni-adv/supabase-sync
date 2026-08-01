@@ -136,7 +136,7 @@ describe('proxy loader', () => {
     const res = await call(
       { authorization: 'Bearer spx_x' },
       'customers',
-      'https://app/rest/v1/customers?email=eq.foo@bar.com&select=*',
+      'https://app/rest/v1/customers?email_address=eq.foo@bar.com&select=*',
     );
     expect(res.status).toBe(403);
     expect(await res.text()).toContain("L'utente non ha acconsentito al marketing su Shopify");
@@ -148,11 +148,11 @@ describe('proxy loader', () => {
     resolveShopReadContext.mockResolvedValueOnce(okCtx({ customersEnabled: true }));
     forwardRead
       .mockResolvedValueOnce({ status: 200, body: '[{"accepts_marketing":true}]', contentType: 'application/json' })
-      .mockResolvedValueOnce({ status: 200, body: '[{"email":"foo@bar.com"}]', contentType: 'application/json' });
+      .mockResolvedValueOnce({ status: 200, body: '[{"email_address":"foo@bar.com"}]', contentType: 'application/json' });
     const res = await call(
       { authorization: 'Bearer spx_x' },
       'customers',
-      'https://app/rest/v1/customers?email=eq.foo@bar.com',
+      'https://app/rest/v1/customers?email_address=eq.foo@bar.com',
     );
     expect(res.status).toBe(200);
     expect(await res.text()).toContain('foo@bar.com');
@@ -192,7 +192,7 @@ describe('proxy loader', () => {
     await call(
       { authorization: 'Bearer spx_x' },
       'products',
-      'https://app/rest/v1/products?email=eq.foo@bar.com',
+      'https://app/rest/v1/products?email_address=eq.foo@bar.com',
     );
     expect(forwardRead).toHaveBeenCalledTimes(1);
     const forwardedSearch = forwardRead.mock.calls[0][2] as string;

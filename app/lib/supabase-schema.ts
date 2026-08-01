@@ -68,8 +68,11 @@ const PRODUCTS_INDEXES = [
 const CUSTOMERS_COLUMNS: Column[] = [
   { name: 'id', type: 'UUID', constraints: 'PRIMARY KEY DEFAULT gen_random_uuid()' },
   { name: 'shopify_customer_id', type: 'BIGINT', constraints: 'UNIQUE NOT NULL' },
-  { name: 'email', type: 'TEXT' },
-  { name: 'phone', type: 'TEXT' },
+  // I nomi sono per esteso perche' e' cosi' che li cercano gli strumenti di
+  // tracciamento (email_address, phone_number): la colonna si chiama come il
+  // dato che il tag va a leggere.
+  { name: 'email_address', type: 'TEXT' },
+  { name: 'phone_number', type: 'TEXT' },
   { name: 'first_name', type: 'TEXT' },
   { name: 'last_name', type: 'TEXT' },
   { name: 'accepts_marketing', type: 'BOOLEAN' },
@@ -88,8 +91,8 @@ const CUSTOMERS_COLUMNS: Column[] = [
 
 const CUSTOMERS_INDEXES = [
   `CREATE UNIQUE INDEX IF NOT EXISTS idx_customers_shopify_id ON customers(shopify_customer_id);`,
-  `CREATE INDEX IF NOT EXISTS idx_customers_email ON customers(email) WHERE email IS NOT NULL;`,
-  `CREATE INDEX IF NOT EXISTS idx_customers_phone ON customers(phone) WHERE phone IS NOT NULL;`,
+  `CREATE INDEX IF NOT EXISTS idx_customers_email_address ON customers(email_address) WHERE email_address IS NOT NULL;`,
+  `CREATE INDEX IF NOT EXISTS idx_customers_phone_number ON customers(phone_number) WHERE phone_number IS NOT NULL;`,
 ];
 
 function columnCreateDef(col: Column): string {

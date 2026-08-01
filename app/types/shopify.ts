@@ -69,8 +69,10 @@ export interface ShopifyCustomer {
 
 export interface SupabaseCustomerRow {
   shopify_customer_id: number;
-  email: string | null;
-  phone: string | null;
+  // Nomi per esteso: sono le colonne della tabella del merchant, non i campi
+  // del payload Shopify (che restano email / phone).
+  email_address: string | null;
+  phone_number: string | null;
   first_name: string | null;
   last_name: string | null;
   accepts_marketing: boolean | null;

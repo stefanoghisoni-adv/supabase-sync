@@ -1,6 +1,11 @@
 // Colonne univoche identificative: un filtro `eq` su una di queste è un "lookup
-// mirato" a uno specifico cliente (es. email=eq.x).
-export const IDENTIFIER_COLUMNS = ['id', 'email', 'phone', 'shopify_customer_id'];
+// mirato" a uno specifico cliente (es. email_address=eq.x).
+export const IDENTIFIER_COLUMNS = [
+  'id',
+  'email_address',
+  'phone_number',
+  'shopify_customer_id',
+];
 
 // True se la query filtra con `eq` su una colonna identificativa.
 // (URLSearchParams ignora il '?' iniziale della search.)

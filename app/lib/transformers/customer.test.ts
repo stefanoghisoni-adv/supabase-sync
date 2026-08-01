@@ -24,7 +24,7 @@ describe('transformCustomer', () => {
     const row = transformCustomer(base);
 
     expect(row.shopify_customer_id).toBe(123);
-    expect(row.email).toBe('jane@example.com');
+    expect(row.email_address).toBe('jane@example.com');
     expect(row.total_spent).toBe(42.5);
     expect(row.orders_count).toBe(3);
     expect(row.customer_state).toBe('enabled');
