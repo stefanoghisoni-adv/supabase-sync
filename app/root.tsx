@@ -84,7 +84,7 @@ export default function App() {
             <Link to="/" rel="home">
               Dashboard
             </Link>
-            <Link to="/products/issues">Prodotti con problemi</Link>
+            <Link to="/products/issues">Prodotti non idonei</Link>
             <Link to="/logs">Logs</Link>
             {/* Nascosta sui piani senza nulla da acquistare (lifetime). */}
             {canSeePlanTab && <Link to="/plan">Piano</Link>}
@@ -154,7 +154,7 @@ export function ErrorBoundary() {
             <Link to="/" rel="home">
               Dashboard
             </Link>
-            <Link to="/products/issues">Prodotti con problemi</Link>
+            <Link to="/products/issues">Prodotti non idonei</Link>
             <Link to="/logs">Logs</Link>
             {canSeePlanTab && <Link to="/plan">Piano</Link>}
             <Link to="/settings/supabase">Impostazioni</Link>

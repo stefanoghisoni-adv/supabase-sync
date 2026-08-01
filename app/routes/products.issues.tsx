@@ -441,7 +441,7 @@ export default function ProblemProducts() {
 
   return (
     <Page
-      title="Prodotti con problemi"
+      title="Prodotti non idonei"
       backAction={{ url: '/' }}
       primaryAction={{
         content: 'Ricontrolla e aggiorna',
