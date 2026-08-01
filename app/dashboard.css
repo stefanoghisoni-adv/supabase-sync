@@ -43,14 +43,15 @@
   }
 }
 
-/* Bordo superiore dei campi di testo. Polaris lo vuole piu' scuro degli altri
-   tre (dava l'idea del campo incassato) ma lo disegna, come tutto il bordo, a
-   0.66px: a quella misura il browser lo spalma su mezzo pixel e a riposo il
-   lato alto sparisce, per ricomparire all'hover quando il colore si scurisce.
-   Un pixel pieno solo in cima lo rende stabile in ogni stato; gli altri tre
-   lati restano come li disegna Polaris. */
+/* Bordo dei campi di testo. Polaris lo disegna a 0.66px con il lato alto piu'
+   scuro (l'effetto del campo incassato): sotto il pixel il browser distribuisce
+   il tratto sulle righe vicine e, a seconda di dove cade il campo, un lato
+   svanisce del tutto. Alzare il solo lato alto spostava il problema in fondo.
+   Qui il bordo e' di un pixel pieno su tutti e quattro i lati e di un colore
+   solo: si vede sempre, e nessun lato pesa piu' degli altri. */
 .Polaris-TextField__Backdrop {
-  border-top-width: var(--p-border-width-025);
+  border-width: var(--p-border-width-025);
+  border-top-color: var(--p-color-input-border);
 }
 
 /* Il grafico occupa lo spazio che avanza sotto al titolo e ci sta in mezzo.
