@@ -166,11 +166,11 @@ export default function SupabaseSettings() {
                 colpo d'occhio (cosa prevede il piano, cosa risponde il progetto).
                 A Database va la parte larga: indirizzo e chiave sono lunghi e
                 nella colonna stretta finirebbero accorciati. */}
-            {/* 30/70. minmax(0, …) e non i soli fr: senza, un valore lungo
+            {/* 35/65. minmax(0, …) e non i soli fr: senza, un valore lungo
                 allargherebbe la colonna oltre la sua quota invece di stare
                 dentro. */}
             <InlineGrid
-              columns={{ xs: 1, md: 'minmax(0, 3fr) minmax(0, 7fr)' }}
+              columns={{ xs: 1, md: 'minmax(0, 35fr) minmax(0, 65fr)' }}
               gap="400"
             >
               <AccountCard

@@ -38,14 +38,19 @@ function CopyableRow({ label, value }: { label: string; value: string }) {
       <Text as="span" variant="bodyMd">
         {label}
       </Text>
-      <Tooltip content={copied ? 'Copiato' : 'Clicca per copiare'}>
-        {/* monochromePlain: e' un valore da leggere, non un link da seguire, e
-            del blu non ha bisogno. Il testo mostrato puo' essere accorciato,
-            quello copiato e' sempre intero. */}
-        <Button variant="monochromePlain" onClick={copy} textAlign="right">
-          {middleTruncate(value)}
-        </Button>
-      </Tooltip>
+      {/* copy-value: il valore sta in secondo piano e si accende al passaggio
+          del puntatore (regole in dashboard.css, il pulsante non prende una
+          classe propria). */}
+      <div className="copy-value">
+        <Tooltip content={copied ? 'Copiato' : 'Clicca per copiare'}>
+          {/* monochromePlain: e' un valore da leggere, non un link da seguire, e
+              del blu non ha bisogno. Il testo mostrato puo' essere accorciato,
+              quello copiato e' sempre intero. */}
+          <Button variant="monochromePlain" onClick={copy} textAlign="right">
+            {middleTruncate(value)}
+          </Button>
+        </Tooltip>
+      </div>
     </InlineStack>
   );
 }

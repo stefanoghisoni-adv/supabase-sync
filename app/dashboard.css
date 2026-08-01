@@ -49,6 +49,22 @@
   }
 }
 
+/* Valori da copiare (indirizzo e chiave, in Impostazioni). Sono dati di
+   riferimento, non cose da leggere ogni volta: stanno in secondo piano e
+   riprendono il colore pieno del testo quando ci passi sopra o mentre li premi,
+   che e' anche il modo di dire che si possono cliccare. Polaris non ha una prop
+   per il colore del pulsante, ma lo prende da una variabile: si cambia quella,
+   cosi' il resto degli stati resta come lo disegna lui. */
+.copy-value .Polaris-Button {
+  --pc-button-color: var(--p-color-text-secondary);
+  --pc-button-color_hover: var(--p-color-text);
+}
+
+.copy-value .Polaris-Button:active,
+.copy-value .Polaris-Button:focus-visible {
+  color: var(--p-color-text);
+}
+
 /* Bordo dei campi di testo. Lo spessore resta quello nativo di Polaris
    (--p-border-width-0165, cioe' 0.66px: lo stesso dei campi dell'admin di
    Shopify). Qui si tocca solo il colore del lato alto, che di suo Polaris fa
