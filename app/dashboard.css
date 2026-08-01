@@ -20,7 +20,7 @@
    pulsante appena premuto, in fondo allo schermo. Qui scende dal bordo alto di
    una misura fissa, restando nella parte alta della pagina. */
 :root {
-  --app-modal-offset: min(8vh, 5rem);
+  --app-modal-offset: min(12vh, 7.5rem);
 }
 
 /* Sotto i 768px il modal e' ancorato al fondo (comportamento a foglio mobile):
