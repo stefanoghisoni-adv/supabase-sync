@@ -506,10 +506,9 @@ export default function ProblemProducts() {
                     alignItems="center" le allinea sull'asse verticale, altrimenti
                     il testo si appoggerebbe in cima al campo. */}
                 <InlineGrid columns={2} gap="400" alignItems="center">
-                  {/* Con una ricerca senza risultati il conteggio direbbe "0
-                      varianti a cui manca il valore...", che si legge come "non
-                      ci sono problemi" mentre e' solo la ricerca a non aver
-                      trovato nulla. Meglio dirlo esplicitamente. */}
+                  {/* Con una ricerca senza risultati la tabella resta vuota: senza
+                      questa riga sembrerebbe che i problemi siano finiti, mentre
+                      e' solo la ricerca a non aver trovato nulla. */}
                   {query.trim() && filtered.length === 0 ? (
                     <Text as="p" tone="subdued">
                       Nessun risultato per &laquo;{query.trim()}&raquo;. Le varianti
@@ -517,10 +516,11 @@ export default function ProblemProducts() {
                     </Text>
                   ) : (
                     <Text as="p" tone="subdued">
-                      {filtered.length}{' '}
-                      {filtered.length === 1 ? 'variante' : 'varianti'} a cui manca il valore{' '}
-                      <code>cost_per_item</code>. I costi che inserisci vengono
-                      applicati quando premi &laquo;Ricontrolla e aggiorna&raquo;.
+                      I prodotti elencati non presentano un valore per il parametro{' '}
+                      <code>cost_per_item</code> (costo prodotto) pertanto non potranno
+                      essere sincronizzati fino al loro adeguamento. Il valore verrà
+                      aggiornato sia sul database che su Shopify dopo aver cliccato
+                      &laquo;Ricontrolla e aggiorna&raquo;.
                     </Text>
                   )}
                   <TextField
