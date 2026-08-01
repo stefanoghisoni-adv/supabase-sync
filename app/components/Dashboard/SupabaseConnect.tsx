@@ -509,8 +509,9 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
         </Banner>
       )}
       <Text as="p" tone="subdued">
-        Verrai portato su Supabase per accedere o creare gratuitamente un account, poi torni
-        qui. L'app elencherà i tuoi progetti e configurerà le tabelle nel progetto scelto.
+        Accedi a Supabase o crea un nuovo account. Subito dopo l'accesso ti verrà chiesto di
+        accettare l'integrazione e, proseguendo, potrai selezionare o creare un nuovo database
+        da collegare.
       </Text>
 
       {oauthError && <Banner tone="critical">{oauthError}</Banner>}
