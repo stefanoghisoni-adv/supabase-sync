@@ -163,8 +163,16 @@ export default function SupabaseSettings() {
             {errorMessage && <Banner tone="critical">{errorMessage}</Banner>}
 
             {/* Account e Database affiancati: sono due letture dello stesso
-                colpo d'occhio (cosa prevede il piano, cosa risponde il progetto). */}
-            <InlineGrid columns={{ xs: 1, md: 2 }} gap="400">
+                colpo d'occhio (cosa prevede il piano, cosa risponde il progetto).
+                A Database va la parte larga: indirizzo e chiave sono lunghi e
+                nella colonna stretta finirebbero accorciati. */}
+            {/* 30/70. minmax(0, …) e non i soli fr: senza, un valore lungo
+                allargherebbe la colonna oltre la sua quota invece di stare
+                dentro. */}
+            <InlineGrid
+              columns={{ xs: 1, md: 'minmax(0, 3fr) minmax(0, 7fr)' }}
+              gap="400"
+            >
               <AccountCard
                 planName={account.planName}
                 productsSyncActive={account.productsSyncActive}
