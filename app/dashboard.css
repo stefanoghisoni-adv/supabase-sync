@@ -15,7 +15,10 @@
   height: 100%;
 }
 
-/* Il grafico occupa lo spazio che avanza sotto al titolo e ci sta in mezzo. */
+/* Il grafico occupa lo spazio che avanza sotto al titolo e ci sta in mezzo.
+   Lo spazio in alto e' piu' generoso di proposito: il titolo pesa sulla parte
+   alta della card, e a centratura esatta il grafico sembra ancora appeso in
+   cima. Cosi' scende di una manciata di pixel e la card si legge bilanciata. */
 .chart-card__body {
   flex: 1;
   display: flex;
@@ -23,5 +26,5 @@
   justify-content: center;
   /* Senza, il contenuto piu' alto dello spazio disponibile sfonderebbe la card. */
   min-height: 0;
-  padding-block-start: var(--p-space-200);
+  padding-block-start: var(--p-space-1000);
 }

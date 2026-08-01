@@ -1,6 +1,6 @@
 import { useState, useEffect, lazy, Suspense, Component } from 'react';
 import type { ReactNode } from 'react';
-import { Card, Text, BlockStack, SkeletonBodyText } from '@shopify/polaris';
+import { Card, Text, BlockStack, Box } from '@shopify/polaris';
 import { computeChartYMax } from './chart-scale';
 
 // Import DINAMICO: il modulo che contiene polaris-viz non deve finire nel grafo
@@ -102,7 +102,11 @@ export function EligibilityChart({
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
-  const skeleton = <SkeletonBodyText lines={8} />;
+  // Attesa "a riquadro", come i grafici di Analisi di Shopify: righe di testo
+  // finte prometterebbero un elenco, qui invece sta arrivando un grafico.
+  const skeleton = (
+    <Box background="bg-surface-secondary" borderRadius="200" minHeight="260px" />
+  );
   // Finche' i dati non arrivano il mese non e' noto: il sottotitolo dice
   // comunque che cosa si stara' guardando.
   const subtitle = monthLabel ?? 'Mese corrente';
