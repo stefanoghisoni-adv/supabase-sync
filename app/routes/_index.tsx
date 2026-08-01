@@ -277,6 +277,10 @@ export default function Dashboard() {
   // Stato del collegamento Supabase per il badge del primo step: Non collegato
   // (grigio) → In corso (arancione) → Fallito (rosso) / Collegato (verde).
   const [connectStatus, setConnectStatus] = useState<'idle' | 'in_progress' | 'failed'>('idle');
+  // Esito dell'ultima disconnessione. Vive qui e non dentro SupabaseConnect
+  // perche' quel componente viene rimontato appena il collegamento cade: il
+  // banner sparirebbe nello stesso istante in cui deve comparire.
+  const [disconnectDone, setDisconnectDone] = useState<'delete' | 'keep' | null>(null);
   const connectBadge = supabaseConnected
     ? { tone: 'success' as const, label: 'Collegato' }
     : connectStatus === 'failed'
@@ -509,6 +513,7 @@ export default function Dashboard() {
           disabled={blocked}
           authorization={authorization}
           onConnectStatusChange={setConnectStatus}
+          onDisconnected={setDisconnectDone}
         />
       ),
     },
@@ -620,6 +625,26 @@ export default function Dashboard() {
       ]}
     >
       <BlockStack gap="500">
+        {/* Esito della disconnessione: in cima perche' e' la risposta all'ultima
+            azione del merchant, e il modal che l'ha avviata e' gia' sparito. */}
+        {disconnectDone && (
+          <Banner
+            tone="success"
+            title={
+              disconnectDone === 'delete'
+                ? 'Tabelle e dati eliminati'
+                : 'Collegamento rimosso'
+            }
+            onDismiss={() => setDisconnectDone(null)}
+          >
+            <Text as="p">
+              {disconnectDone === 'delete'
+                ? 'Il collegamento è stato rimosso e le tabelle create dall’app, con i dati sincronizzati, sono state eliminate dal progetto.'
+                : 'Il collegamento è stato rimosso. Le tabelle e i dati sincronizzati restano nel progetto: ricollegandolo, la sincronizzazione riparte da lì.'}
+            </Text>
+          </Banner>
+        )}
+
         {/* Banner di blocco (non chiudibile): danger se DISABLED, warning se PENDING. */}
         {authorization === 'DISABLED' && (
           <Banner tone="critical" title="App disabilitata">

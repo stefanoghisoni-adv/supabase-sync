@@ -40,11 +40,14 @@ interface SupabaseConnectProps {
   // Notifica il parent lo stato del flusso di collegamento (guida il badge del
   // primo step: In corso / Fallito / Non collegato).
   onConnectStatusChange?: (status: SupabaseConnectStatus) => void;
+  // Disconnessione riuscita: il parent mostra il banner di conferma in cima alla
+  // dashboard. Qui non lo si puo' fare, il componente viene rimontato subito dopo.
+  onDisconnected?: (mode: 'delete' | 'keep') => void;
 }
 
 export type SupabaseConnectStatus = 'idle' | 'in_progress' | 'failed';
 
-export function SupabaseConnect({ connected, projectName, projectUrl, disabled, authorization = 'ENABLED', onConnectStatusChange }: SupabaseConnectProps) {
+export function SupabaseConnect({ connected, projectName, projectUrl, disabled, authorization = 'ENABLED', onConnectStatusChange, onDisconnected }: SupabaseConnectProps) {
   const revalidator = useRevalidator();
   const urlFetcher = useFetcher<{ url?: string; error?: string }>();
   const projectsFetcher = useFetcher<{ projects: SupabaseProject[]; error?: string }>();
@@ -256,7 +259,12 @@ export function SupabaseConnect({ connected, projectName, projectUrl, disabled, 
     if (selectFetcher.data?.ok || disconnectFetcher.data?.ok) {
       // Disconnessione a flusso non completato: riporta il componente allo
       // stato iniziale (la revalidation da sola non basta, vedi dismissedFlow).
-      if (disconnectFetcher.data?.ok) setDismissedFlow(true);
+      if (disconnectFetcher.data?.ok) {
+        setDismissedFlow(true);
+        // disconnectMode dice quale delle due strade e' stata presa: il testo
+        // del banner cambia se i dati sono stati eliminati o mantenuti.
+        onDisconnected?.(disconnectMode ?? 'keep');
+      }
       revalidator.revalidate();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
