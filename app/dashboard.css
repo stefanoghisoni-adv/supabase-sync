@@ -1,0 +1,27 @@
+/* Regole di impaginazione scritte a mano: qui solo quello che Polaris non
+   esprime con una prop. Tutto il resto della dashboard resta a componenti. */
+
+/* Card del grafico. Nella riga a due colonne l'altezza la detta la card piu'
+   alta: senza queste regole il grafico resterebbe appiccicato in cima con un
+   vuoto sotto. Polaris non ha una prop per far riempire alla card il suo spazio
+   e la Card e' fatta di due elementi annidati (il contenitore dell'ombra e il
+   riquadro con sfondo e padding): nessuno dei due propaga l'altezza al
+   contenuto, quindi vanno resi flessibili entrambi. */
+.chart-card,
+.chart-card > *,
+.chart-card > * > * {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* Il grafico occupa lo spazio che avanza sotto al titolo e ci sta in mezzo. */
+.chart-card__body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  /* Senza, il contenuto piu' alto dello spazio disponibile sfonderebbe la card. */
+  min-height: 0;
+  padding-block-start: var(--p-space-200);
+}

@@ -3,7 +3,7 @@ import type { LoaderFunctionArgs } from '@remix-run/node';
 import { json } from '@remix-run/node';
 import { authenticate } from '~/shopify.server';
 import { prisma } from '~/db.server';
-import { buildHistorySeries } from '~/lib/stats/history-series';
+import { buildMonthSeries, monthLabel } from '~/lib/stats/history-series';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const { session } = await authenticate.admin(request);
@@ -15,19 +15,26 @@ export async function loader({ request }: LoaderFunctionArgs) {
     throw new Response('Shop not found', { status: 404 });
   }
 
-  // Ultimi 30 giorni: la data di inizio e' 30 giorni fa da oggi
-  const from = new Date(Date.now() - 30 * 24 * 3600 * 1000);
-  const snapshots = await prisma.productEligibilitySnapshot.findMany({
-    where: { shopId: shop.id, day: { gte: from } },
-    orderBy: { day: 'asc' },
-  });
+  const now = new Date();
+  const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
 
-  const plan = await prisma.plan.findUnique({
-    where: { planName: shop.currentPlan },
-  });
+  const [inMonth, previous, plan] = await Promise.all([
+    prisma.productEligibilitySnapshot.findMany({
+      where: { shopId: shop.id, day: { gte: monthStart } },
+      orderBy: { day: 'asc' },
+    }),
+    // L'ultima rilevazione prima del mese: da li' parte il conteggio del primo
+    // giorno, altrimenti un negozio gia' avviato ricomincerebbe da zero.
+    prisma.productEligibilitySnapshot.findFirst({
+      where: { shopId: shop.id, day: { lt: monthStart } },
+      orderBy: { day: 'desc' },
+    }),
+    prisma.plan.findUnique({ where: { planName: shop.currentPlan } }),
+  ]);
 
   return json({
-    points: buildHistorySeries(snapshots, new Date()),
+    points: buildMonthSeries(previous ? [previous, ...inMonth] : inMonth, now),
+    monthLabel: monthLabel(now),
     // null = piano senza tetto: il grafico non disegnera' la soglia
     planLimit: plan?.maxProducts ?? null,
   });

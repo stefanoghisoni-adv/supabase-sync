@@ -252,7 +252,9 @@ interface CustomerStatsResponse {
 }
 
 interface ProductHistoryResponse {
-  points: { day: string; count: number }[];
+  /** Un punto per giorno del mese corrente; count null = giorno non ancora arrivato. */
+  points: { day: number; count: number | null }[];
+  monthLabel: string;
   planLimit: number | null;
 }
 
@@ -688,6 +690,7 @@ export default function Dashboard() {
           <Stepper steps={stepperItems} />
           <EligibilityChart
             points={historyFetcher.data?.points ?? []}
+            monthLabel={historyFetcher.data?.monthLabel}
             planLimit={historyFetcher.data?.planLimit ?? null}
             loading={!historyFetcher.data}
           />

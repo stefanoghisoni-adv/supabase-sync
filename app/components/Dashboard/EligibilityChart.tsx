@@ -13,18 +13,22 @@ const EligibilityChartCanvas = lazy(() => import('./EligibilityChartCanvas'));
 // type per riportare il pacchetto nel grafo. Qui serve solo la forma dei dati.
 interface ChartSeries {
   name: string;
-  data: { key: string; value: number }[];
+  data: { key: string; value: number | null }[];
   color?: string;
   styleOverride?: { line: { strokeDasharray: string; width: number; hasArea: boolean } };
 }
 
 interface EligibilityPoint {
-  day: string; // YYYY-MM-DD
-  count: number;
+  /** Giorno del mese, da 1 all'ultimo. */
+  day: number;
+  /** null = giorno non ancora arrivato. */
+  count: number | null;
 }
 
 interface EligibilityChartProps {
   points: EligibilityPoint[];
+  /** Mese mostrato sull'asse, es. "Agosto 2026". */
+  monthLabel?: string;
   planLimit: number | null;
   loading: boolean;
 }
@@ -60,39 +64,58 @@ class ChartErrorBoundary extends Component<{ children: ReactNode }, { failed: bo
 }
 
 // Titolo e sottotitolo sono identici in tutti gli stati: la Card non deve
-// cambiare forma mentre i dati arrivano.
-function ChartCard({ children }: { children: React.ReactNode }) {
+// cambiare forma mentre i dati arrivano. Le due classi servono a far riempire
+// alla card l'altezza della riga e a tenere il grafico in mezzo (vedi
+// dashboard.css): l'altra colonna e' piu' alta e senza questo il grafico
+// resterebbe schiacciato in cima.
+function ChartCard({
+  subtitle,
+  children,
+}: {
+  subtitle: string;
+  children: React.ReactNode;
+}) {
   return (
-    <Card>
-      <BlockStack gap="200">
-        <Text as="h2" variant="headingMd">
-          Prodotti sincronizzabili
-        </Text>
-        <Text as="p" tone="subdued">
-          Ultimi 30 giorni
-        </Text>
-        {children}
-      </BlockStack>
-    </Card>
+    <div className="chart-card">
+      <Card>
+        <BlockStack gap="200">
+          <Text as="h2" variant="headingMd">
+            Prodotti sincronizzabili
+          </Text>
+          <Text as="p" tone="subdued">
+            {subtitle}
+          </Text>
+        </BlockStack>
+        <div className="chart-card__body">{children}</div>
+      </Card>
+    </div>
   );
 }
 
-export function EligibilityChart({ points, planLimit, loading }: EligibilityChartProps) {
+export function EligibilityChart({
+  points,
+  monthLabel,
+  planLimit,
+  loading,
+}: EligibilityChartProps) {
   // Il grafico esiste solo nel browser: in SSR si rende lo scheletro.
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
   const skeleton = <SkeletonBodyText lines={8} />;
+  // Finche' i dati non arrivano il mese non e' noto: il sottotitolo dice
+  // comunque che cosa si stara' guardando.
+  const subtitle = monthLabel ?? 'Mese corrente';
 
   if (loading || !mounted) {
-    return <ChartCard>{skeleton}</ChartCard>;
+    return <ChartCard subtitle={subtitle}>{skeleton}</ChartCard>;
   }
 
   // Nessuno snapshot ancora: lo storico si costruisce un giorno alla volta.
   // Con un solo punto il grafico si disegna comunque (un marker isolato).
   if (points.length === 0) {
     return (
-      <ChartCard>
+      <ChartCard subtitle={subtitle}>
         <Text as="p" tone="subdued">
           Lo storico si costruisce da qui in avanti, un punto al giorno.
         </Text>
@@ -100,10 +123,12 @@ export function EligibilityChart({ points, planLimit, loading }: EligibilityChar
     );
   }
 
+  // Le chiavi sono i giorni del mese: l'asse orizzontale va dal primo
+  // all'ultimo, cosi' si vede in che punto del mese il numero e' cambiato.
   const series: ChartSeries[] = [
     {
       name: 'Prodotti sincronizzabili',
-      data: points.map((p) => ({ key: p.day, value: p.count })),
+      data: points.map((p) => ({ key: String(p.day), value: p.count })),
     },
   ];
 
@@ -112,7 +137,7 @@ export function EligibilityChart({ points, planLimit, loading }: EligibilityChar
   if (planLimit != null) {
     series.push({
       name: 'Limite del piano',
-      data: points.map((p) => ({ key: p.day, value: planLimit })),
+      data: points.map((p) => ({ key: String(p.day), value: planLimit })),
       color: '#FF8A00',
       styleOverride: { line: { strokeDasharray: '6 4', width: 2, hasArea: false } },
     });
@@ -122,11 +147,11 @@ export function EligibilityChart({ points, planLimit, loading }: EligibilityChar
   // arancione cadrebbe sul bordo superiore (con 3 sincronizzabili su un limite
   // di 100 sarebbe quasi invisibile). Con il tetto un po' piu' alto resta a mezza
   // altezza e ben leggibile.
-  const maxData = points.reduce((m, p) => Math.max(m, p.count), 0);
+  const maxData = points.reduce((m, p) => Math.max(m, p.count ?? 0), 0);
   const maxY = computeChartYMax(planLimit, maxData);
 
   return (
-    <ChartCard>
+    <ChartCard subtitle={subtitle}>
       <ChartErrorBoundary>
         <Suspense fallback={skeleton}>
           <EligibilityChartCanvas series={series} maxY={maxY} />

@@ -18,6 +18,8 @@ import polarisStyles from '@shopify/polaris/build/esm/styles.css?url';
 import vizStyles from '@shopify/polaris-viz/build/esm/styles.css?url';
 // Caricato DOPO Polaris: neutralizza il tema scuro (vedi force-light.css).
 import forceLightStyles from './force-light.css?url';
+// Impaginazioni che Polaris non esprime con una prop (vedi dashboard.css).
+import dashboardStyles from './dashboard.css?url';
 import { Page, Banner, Text, BlockStack } from '@shopify/polaris';
 import { authenticate } from './shopify.server';
 import { prisma } from './db.server';
@@ -27,6 +29,7 @@ export const links: LinksFunction = () => [
   { rel: 'stylesheet', href: polarisStyles },
   { rel: 'stylesheet', href: vizStyles },
   { rel: 'stylesheet', href: forceLightStyles },
+  { rel: 'stylesheet', href: dashboardStyles },
 ];
 
 export async function loader({ request }: LoaderFunctionArgs) {
