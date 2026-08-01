@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { Card, BlockStack, InlineStack, Text, Button, Tooltip } from '@shopify/polaris';
 import { MetricRow } from './MetricRow';
-import { middleTruncate } from './copy-value';
+import { middleTruncate, copyToClipboard } from './copy-value';
 
 export interface DatabaseCardProps {
   connected: boolean;
@@ -25,9 +25,10 @@ function CopyableRow({ label, value }: { label: string; value: string }) {
   const [copied, setCopied] = useState(false);
 
   const copy = useCallback(() => {
-    // clipboard non c'e' fuori da un contesto sicuro: senza questo controllo il
-    // clic andrebbe in errore invece di non fare nulla.
-    navigator.clipboard?.writeText(value).then(() => {
+    // La conferma appare solo a copia riuscita: dentro la cornice dell'admin il
+    // permesso puo' mancare, e copyToClipboard lo dice invece di far finta.
+    copyToClipboard(value).then((ok) => {
+      if (!ok) return;
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     });
@@ -42,7 +43,7 @@ function CopyableRow({ label, value }: { label: string; value: string }) {
           del puntatore (regole in dashboard.css, il pulsante non prende una
           classe propria). */}
       <div className="copy-value">
-        <Tooltip content={copied ? 'Copiato' : 'Clicca per copiare'}>
+        <Tooltip content={copied ? 'Copiato!' : 'Clicca per copiare'}>
           {/* monochromePlain: e' un valore da leggere, non un link da seguire, e
               del blu non ha bisogno. Il testo mostrato puo' essere accorciato,
               quello copiato e' sempre intero. */}
