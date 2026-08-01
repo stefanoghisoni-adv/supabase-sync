@@ -43,6 +43,16 @@
   }
 }
 
+/* Bordo superiore dei campi di testo. Polaris lo vuole piu' scuro degli altri
+   tre (dava l'idea del campo incassato) ma lo disegna, come tutto il bordo, a
+   0.66px: a quella misura il browser lo spalma su mezzo pixel e a riposo il
+   lato alto sparisce, per ricomparire all'hover quando il colore si scurisce.
+   Un pixel pieno solo in cima lo rende stabile in ogni stato; gli altri tre
+   lati restano come li disegna Polaris. */
+.Polaris-TextField__Backdrop {
+  border-top-width: var(--p-border-width-025);
+}
+
 /* Il grafico occupa lo spazio che avanza sotto al titolo e ci sta in mezzo.
    Lo spazio in alto e' piu' generoso di proposito: il titolo pesa sulla parte
    alta della card, e a centratura esatta il grafico sembra ancora appeso in
