@@ -6,40 +6,93 @@ export function normalizeCost(value: string): string {
 }
 
 /**
- * Il campo resta modificabile anche dopo un salvataggio riuscito: un costo
- * sbagliato dev'essere correggibile subito, senza ricaricare la pagina. Si
- * blocca solo mentre una scrittura e' in volo, mentre il ricontrollo sta
- * girando (l'elenco sta per cambiare sotto le mani) e a negozio sospeso.
+ * Il campo resta modificabile mentre il merchant lavora: i valori inseriti sono
+ * appunti, non salvataggi, e vengono scritti su Shopify solo con "Ricontrolla e
+ * aggiorna". Si blocca durante quell'operazione e a negozio sospeso.
  */
 export function costFieldDisabled(opts: {
-  saving: boolean;
-  rechecking: boolean;
+  updating: boolean;
   blocked: boolean;
 }): boolean {
-  return opts.saving || opts.rechecking || opts.blocked;
+  return opts.updating || opts.blocked;
+}
+
+// Un costo da scrivere su Shopify per una variante. E' un type e non una
+// interface perche' viaggia come corpo JSON della richiesta, e le interface non
+// sono assegnabili al tipo "oggetto serializzabile" che si aspetta il submit.
+export type PendingCost = {
+  variantId: number;
+  inventoryItemId: number;
+  cost: string;
+};
+
+/** Una riga compilata che non si puo' salvare, con il motivo. */
+export interface RejectedCost {
+  variantId: number;
+  reason: 'invalid' | 'no-inventory-item';
+}
+
+interface EditableRow {
+  variantId: number;
+  inventoryItemId: number | null;
 }
 
 /**
- * Il tic verde dice "il valore che vedi e' salvato", non "questa riga e' stata
- * toccata": vale finche' il campo mostra esattamente cio' che e' finito su
- * Shopify. Appena il merchant lo modifica sparisce, e torna quando anche il
- * nuovo valore e' stato salvato.
+ * Divide i valori inseriti in "da salvare" e "da correggere". I campi lasciati
+ * vuoti non sono ne' l'uno ne' l'altro: sono righe che il merchant non ha
+ * ancora toccato.
  */
-export function isCostSaved(savedValue: string | undefined, current: string): boolean {
-  if (savedValue === undefined) return false;
-  return normalizeCost(current) === savedValue;
+export function collectPendingCosts(
+  rows: EditableRow[],
+  values: Record<number, string>,
+): { updates: PendingCost[]; rejected: RejectedCost[] } {
+  const updates: PendingCost[] = [];
+  const rejected: RejectedCost[] = [];
+
+  for (const row of rows) {
+    const raw = values[row.variantId];
+    if (raw === undefined) continue;
+    const cost = normalizeCost(raw);
+    if (cost === '') continue;
+
+    const parsed = Number(cost);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      rejected.push({ variantId: row.variantId, reason: 'invalid' });
+      continue;
+    }
+    // Il costo vive sull'inventory item: senza, non c'e' dove scriverlo.
+    if (!row.inventoryItemId) {
+      rejected.push({ variantId: row.variantId, reason: 'no-inventory-item' });
+      continue;
+    }
+
+    updates.push({ variantId: row.variantId, inventoryItemId: row.inventoryItemId, cost });
+  }
+
+  return { updates, rejected };
 }
 
 /**
- * Se il salvataggio ha senso. Il campo salva quando perde il fuoco: senza
- * questo controllo basterebbe entrarci e uscirne per riscrivere su Shopify un
- * valore identico a quello gia' salvato.
+ * I valori inseriti sopravvivono al cambio di tab: sono lavoro del merchant e
+ * finche' non li conferma non esistono da nessun'altra parte. Se quel che era
+ * stato messo da parte e' illeggibile si riparte da zero, senza far saltare la
+ * pagina.
  */
-export function shouldSaveCost(opts: {
-  value: string;
-  savedValue: string | undefined;
-}): boolean {
-  const normalized = normalizeCost(opts.value);
-  if (normalized === '') return false;
-  return normalized !== opts.savedValue;
+export function parseStoredCosts(raw: string | null): Record<number, string> {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+
+    const values: Record<number, string> = {};
+    for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+      const variantId = Number(key);
+      if (Number.isInteger(variantId) && typeof value === 'string') {
+        values[variantId] = value;
+      }
+    }
+    return values;
+  } catch {
+    return {};
+  }
 }
