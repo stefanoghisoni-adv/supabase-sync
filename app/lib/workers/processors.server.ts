@@ -10,7 +10,8 @@ import { isAuthorized } from '../../utils/authorization.server';
 import { isProductLimitReached } from '../limits/product-limit';
 import { enrichVariantCosts } from '../stats/inventory-cost.server';
 import { filterEligibleProductRows } from '../eligibility/product-eligibility';
-import type { ShopifyCustomer } from '~/types/shopify';
+import { sortByCreatedAtAsc } from '../sync/product-order';
+import type { ShopifyCustomer, ShopifyProduct } from '~/types/shopify';
 import { isCustomerOptedIn } from '../stats/customer-consent-stats';
 import { ensureCustomersTable } from '../supabase/ensure-customers-table.server';
 
@@ -254,8 +255,11 @@ export async function processPeriodicSyncCheck(shopId: string): Promise<void> {
       // sempre cost_per_item null, azzerando anche i valori inseriti a mano.
       await enrichVariantCosts(shopifyClient, products);
 
-      // Process each product individually for delta detection
-      for (const product of products) {
+      // Process each product individually for delta detection. Anche qui dal
+      // piu' vecchio: quando il tetto e' saturo passano solo gli aggiornamenti
+      // ai prodotti gia' presenti, e fra i nuovi ha la precedenza chi c'era da
+      // piu' tempo su Shopify.
+      for (const product of sortByCreatedAtAsc(products as ShopifyProduct[])) {
         // Tetto del piano: se il prodotto è nuovo e il limite è già saturo,
         // non aggiungerlo (gli aggiornamenti ai prodotti esistenti passano).
         if (
@@ -455,8 +459,13 @@ export async function processInitialBulkSync(
 
       // Trasforma, filtra le idonee e applica il tetto DOPO il filtro: un prodotto
       // consuma quota solo se ha ≥1 variante idonea.
+      //
+      // Dal piu' vecchio al piu' recente: e' l'ordine in cui la quota del piano
+      // va spesa. Shopify pagina gia' per id crescente (cioe' per creazione),
+      // quindi qui si riordina la pagina appena scaricata e l'insieme resta in
+      // ordine anche fra pagine diverse.
       const allRows = [];
-      for (const product of products) {
+      for (const product of sortByCreatedAtAsc(products as ShopifyProduct[])) {
         if (maxProducts != null && totalProducts >= maxProducts) break;
         const eligibleRows = filterEligibleProductRows(transformProduct(product));
         if (eligibleRows.length === 0) continue; // nessuna variante idonea: niente quota

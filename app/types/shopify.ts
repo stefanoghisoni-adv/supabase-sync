@@ -8,6 +8,10 @@ export interface ShopifyProduct {
   status: 'active' | 'draft' | 'archived';
   tags: string;
   published_at: string | null;
+  // Data di creazione su Shopify: decide l'ordine con cui i prodotti vengono
+  // sincronizzati (dal piu' vecchio) e quindi chi entra sotto il tetto del piano.
+  // Opzionale perche' con `fields` ristretti Shopify non la restituisce.
+  created_at?: string | null;
   variants: ShopifyVariant[];
   images?: ShopifyImage[];
 }
