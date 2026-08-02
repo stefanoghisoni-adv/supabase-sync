@@ -17,6 +17,7 @@ import {
   detectCreatedTables,
   tableCreationJobType,
 } from '~/lib/supabase/detect-created-tables';
+import { RELOAD_SCHEMA_SQL } from '~/lib/supabase/ensure-table.server';
 
 export async function action({ request }: ActionFunctionArgs) {
   const { session } = await authenticate.admin(request);
@@ -93,7 +94,16 @@ export async function action({ request }: ActionFunctionArgs) {
     // DDL idempotente e non distruttivo: crea le tabelle mancanti e allinea le
     // colonne di quelle già esistenti (progetto pre-esistente) senza cancellare
     // i dati. Applica solo le tabelle abilitate dal piano.
-    await runQuery(token, ref, buildMerchantSchemaSQL(includeCustomers));
+    //
+    // La ricarica dello schema in coda non è un di più: l'API REST del progetto
+    // lavora su una copia in cache, e una sincronizzazione avviata subito dopo
+    // il collegamento scriverebbe su tabelle che quella copia non conosce
+    // ancora.
+    await runQuery(
+      token,
+      ref,
+      buildMerchantSchemaSQL(includeCustomers) + RELOAD_SCHEMA_SQL,
+    );
 
     // Log dell'evento di creazione tabelle. Best effort come l'emissione del
     // token-proxy: a questo punto la DDL e' riuscita e un errore qui non deve

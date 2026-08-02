@@ -14,12 +14,35 @@ import { sortByCreatedAtAsc } from '../sync/product-order';
 import type { ShopifyCustomer, ShopifyProduct } from '~/types/shopify';
 import { isCustomerOptedIn } from '../stats/customer-consent-stats';
 import { ensureCustomersTable } from '../supabase/ensure-customers-table.server';
+import { ensureProductsTable } from '../supabase/ensure-products-table.server';
 
 // Solo la parte del Job BullMQ che i processor usano davvero. Tipandola cosi'
 // il bulk sync puo' girare anche senza coda (allineamento automatico dal cron),
 // e un Job vero resta compatibile senza cast.
 interface ProgressReporter {
   updateProgress(value: unknown): Promise<unknown> | unknown;
+}
+
+/**
+ * La tabella dei prodotti dev'esserci prima di qualunque scrittura.
+ *
+ * Non e' un dettaglio da tollerare come per i clienti: senza tabella prodotti
+ * non c'e' nulla da sincronizzare, quindi la corsa si ferma qui — ma con un
+ * messaggio che dice cosa manca, invece dell'errore grezzo dell'API REST
+ * ("Could not find the table 'public.products' in the schema cache") che
+ * arrivava a valle, dopo aver gia' scaricato mezzo catalogo da Shopify.
+ */
+async function requireProductsTable(
+  shopId: string,
+  config: Parameters<typeof ensureProductsTable>[1],
+  supabase: SupabaseClient,
+): Promise<void> {
+  const table = await ensureProductsTable(shopId, config, supabase);
+  if (table.status === 'unavailable') {
+    throw new Error(
+      `Tabella prodotti "${config.tableNameProducts}" non disponibile sul database collegato: ricollega il database dalle impostazioni.`,
+    );
+  }
 }
 
 /**
@@ -230,6 +253,8 @@ export async function processPeriodicSyncCheck(shopId: string): Promise<void> {
   });
 
   try {
+    await requireProductsTable(shop.id, shop.supabaseConfig, supabase);
+
     let totalProducts = 0;
     let totalVariants = 0;
     let nextPageInfo: string | null = null;
@@ -437,6 +462,8 @@ export async function processInitialBulkSync(
   let nextPageInfo: string | null = null;
 
   try {
+    await requireProductsTable(shop.id, shop.supabaseConfig, supabase);
+
     // Riconciliazione, non ripopolamento da zero: la tabella NON viene svuotata,
     // cosi' resta leggibile per tutta la sync (con l'azzeramento il tracciamento
     // leggeva zero prodotti per l'intera durata) e non si distrugge nulla su un

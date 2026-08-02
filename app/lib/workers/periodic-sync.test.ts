@@ -45,6 +45,11 @@ vi.mock('../supabase/ensure-customers-table.server', () => ({
   ensureCustomersTable: vi.fn(async () => ({ status: 'already_present', empty: false })),
 }));
 
+// Idem per la tabella prodotti (test propri in ensure-products-table.test.ts).
+vi.mock('../supabase/ensure-products-table.server', () => ({
+  ensureProductsTable: vi.fn(async () => ({ status: 'already_present', empty: false })),
+}));
+
 // Import after mocks
 import { processPeriodicSyncCheck } from './processors.server';
 import { ShopifyAPIClient } from '../shopify-api.server';

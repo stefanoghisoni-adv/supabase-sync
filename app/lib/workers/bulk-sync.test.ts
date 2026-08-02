@@ -38,12 +38,20 @@ vi.mock('../stats/inventory-cost.server', () => ({
   enrichVariantCosts: vi.fn(async (_client: unknown, products: unknown) => products),
 }));
 
+// La tabella prodotti si da' per presente: la sua verifica ha i test suoi
+// (ensure-products-table.test.ts) e qui aggiungerebbe solo rumore ai doppioni
+// del client Supabase.
+vi.mock('../supabase/ensure-products-table.server', () => ({
+  ensureProductsTable: vi.fn(async () => ({ status: 'already_present', empty: false })),
+}));
+
 // Import after mocks
 import { processInitialBulkSync } from './processors.server';
 import { ShopifyAPIClient } from '../shopify-api.server';
 import { createSupabaseClient } from '../supabase.server';
 import { transformProduct } from '../transformers/product.server';
 import { prisma } from '../../db.server';
+import { ensureProductsTable } from '../supabase/ensure-products-table.server';
 
 describe('Initial bulk sync processor', () => {
   beforeEach(() => {
@@ -250,6 +258,42 @@ describe('Initial bulk sync processor', () => {
         message: 'Shopify API error',
       },
     });
+  });
+
+  it('tabella prodotti non disponibile → si ferma subito, senza scaricare da Shopify', async () => {
+    // Il guasto da cui nasce il controllo: la corsa scaricava mezzo catalogo e
+    // poi si schiantava sull'upsert con l'errore grezzo dell'API REST.
+    vi.mocked(ensureProductsTable).mockResolvedValueOnce({
+      status: 'unavailable',
+      empty: false,
+    });
+
+    vi.mocked(prisma.shop.findUnique).mockResolvedValue({
+      id: 'shop-3',
+      shopDomain: 'test-shop.myshopify.com',
+      accessToken: 'encrypted-token',
+      supabaseConfig: {
+        syncEnabled: true,
+        tableNameProducts: 'products',
+        supabaseUrl: 'https://test.supabase.co',
+        supabasePublicKey: 'encrypted-key',
+        supabaseServiceRoleKey: 'encrypted-service',
+      },
+    } as any);
+    vi.mocked(prisma.syncJob.create).mockResolvedValue({ id: 'sync-job-3' } as any);
+    vi.mocked(prisma.syncJob.update).mockResolvedValue({} as any);
+    vi.mocked(createSupabaseClient).mockReturnValue({ from: vi.fn() } as any);
+
+    const getProducts = vi.fn();
+    vi.mocked(ShopifyAPIClient).mockImplementation(() => ({ getProducts } as any));
+
+    await expect(processInitialBulkSync('shop-3')).rejects.toThrow('Tabella prodotti');
+    expect(getProducts).not.toHaveBeenCalled();
+
+    const failedCall = vi.mocked(prisma.syncJob.update).mock.calls.find(
+      (call: any) => call[0].data?.status === 'failed',
+    );
+    expect(failedCall).toBeDefined();
   });
 
   it('should cap synced products to the plan maxProducts limit', async () => {
