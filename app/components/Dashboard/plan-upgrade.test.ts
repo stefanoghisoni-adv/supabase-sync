@@ -5,6 +5,7 @@ import {
   planChangeBanner,
   shouldTriggerPlanCatchUp,
   syncCtaState,
+  type BannerMessage,
 } from './plan-upgrade';
 
 describe('hasPlanChanged', () => {
@@ -141,7 +142,16 @@ describe('planChangeBanner', () => {
   // Clienti inclusi e tabella gia' provveduta: niente da annunciare sui clienti.
   const withCustomers = { customersEnabled: true, customersTableCreated: true };
   const changed = { planChanged: true };
-  const text = (b: { messages: string[] } | null) => (b?.messages ?? []).join(' ');
+  // I paragrafi possono essere stringhe o spezzoni (una parte in grassetto):
+  // qui interessa solo il testo che il merchant legge.
+  const text = (b: { messages: BannerMessage[] } | null) =>
+    (b?.messages ?? [])
+      .map((m) => (typeof m === 'string' ? m : m.map((s) => s.text).join('')))
+      .join(' ');
+  const boldText = (b: { messages: BannerMessage[] } | null) =>
+    (b?.messages ?? [])
+      .flatMap((m) => (typeof m === 'string' ? [] : m.filter((s) => s.bold)))
+      .map((s) => s.text);
 
   it('tetto che sale → success e nuovo limite', () => {
     const b = planChangeBanner({ ...changed, currentMax: 400, previousMax: 50, ...noCustomers })!;
@@ -183,18 +193,60 @@ describe('planChangeBanner', () => {
     expect(text(b)).toContain('periodica dei prodotti');
   });
 
-  it('clienti non piu\' inclusi ma tabella esistente → warning: sync sospesa, dati intatti', () => {
+  it('downgrade che esclude i clienti → nuovo tetto in grassetto e dati non eliminati', () => {
     const b = planChangeBanner({
       ...changed,
       currentMax: 50,
       previousMax: 400,
       customersEnabled: false,
       customersTableCreated: true,
+      customersUpgradePlan: 'pro',
     })!;
     expect(b.tone).toBe('warning');
+    expect(b.title).toBe('Piano modificato');
+    // Tetto e clienti in un paragrafo solo, l'invito a tornare indietro nell'altro.
+    expect(b.messages).toHaveLength(2);
+    expect(text(b)).toContain('è stato aggiornato a 50 prodotti');
+    expect(text(b)).toContain('non verranno eliminati');
+    expect(text(b)).toContain('profittabilità');
+    expect(text(b)).toContain('almeno a Pro');
+    expect(boldText(b)).toEqual(['50 prodotti']);
+  });
+
+  it('downgrade coi clienti esclusi e nessun piano da proporre → solo il primo paragrafo', () => {
+    const b = planChangeBanner({
+      ...changed,
+      currentMax: 50,
+      previousMax: 400,
+      customersEnabled: false,
+      customersTableCreated: true,
+      customersUpgradePlan: null,
+    })!;
+    expect(b.messages).toHaveLength(1);
+    expect(text(b)).not.toContain('aggiornerai');
+  });
+
+  it('clienti esclusi senza tetto: il grassetto non diventa "senza limite prodotti"', () => {
+    const b = planChangeBanner({
+      ...changed,
+      currentMax: null,
+      previousMax: 400,
+      customersEnabled: false,
+      customersTableCreated: true,
+    })!;
+    expect(boldText(b)).toEqual(['senza limite di prodotti']);
+  });
+
+  it('sync clienti sospesa senza cambio di piano → resta il messaggio breve', () => {
+    const b = planChangeBanner({
+      planChanged: false,
+      currentMax: 50,
+      previousMax: 400,
+      customersEnabled: false,
+      customersTableCreated: true,
+    })!;
     expect(text(b)).toContain('si interrompe');
     expect(text(b)).toContain('non vengono cancellati');
-    expect(text(b)).toContain('tracciamento');
   });
 
   it('clienti persi con tetto prodotti invariato → resta warning', () => {

@@ -1,3 +1,5 @@
+import { planLabel } from './account-format';
+
 // `lastSyncedPlan` null significa "nessuna sync completata": e' il flusso normale
 // di primo utilizzo, non un cambio di piano da segnalare.
 export function hasPlanChanged(
@@ -88,11 +90,29 @@ function capLabel(v: number | null): string {
   return v == null ? 'senza limite' : String(v);
 }
 
+// Il tetto detto per esteso, come si legge dentro una frase.
+function capPhrase(v: number | null): string {
+  return v == null ? 'senza limite di prodotti' : `${v} prodotti`;
+}
+
+/**
+ * Pezzo di paragrafo. I messaggi non sono piu' solo stringhe perche' in qualche
+ * punto una parte va in grassetto (il nuovo tetto), e il banner viene conservato
+ * nel sessionStorage: deve restare fatto di dati, non di elementi React.
+ */
+export interface MessageSegment {
+  text: string;
+  bold?: boolean;
+}
+
+/** Paragrafo: una stringa quando e' tutto testo piano, a pezzi quando non lo e'. */
+export type BannerMessage = string | MessageSegment[];
+
 export interface PlanChangeBanner {
   tone: 'success' | 'warning';
   title: string;
   /** Un paragrafo per argomento: prodotti prima, clienti dopo. */
-  messages: string[];
+  messages: BannerMessage[];
 }
 
 /**
@@ -117,6 +137,12 @@ export function planChangeBanner(opts: {
   customersEnabled: boolean;
   /** La tabella dei clienti risulta gia' creata nel progetto del merchant. */
   customersTableCreated: boolean;
+  /**
+   * Primo piano che rimetterebbe i clienti nella sincronizzazione (nome
+   * tecnico). Null se non c'e' nulla da proporre: in quel caso la frase
+   * sull'upgrade non compare.
+   */
+  customersUpgradePlan?: string | null;
 }): PlanChangeBanner | null {
   const productsDowngrade = opts.planChanged && cap(opts.currentMax) < cap(opts.previousMax);
   // Clienti inclusi dal piano ma tabella ancora da creare: sta per essere
@@ -127,7 +153,36 @@ export function planChangeBanner(opts: {
 
   if (!opts.planChanged && !customersGained && !customersLost) return null;
 
-  const messages: string[] = [];
+  const messages: BannerMessage[] = [];
+
+  // Scendere di piano perdendo i clienti e' l'unico caso in cui le due cose
+  // vanno raccontate insieme: il merchant deve capire in una lettura sola cosa
+  // cambia sul tetto prodotti, che i dati dei clienti restano dove sono, e come
+  // tornare indietro. Due paragrafi separati lascerebbero il dubbio peggiore —
+  // che i clienti gia' raccolti vengano cancellati.
+  if (opts.planChanged && customersLost) {
+    messages.push([
+      {
+        text: 'Il nuovo limite dei prodotti sincronizzabili previsti dal piano è stato aggiornato a ',
+      },
+      { text: capPhrase(opts.currentMax), bold: true },
+      {
+        text:
+          ' e la sincronizzazione dei dati dei clienti è stata sospesa. I dati dei clienti non ' +
+          'verranno eliminati ma non saranno più aggiornati né per le informazioni dei clienti ' +
+          'né per gli ordini e i dati di profittabilità ad essi connessi.',
+      },
+    ]);
+
+    if (opts.customersUpgradePlan) {
+      messages.push(
+        `Se aggiornerai di nuovo almeno a ${planLabel(opts.customersUpgradePlan)} ` +
+          'la sincronizzazione riprenderà normalmente.',
+      );
+    }
+
+    return { tone: 'warning', title: 'Piano modificato', messages };
+  }
 
   if (opts.planChanged) {
     messages.push(

@@ -39,6 +39,7 @@ import {
   shouldTriggerPlanCatchUp,
   syncCtaState,
 } from '~/components/Dashboard/plan-upgrade';
+import { firstPlanWithCustomersSync } from '~/components/Dashboard/account-format';
 
 // Solo per questo store mostriamo il messaggio d'errore reale (utile in debug),
 // invece del generico "Errore interno": gli altri merchant non devono vedere
@@ -79,10 +80,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
     // il loader costa due round-trip in profondità invece di tre. Su Vercel il
     // DB è remoto, quindi ogni round-trip risparmiato è latenza in meno sul TTFB
     // — che è ciò che domina l'LCP di questa pagina.
-    const [plan, recentJobs, customersTableJob, oauthToken] = await Promise.all([
-      prisma.plan.findUnique({
-        where: { planName: shop.currentPlan },
-      }),
+    const [plans, recentJobs, customersTableJob, oauthToken] = await Promise.all([
+      // Tutti i piani, non solo quello in uso: quando i clienti restano fuori
+      // serve anche sapere quale piano li rimetterebbe dentro, e leggerli tutti
+      // costa come leggerne uno (la tabella e' di poche righe).
+      prisma.plan.findMany(),
       prisma.syncJob.findMany({
         where: { shopId: shop.id },
         orderBy: { startedAt: 'desc' },
@@ -110,6 +112,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
         select: { id: true },
       }),
     ]);
+
+    const plan = plans.find((p) => p.planName === shop.currentPlan) ?? null;
 
     // Autorizzazione: se il trial (giorni definiti nel piano) è scaduto e il
     // negozio è ancora ENABLED, lo portiamo automaticamente in PENDING (persistente).
@@ -141,8 +145,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
     // Piano dell'ultima sync: serve a capire se c'e' altro da sincronizzare e a
     // dire, nel banner, se il tetto prodotti e' salito o sceso.
     const planChanged = hasPlanChanged(shop.currentPlan, shop.lastSyncedPlan);
+    // I piani sono gia' tutti in memoria: nessuna seconda interrogazione.
     const previousPlan = planChanged && shop.lastSyncedPlan
-      ? await prisma.plan.findUnique({ where: { planName: shop.lastSyncedPlan } })
+      ? plans.find((p) => p.planName === shop.lastSyncedPlan) ?? null
       : null;
 
     // Cambio di piano: l'allineamento non lo chiediamo al merchant, parte da solo.
@@ -182,6 +187,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
       planChanged,
       currentMaxProducts: plan?.maxProducts ?? null,
       previousMaxProducts: previousPlan?.maxProducts ?? null,
+      // Piano che rimetterebbe i clienti nella sincronizzazione: serve al banner
+      // del cambio di piano quando li ha appena persi.
+      customersUpgradePlan: customersEnabled
+        ? null
+        : firstPlanWithCustomersSync(
+            plans.map((p) => ({
+              planName: p.planName,
+              priceMonthly: Number(p.priceMonthly),
+              customersSyncEnabled: p.customersSyncEnabled,
+            })),
+            shop.currentPlan,
+          ),
       customersTableCreated: customersTableJob !== null,
     });
   } catch (err) {
@@ -270,7 +287,7 @@ interface ProductHistoryResponse {
 }
 
 export default function Dashboard() {
-  const { shop, plan, supabaseConnected, supabaseAccountConnected, customersEnabled, authorization, syncState, planChanged, currentMaxProducts, previousMaxProducts, customersTableCreated } =
+  const { shop, plan, supabaseConnected, supabaseAccountConnected, customersEnabled, authorization, syncState, planChanged, currentMaxProducts, previousMaxProducts, customersTableCreated, customersUpgradePlan } =
     useLoaderData<typeof loader>();
   const blocked = authorization !== 'ENABLED';
   const navigate = useNavigate();
@@ -413,6 +430,7 @@ export default function Dashboard() {
     previousMax: previousMaxProducts,
     customersEnabled,
     customersTableCreated,
+    customersUpgradePlan,
   });
   const hasPlanBanner = planBanner !== null;
 
@@ -705,9 +723,21 @@ export default function Dashboard() {
             {/* Un paragrafo per argomento: prodotti e clienti cambiano per
                 motivi diversi e vanno letti separatamente. */}
             <BlockStack gap="200">
-              {banner.value.messages.map((message) => (
-                <Text as="p" key={message}>
-                  {message}
+              {banner.value.messages.map((message, index) => (
+                <Text as="p" key={index}>
+                  {typeof message === 'string'
+                    ? message
+                    : // Paragrafo a pezzi: il grassetto sta dentro la frase (il
+                      // nuovo tetto prodotti), non su una riga a parte.
+                      message.map((segment, segmentIndex) =>
+                        segment.bold ? (
+                          <Text key={segmentIndex} as="span" fontWeight="bold">
+                            {segment.text}
+                          </Text>
+                        ) : (
+                          segment.text
+                        ),
+                      )}
                 </Text>
               ))}
             </BlockStack>
