@@ -8,12 +8,12 @@ import {
 
 describe('productQuotaLabel', () => {
   it('affianca il tetto del piano al conteggio', () => {
-    expect(productQuotaLabel(54, 100)).toBe('54/100');
+    expect(productQuotaLabel(54, 100)).toBe('54 / 100');
   });
 
   it('piano senza tetto → infinito', () => {
-    expect(productQuotaLabel(54, null)).toBe('54/∞');
-    expect(productQuotaLabel(0, undefined)).toBe('0/∞');
+    expect(productQuotaLabel(54, null)).toBe('54 / ∞');
+    expect(productQuotaLabel(0, undefined)).toBe('0 / ∞');
   });
 });
 

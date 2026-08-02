@@ -9,9 +9,9 @@ const UNLIMITED = '∞';
 /** Quota consumata oltre la quale il merchant va avvisato. */
 export const PRODUCT_LIMIT_WARN_RATIO = 0.85;
 
-/** "54/100", oppure "54/∞" se il piano non ha tetto. */
+/** "54 / 100", oppure "54 / ∞" se il piano non ha tetto. */
 export function productQuotaLabel(count: number, limit: number | null | undefined): string {
-  return `${count}/${limit == null ? UNLIMITED : limit}`;
+  return `${count} / ${limit == null ? UNLIMITED : limit}`;
 }
 
 /**
