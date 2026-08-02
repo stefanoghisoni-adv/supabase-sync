@@ -5,6 +5,7 @@ import {
   formatDuration,
   formatDateTime,
   syncRowNumbers,
+  syncErrorMessage,
 } from './sync-log-format';
 
 describe('tableCreationMessage', () => {
@@ -69,5 +70,43 @@ describe('syncRowNumbers', () => {
   });
   it('per la creazione tabelle la colonna e vuota', () => {
     expect(syncRowNumbers({ ...job, jobType: 'table_create_both' }, true)).toBe('');
+  });
+});
+
+describe('syncErrorMessage', () => {
+  it('tabella prodotti non trovata → frase leggibile', () => {
+    expect(
+      syncErrorMessage(
+        "Supabase products upsert failed: Could not find the table 'public.products' in the schema cache",
+      ),
+    ).toBe('Non è stata trovata nessuna tabella per i prodotti');
+  });
+
+  it('tabella clienti non trovata → frase leggibile', () => {
+    expect(
+      syncErrorMessage(
+        "Supabase customer upsert failed: Could not find the table 'public.customers' in the schema cache",
+      ),
+    ).toBe('Non è stata trovata nessuna tabella per i clienti');
+  });
+
+  it('vale anche per il "does not exist" di Postgres', () => {
+    expect(syncErrorMessage('relation "products" does not exist')).toBe(
+      'Non è stata trovata nessuna tabella per i prodotti',
+    );
+    expect(syncErrorMessage('relation "customers" does not exist')).toBe(
+      'Non è stata trovata nessuna tabella per i clienti',
+    );
+  });
+
+  it('errori che non sappiamo tradurre passano com’erano', () => {
+    // Meglio un errore tecnico che nessun errore: chi guarda il log deve
+    // comunque poterlo riportare al supporto.
+    expect(syncErrorMessage('Shopify API error: 429')).toBe('Shopify API error: 429');
+  });
+
+  it('errore assente o vuoto → non lascia la cella muta', () => {
+    expect(syncErrorMessage(null)).toBe('Errore sconosciuto');
+    expect(syncErrorMessage('   ')).toBe('Errore sconosciuto');
   });
 });

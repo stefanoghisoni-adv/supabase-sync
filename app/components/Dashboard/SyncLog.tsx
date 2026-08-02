@@ -8,6 +8,7 @@ import {
   formatDuration,
   formatDateTime,
   syncRowNumbers,
+  syncErrorMessage,
 } from './sync-log-format';
 
 type SerializedSyncJob = SerializeFrom<SyncJob>;
@@ -35,7 +36,7 @@ export function SyncLog({ jobs, customersEnabled, timeZone }: SyncLogProps) {
         <Badge tone={status.tone}>{status.label}</Badge>
         {job.status === 'failed' && job.errors ? (
           <Text as="span" variant="bodySm" tone="critical">
-            {(job.errors as { message?: string }).message ?? 'Errore sconosciuto'}
+            {syncErrorMessage((job.errors as { message?: string }).message)}
           </Text>
         ) : null}
       </BlockStack>

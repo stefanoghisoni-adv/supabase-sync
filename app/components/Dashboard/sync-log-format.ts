@@ -9,6 +9,35 @@ export function tableCreationMessage(jobType: string): string | null {
   return TABLE_CREATION_MESSAGES[jobType] ?? null;
 }
 
+// Il modo in cui il database dice che una tabella non c'e': o non esiste
+// davvero, o non e' ancora nella copia dello schema che l'API REST tiene in
+// memoria. Per chi legge il log e' la stessa notizia.
+const TABLE_MISSING = /could not find the table|does not exist|relation .* does not exist|42P01/i;
+
+/**
+ * L'errore di un job come va letto dal merchant.
+ *
+ * Gli errori arrivano dalle librerie, quindi in inglese e con dentro nomi di
+ * tabelle e codici: nel log del negozio non dicono nulla a chi li legge. I casi
+ * che sappiamo riconoscere li traduciamo in una frase sola; gli altri passano
+ * come sono — meglio un errore tecnico che nessun errore.
+ */
+export function syncErrorMessage(raw: string | null | undefined): string {
+  const text = (raw ?? '').trim();
+  if (!text) return 'Errore sconosciuto';
+
+  if (TABLE_MISSING.test(text)) {
+    if (/customer|client/i.test(text)) {
+      return 'Non è stata trovata nessuna tabella per i clienti';
+    }
+    if (/product|prodott/i.test(text)) {
+      return 'Non è stata trovata nessuna tabella per i prodotti';
+    }
+  }
+
+  return text;
+}
+
 export interface StatusBadge {
   tone: 'success' | 'critical' | 'info';
   label: string;
