@@ -56,6 +56,30 @@ function CopyableRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+/**
+ * Riga di un valore che esiste solo a database collegato.
+ *
+ * La riga c'e' comunque: sparendo, la card non direbbe quali dati serviranno
+ * per il tracciamento, e il collegamento sembrerebbe togliere qualcosa invece
+ * di aggiungerlo. Finche' non c'e' nulla da copiare, al posto del valore va un
+ * badge grigio — che e' il modo in cui il resto delle Impostazioni dice "questa
+ * cosa non e' in uso".
+ */
+function ValueRow({
+  label,
+  value,
+  available,
+}: {
+  label: string;
+  value: string | null;
+  available: boolean;
+}) {
+  if (!available || !value) {
+    return <MetricRow label={label} badge={{ content: 'Non configurato' }} />;
+  }
+  return <CopyableRow label={label} value={value} />;
+}
+
 export function DatabaseCard({ connected, appUrl, readKey }: DatabaseCardProps) {
   return (
     <Card>
@@ -70,10 +94,12 @@ export function DatabaseCard({ connected, appUrl, readKey }: DatabaseCardProps) 
             content: connected ? 'Collegato' : 'Non collegato',
           }}
         />
-        {/* Senza collegamento non esistono ne' indirizzo ne' chiave: la card
-            resta alla sola riga di stato. */}
-        {appUrl && <CopyableRow label="App URL" value={appUrl} />}
-        {readKey && <CopyableRow label="Publishable API Key" value={readKey} />}
+        <ValueRow label="App URL" value={appUrl} available={connected} />
+        <ValueRow
+          label="Publishable API Key"
+          value={readKey}
+          available={connected}
+        />
       </BlockStack>
     </Card>
   );
