@@ -3,7 +3,7 @@ import { canAccessPlanTab } from '~/components/Billing/plan-access';
 // Il nome tecnico del piano (colonna plan_name) non e' adatto alla UI: mappa esplicita.
 const PLAN_LABELS: Record<string, string> = {
   free: 'Free',
-  pro: 'Pro+',
+  pro: 'Pro',
   business: 'Business',
   enterprise: 'Enterprise',
   lifetime: 'Lifetime',

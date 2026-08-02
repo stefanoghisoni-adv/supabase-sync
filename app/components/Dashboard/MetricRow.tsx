@@ -4,7 +4,12 @@ import { InfoIcon } from '@shopify/polaris-icons';
 
 export interface MetricRowProps {
   label: string;
-  badge: { tone?: 'success' | 'warning'; content: string };
+  /**
+   * Omesso quando l'azione dice gia' tutto (es. "Aggiorna a Business" al posto
+   * di "Non attiva"): la riga resta a due colonne invece di ripetere lo stesso
+   * concetto due volte.
+   */
+  badge?: { tone?: 'success' | 'warning'; content: string };
   info?: string;
   action?: ReactNode;
 }
@@ -27,7 +32,7 @@ export function MetricRow({ label, badge, info, action }: MetricRowProps) {
       </InlineStack>
       <InlineStack gap="200" blockAlign="center" wrap={false}>
         {action}
-        <Badge tone={badge.tone}>{badge.content}</Badge>
+        {badge ? <Badge tone={badge.tone}>{badge.content}</Badge> : null}
       </InlineStack>
     </InlineStack>
   );

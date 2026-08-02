@@ -9,13 +9,13 @@ import {
 describe('planLabel', () => {
   it('mappa i piani noti', () => {
     expect(planLabel('free')).toBe('Free');
-    expect(planLabel('pro')).toBe('Pro+');
+    expect(planLabel('pro')).toBe('Pro');
     expect(planLabel('business')).toBe('Business');
     expect(planLabel('enterprise')).toBe('Enterprise');
     expect(planLabel('lifetime')).toBe('Lifetime');
   });
   it('tollera maiuscole e spazi', () => {
-    expect(planLabel('  PRO ')).toBe('Pro+');
+    expect(planLabel('  PRO ')).toBe('Pro');
   });
   it('piano sconosciuto → capitalizzato', () => {
     expect(planLabel('custom')).toBe('Custom');

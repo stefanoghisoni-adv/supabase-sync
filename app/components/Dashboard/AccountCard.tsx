@@ -10,7 +10,7 @@ export interface AccountCardProps {
   /**
    * Piano da proporre quando i clienti non sono inclusi (nome tecnico). Null
    * quando i clienti sono gia' inclusi o non c'e' un piano superiore da
-   * proporre: in quel caso accanto al badge non compare nulla.
+   * proporre: in quel caso la riga torna al badge.
    */
   customersUpgradePlan?: string | null;
 }
@@ -27,6 +27,8 @@ export function AccountCard({
   const loadingPlan =
     navigation.state === 'loading' && navigation.location?.pathname === '/plan';
 
+  const upgrade = !customersSyncActive && Boolean(customersUpgradePlan);
+
   return (
     <Card>
       <BlockStack gap="300">
@@ -40,8 +42,12 @@ export function AccountCard({
         />
         <MetricRow
           label="Sincronizzazione clienti"
+          // L'invito all'upgrade prende il posto del badge "Non attiva": dice la
+          // stessa cosa e in piu' dice cosa farci. Il badge resta quando la sync
+          // e' attiva, o quando non c'e' nessun piano da proporre — altrimenti
+          // la riga rimarrebbe senza risposta.
           action={
-            customersUpgradePlan ? (
+            upgrade ? (
               <Button
                 variant="plain"
                 url="/plan"
@@ -52,7 +58,7 @@ export function AccountCard({
               </Button>
             ) : undefined
           }
-          badge={syncStatusBadge(customersSyncActive)}
+          badge={upgrade ? undefined : syncStatusBadge(customersSyncActive)}
         />
       </BlockStack>
     </Card>
