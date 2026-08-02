@@ -31,15 +31,6 @@ export function ProductsCard({
           Prodotti
         </Text>
         <MetricRow label="Prodotti totali" badge={{ content: value(total) }} />
-        {/* Accanto agli idonei il tetto del piano: il numero da solo non dice
-            quanto margine resta. */}
-        <MetricRow
-          label="Prodotti idonei"
-          badge={{
-            tone: 'success',
-            content: loading ? '—' : productQuotaLabel(readyCount, planLimit),
-          }}
-        />
         <MetricRow
           label="Non idonei"
           action={
@@ -50,6 +41,16 @@ export function ProductsCard({
             ) : undefined
           }
           badge={{ tone, content: value(problemCount) }}
+        />
+        {/* Ultima riga, come conclusione delle due sopra: e' il numero che
+            conta davvero. Accanto, il tetto del piano — il conteggio da solo
+            non dice quanto margine resta. */}
+        <MetricRow
+          label="Prodotti idonei"
+          badge={{
+            tone: 'success',
+            content: loading ? '—' : productQuotaLabel(readyCount, planLimit),
+          }}
         />
       </BlockStack>
     </Card>
