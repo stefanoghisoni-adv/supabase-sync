@@ -13,8 +13,9 @@ import {
   Icon,
   Banner,
   SkeletonDisplayText,
+  Tooltip,
 } from '@shopify/polaris';
-import { ProductIcon, PersonIcon, SettingsIcon } from '@shopify/polaris-icons';
+import { ProductIcon, PersonIcon, SettingsIcon, LockIcon } from '@shopify/polaris-icons';
 import { ProductsCard } from '~/components/Dashboard/ProductsCard';
 import { PlanLimitBanner } from '~/components/Dashboard/PlanLimitBanner';
 import { CustomersCard } from '~/components/Dashboard/CustomersCard';
@@ -40,7 +41,6 @@ import {
 } from '~/components/Dashboard/plan-upgrade';
 import { firstPlanWithCustomersSync } from '~/components/Dashboard/account-format';
 import { authorizationBanners } from '~/components/Dashboard/authorization-banners';
-import { CustomersLockedHint } from '~/components/Dashboard/CustomersLockedHint';
 
 // Solo per questo store mostriamo il messaggio d'errore reale (utile in debug),
 // invece del generico "Errore interno": gli altri merchant non devono vedere
@@ -604,7 +604,14 @@ export default function Dashboard() {
                   {customersEnabled ? (
                     previewCustomers
                   ) : (
-                    <CustomersLockedHint />
+                    <Tooltip content="Aggiorna ora per integrare la sincronizzazione dei clienti">
+                      {/* Il glifo del lucchetto e' disegnato dentro un viewBox 20
+                          con ~4px vuoti a destra: senza questo recupero l'icona
+                          sembra rientrata rispetto al numero della riga sopra. */}
+                      <span style={{ display: 'block', marginInlineEnd: '-4px' }}>
+                        <Icon source={LockIcon} tone="subdued" />
+                      </span>
+                    </Tooltip>
                   )}
                 </InlineStack>
               </BlockStack>
