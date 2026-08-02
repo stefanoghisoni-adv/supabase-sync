@@ -13,6 +13,7 @@ import {
   countsTowardsPlanLimit,
   organizationBillingUrl,
   getOrganizationPlan,
+  getAccountEmail,
   SUPABASE_PLAN_PROJECT_LIMITS,
   isPlanLimitError,
 } from './supabase-management.server';
@@ -326,5 +327,69 @@ describe('createProject: errori', () => {
     await expect(
       createProject('tok', { name: 'x', organizationId: 'o', region: 'eu-central-1', dbPass: 'p' }),
     ).rejects.toMatchObject({ status: 403, body: 'free plan project limit reached' });
+  });
+});
+
+describe('getAccountEmail', () => {
+  beforeEach(() => {
+    (global.fetch as any).mockReset();
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  const profileDenied = { ok: false, status: 403, text: async () => 'forbidden' };
+
+  it('legge primary_email dal profilo quando il token e’ ammesso', async () => {
+    (global.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ primary_email: 'io@example.com', username: 'io' }),
+    });
+    expect(await getAccountEmail('tok')).toBe('io@example.com');
+    expect((global.fetch as any).mock.calls[0][0]).toBe('https://api.supabase.com/v1/profile');
+  });
+
+  it('ripiega sul membro unico dell’organizzazione autorizzata', async () => {
+    (global.fetch as any)
+      .mockResolvedValueOnce(profileDenied)
+      .mockResolvedValueOnce({ ok: true, json: async () => [{ slug: 'org1', name: 'Org' }] })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => [{ user_id: 'u1', email: 'io@example.com', role_name: 'Owner' }],
+      });
+    expect(await getAccountEmail('tok')).toBe('io@example.com');
+    expect((global.fetch as any).mock.calls[2][0]).toBe(
+      'https://api.supabase.com/v1/organizations/org1/members',
+    );
+  });
+
+  it('non indovina quando i membri sono piu’ di uno', async () => {
+    (global.fetch as any)
+      .mockResolvedValueOnce(profileDenied)
+      .mockResolvedValueOnce({ ok: true, json: async () => [{ slug: 'org1', name: 'Org' }] })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => [
+          { user_id: 'u1', email: 'io@example.com' },
+          { user_id: 'u2', email: 'collega@example.com' },
+        ],
+      });
+    expect(await getAccountEmail('tok')).toBeNull();
+  });
+
+  it('non indovina quando le organizzazioni sono piu’ di una', async () => {
+    (global.fetch as any)
+      .mockResolvedValueOnce(profileDenied)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => [{ slug: 'a', name: 'A' }, { slug: 'b', name: 'B' }],
+      });
+    expect(await getAccountEmail('tok')).toBeNull();
+    expect((global.fetch as any).mock.calls.length).toBe(2);
+  });
+
+  it('resta null se anche le organizzazioni sono negate', async () => {
+    (global.fetch as any)
+      .mockResolvedValueOnce(profileDenied)
+      .mockResolvedValueOnce({ ok: false, status: 403, text: async () => 'forbidden' });
+    expect(await getAccountEmail('tok')).toBeNull();
   });
 });

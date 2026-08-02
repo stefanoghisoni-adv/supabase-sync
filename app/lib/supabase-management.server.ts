@@ -136,6 +136,69 @@ export async function listProjects(accessToken: string): Promise<SupabaseProject
   }));
 }
 
+// /v1/profile e' l'unico posto che dichiara l'email dell'account, ma nella
+// specifica non porta alcuno scope OAuth: e' pensato per i token personali, e
+// con un token di integrazione puo' rispondere 401/403. Per questo esiste la
+// via secondaria qui sotto.
+async function profileEmail(accessToken: string): Promise<string | null> {
+  try {
+    const res = await fetch(`${MGMT_BASE}/v1/profile`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) {
+      console.warn(
+        '[supabase] /v1/profile non disponibile:',
+        res.status,
+        (await res.text()).slice(0, 200),
+      );
+      return null;
+    }
+    const data = (await res.json()) as { primary_email?: unknown; email?: unknown };
+    const email = data.primary_email ?? data.email;
+    return typeof email === 'string' && email ? email : null;
+  } catch (e) {
+    console.warn('[supabase] /v1/profile', e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
+// Via secondaria: l'autorizzazione OAuth di Supabase e' data a una singola
+// organizzazione. Se quella organizzazione ha un solo membro, quel membro e'
+// per forza chi ha fatto l'accesso — ed e' l'unico caso in cui possiamo dirlo
+// senza rischiare di mostrare l'indirizzo di un collega.
+async function soleMemberEmail(accessToken: string): Promise<string | null> {
+  try {
+    const orgsRes = await fetch(`${MGMT_BASE}/v1/organizations`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!orgsRes.ok) {
+      console.warn('[supabase] /v1/organizations non disponibile:', orgsRes.status);
+      return null;
+    }
+    const orgs = (await orgsRes.json()) as Array<{ slug?: unknown }>;
+    if (!Array.isArray(orgs) || orgs.length !== 1) return null;
+    const slug = orgs[0]?.slug;
+    if (typeof slug !== 'string' || !slug) return null;
+
+    const membersRes = await fetch(`${MGMT_BASE}/v1/organizations/${slug}/members`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!membersRes.ok) {
+      console.warn('[supabase] /v1/organizations/*/members non disponibile:', membersRes.status);
+      return null;
+    }
+    const members = (await membersRes.json()) as Array<{ email?: unknown }>;
+    if (!Array.isArray(members)) return null;
+    const emails = members
+      .map((m) => m.email)
+      .filter((e): e is string => typeof e === 'string' && e.length > 0);
+    return emails.length === 1 ? emails[0] : null;
+  } catch (e) {
+    console.warn('[supabase] membri organizzazione', e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
 /**
  * Email dell'account Supabase a cui si e' fatto accesso.
  *
@@ -144,17 +207,7 @@ export async function listProjects(accessToken: string): Promise<SupabaseProject
  * accorcia. Non tutti i token hanno il permesso di leggere il profilo.
  */
 export async function getAccountEmail(accessToken: string): Promise<string | null> {
-  try {
-    const res = await fetch(`${MGMT_BASE}/v1/profile`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-    if (!res.ok) return null;
-    const data = (await res.json()) as { primary_email?: unknown; email?: unknown };
-    const email = data.primary_email ?? data.email;
-    return typeof email === 'string' && email ? email : null;
-  } catch {
-    return null;
-  }
+  return (await profileEmail(accessToken)) ?? (await soleMemberEmail(accessToken));
 }
 
 export async function getProjectApiKeys(
