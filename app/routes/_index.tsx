@@ -14,6 +14,7 @@ import {
   Banner,
   SkeletonDisplayText,
   Tooltip,
+  Link,
 } from '@shopify/polaris';
 import { ProductIcon, PersonIcon, SettingsIcon, LockIcon } from '@shopify/polaris-icons';
 import { ProductsCard } from '~/components/Dashboard/ProductsCard';
@@ -604,13 +605,25 @@ export default function Dashboard() {
                   {customersEnabled ? (
                     previewCustomers
                   ) : (
-                    <Tooltip content="Sbloccalo passando a un piano superiore">
-                      {/* Il glifo del lucchetto e' disegnato dentro un viewBox 20
-                          con ~4px vuoti a destra: senza questo recupero l'icona
-                          sembra rientrata rispetto al numero della riga sopra. */}
-                      <span style={{ display: 'block', marginInlineEnd: '-4px' }}>
-                        <Icon source={LockIcon} tone="subdued" />
-                      </span>
+                    <Tooltip
+                      content={
+                        <Text as="span" variant="bodySm">
+                          <Link url="/plan">Aggiorna ora</Link> per integrare la
+                          sincronizzazione dei clienti
+                        </Text>
+                      }
+                    >
+                      {/* Anche il lucchetto porta al piano: il collegamento nel
+                          fumetto e' scomodo da centrare col puntatore, e chi ci
+                          clicca sopra si aspetta di arrivare nello stesso posto. */}
+                      <Link url="/plan" removeUnderline>
+                        {/* Il glifo del lucchetto e' disegnato dentro un viewBox 20
+                            con ~4px vuoti a destra: senza questo recupero l'icona
+                            sembra rientrata rispetto al numero della riga sopra. */}
+                        <span style={{ display: 'block', marginInlineEnd: '-4px' }}>
+                          <Icon source={LockIcon} tone="subdued" />
+                        </span>
+                      </Link>
                     </Tooltip>
                   )}
                 </InlineStack>
