@@ -132,9 +132,7 @@ export function SupabaseAccountConnect({
   if (connected) {
     return (
       <Text as="p" tone="subdued">
-        {accountEmail
-          ? `Accesso effettuato con ${accountEmail} dell'account Supabase.`
-          : 'Accesso effettuato.'}
+        {accountEmail ? `Accesso effettuato con ${accountEmail}.` : 'Accesso effettuato.'}
       </Text>
     );
   }

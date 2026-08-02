@@ -38,7 +38,16 @@ export function Stepper({ steps }: { steps: StepperItem[] }) {
       {steps.map((step, index) => (
         <Card key={step.id}>
           <BlockStack gap="300">
-            <InlineStack gap="200" blockAlign="center">
+            {/* Badge all'estremo destro della riga del titolo, non appiccicato
+                al testo: cosi' sta nell'angolo in alto a destra della card e
+                tutti gli step lo mostrano incolonnato, qualunque sia la
+                lunghezza del titolo. */}
+            <InlineStack
+              align="space-between"
+              blockAlign="center"
+              gap="200"
+              wrap={false}
+            >
               <Text
                 as="span"
                 variant="headingSm"
