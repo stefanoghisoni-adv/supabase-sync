@@ -36,8 +36,10 @@ import {
 import { getReadinessCache, setReadinessCache } from '~/lib/cache/stats-cache.server';
 import {
   collectProblemVariants,
+  computeProductReadiness,
   type ProblemVariant,
 } from '~/lib/stats/product-readiness';
+import { PlanLimitBanner } from '~/components/Dashboard/PlanLimitBanner';
 import { filterProblemVariants, pageCount, pageSlice } from '~/lib/stats/problem-filter';
 import {
   costFieldDisabled,
@@ -83,11 +85,21 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const rows = error ? [] : collectProblemVariants(allProducts);
 
+  // Quota del piano: serve all'avviso di limite in esaurimento, lo stesso della
+  // dashboard. I prodotti sono gia' in memoria, quindi il conteggio non costa
+  // una seconda passata su Shopify.
+  const plan = await prisma.plan.findUnique({
+    where: { planName: shop.currentPlan },
+    select: { maxProducts: true },
+  });
+
   return json({
     rows,
     error,
     shopDomain: shop.shopDomain,
     blocked: !isAuthorized(shop.authorization),
+    readyCount: error ? 0 : computeProductReadiness(allProducts).readyCount,
+    planLimit: plan?.maxProducts ?? null,
   });
 }
 
@@ -299,7 +311,7 @@ function CostRow({
 
 export default function ProblemProducts() {
   const loaderData = useLoaderData<typeof loader>();
-  const { error, shopDomain, blocked } = loaderData;
+  const { error, shopDomain, blocked, readyCount, planLimit } = loaderData;
 
   const [rows, setRows] = useState<ProblemVariant[]>(loaderData.rows);
   const [values, setValues] = useState<Record<number, string>>({});
@@ -451,6 +463,15 @@ export default function ProblemProducts() {
       }}
     >
       <BlockStack gap="400">
+        {/* Stesso avviso della dashboard: qui e' anche piu' pertinente, perche'
+            ogni costo inserito rende idoneo un prodotto in piu' e avvicina al
+            tetto. Il conteggio segue le righe risolte in questa sessione, senza
+            aspettare un ricaricamento. */}
+        <PlanLimitBanner
+          count={readyCount + (loaderData.rows.length - rows.length)}
+          limit={planLimit}
+        />
+
         {error && <Banner tone="critical">{error}</Banner>}
 
         {blocked && !error && (

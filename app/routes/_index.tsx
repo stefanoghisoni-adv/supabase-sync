@@ -17,6 +17,7 @@ import {
 } from '@shopify/polaris';
 import { ProductIcon, PersonIcon, SettingsIcon, LockIcon } from '@shopify/polaris-icons';
 import { ProductsCard } from '~/components/Dashboard/ProductsCard';
+import { PlanLimitBanner } from '~/components/Dashboard/PlanLimitBanner';
 import { CustomersCard } from '~/components/Dashboard/CustomersCard';
 import { PlanBanner } from '~/components/Dashboard/PlanBanner';
 import { Stepper, type StepperItem } from '~/components/Dashboard/Stepper';
@@ -688,6 +689,13 @@ export default function Dashboard() {
           </Banner>
         )}
 
+        {/* Quota prodotti agli sgoccioli: non si chiude, perche' resta vero
+            finche' il piano non cambia. */}
+        <PlanLimitBanner
+          count={readiness?.readyCount ?? 0}
+          limit={currentMaxProducts}
+        />
+
         {showPlanBanner && banner && (
           <Banner
             tone={banner.value.tone}
@@ -722,6 +730,7 @@ export default function Dashboard() {
           <ProductsCard
             readyCount={readiness?.readyCount ?? 0}
             problemCount={readiness?.problemCount ?? 0}
+            planLimit={currentMaxProducts}
             loading={readinessLoading}
             onViewIssues={() => navigate('/products/issues')}
           />
