@@ -49,6 +49,11 @@ model Shop {
   // Enum e non testo libero: il Table Editor di Supabase mostra i soli valori
   // ammessi e un refuso diventa impossibile a livello di database.
   authorization     AuthorizationState @default(ENABLED)
+  // Autorizzazione al TRACCIAMENTO, indipendente da quella sopra: un negozio a
+  // cui l'app e' sospesa puo' continuare a leggere i dati gia' sincronizzati
+  // (fermi, ma utilizzabili), e viceversa si puo' fermare il solo tracciamento
+  // lasciando l'app in funzione. Spegnere una non spegne l'altra.
+  trackingAuthorization AuthorizationState @default(ENABLED) @map("tracking_authorization")
   // Fuso orario IANA del negozio (es. Europe/Rome), letto da Shopify e
   // memorizzato: rende le date del log identiche su server e client.
   ianaTimezone      String?            @map("iana_timezone")

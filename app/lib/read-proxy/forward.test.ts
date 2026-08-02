@@ -139,7 +139,7 @@ describe('buildSupabaseReadUrl', () => {
 describe('forwardRead', () => {
   beforeEach(() => { global.fetch = vi.fn(); });
   const ctx = {
-    shopId: 's1', authorization: 'ENABLED' as const, canReadData: true, projectRef: 'abcref',
+    shopId: 's1', trackingAuthorization: 'ENABLED' as const, canReadData: true, projectRef: 'abcref',
     serviceRoleKey: 'svc', customersEnabled: true,
   };
 

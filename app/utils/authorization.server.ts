@@ -1,7 +1,15 @@
-// Stato di autorizzazione all'uso dell'app per un negozio. Gestito manualmente
-// dall'owner sulla tabella `shops` di Supabase, e/o impostato automaticamente
-// (es. trial scaduto → PENDING). Il gating è SERVER-SIDE: anche se l'utente
-// riabilita i pulsanti nell'HTML, le azioni vengono comunque rifiutate.
+// Stato di autorizzazione di un negozio. Gestito manualmente dall'owner sulla
+// tabella `shops` di Supabase, e/o impostato automaticamente (es. trial scaduto
+// → PENDING). Il gating è SERVER-SIDE: anche se l'utente riabilita i pulsanti
+// nell'HTML, le azioni vengono comunque rifiutate.
+//
+// Le autorizzazioni sono DUE e indipendenti, su due colonne distinte:
+//  - `authorization`          → uso dell'app (dashboard, sincronizzazioni);
+//  - `tracking_authorization` → tracciamento (letture dei dati sincronizzati).
+// Spegnerne una non spegne l'altra: un negozio sospeso puo' continuare a
+// tracciare con gli ultimi dati sincronizzati, e viceversa si puo' fermare il
+// solo tracciamento lasciando l'app in funzione. Le funzioni qui sotto valgono
+// per entrambe: e' il chiamante a passare la colonna giusta.
 export type AuthorizationState = 'ENABLED' | 'PENDING' | 'DISABLED';
 
 export function normalizeAuthorization(value: string | null | undefined): AuthorizationState {
@@ -16,13 +24,13 @@ export function isAuthorized(value: string | null | undefined): boolean {
   return normalizeAuthorization(value) === 'ENABLED';
 }
 
-// Gate FAIL-CLOSED per l'accesso ai dati (proxy di lettura).
+// Gate FAIL-CLOSED per l'accesso ai dati: va passata `tracking_authorization`,
+// non l'autorizzazione all'uso dell'app.
 //
 // `normalizeAuthorization` è deliberatamente permissiva: mappa a ENABLED tutto
 // ciò che non riconosce, così la UI non si blocca su valori nulli o legacy.
-// Sul percorso dati quel comportamento è però un bypass: la colonna
-// `authorization` è testo libero senza CHECK constraint, editata a mano
-// dall'owner su Supabase, e un refuso ("DISABLD", "BANNED") concederebbe
+// Sul percorso dati quel comportamento è però un bypass: la colonna è
+// editata a mano dall'owner su Supabase, e un refuso ("DISABLD", "BANNED") concederebbe
 // silenziosamente l'accesso proprio allo shop che si voleva bloccare.
 // Qui l'unico valore che concede accesso è l'esatto ENABLED: qualsiasi altra
 // cosa — inclusa una stringa sconosciuta — nega.
@@ -30,13 +38,15 @@ export function grantsDataAccess(value: string | null | undefined): boolean {
   return (value ?? '').trim().toUpperCase() === 'ENABLED';
 }
 
-// Messaggio utente per lo stato di blocco (banner e risposte d'errore).
+// Messaggio utente per lo stato di blocco dell'USO DELL'APP (risposte d'errore
+// lato server). Del tracciamento non parla: e' un'altra autorizzazione, e i
+// banner della dashboard la raccontano a parte (authorization-banners.ts).
 export function authorizationMessage(state: AuthorizationState): string {
   if (state === 'DISABLED') {
     return "L'utilizzo dell'app è stato disabilitato per questo negozio. Contatta il supporto.";
   }
   if (state === 'PENDING') {
-    return 'Il periodo di prova è terminato: il tracciamento che utilizza le tabelle Supabase è sospeso. Aggiorna il piano per riattivarlo.';
+    return 'Il periodo di prova è terminato: le funzioni dell’app e le sincronizzazioni sono sospese. Aggiorna il piano per riattivarle.';
   }
   return '';
 }

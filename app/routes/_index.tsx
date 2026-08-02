@@ -40,6 +40,7 @@ import {
   syncCtaState,
 } from '~/components/Dashboard/plan-upgrade';
 import { firstPlanWithCustomersSync } from '~/components/Dashboard/account-format';
+import { authorizationBanners } from '~/components/Dashboard/authorization-banners';
 
 // Solo per questo store mostriamo il messaggio d'errore reale (utile in debug),
 // invece del generico "Errore interno": gli altri merchant non devono vedere
@@ -118,13 +119,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
     // Autorizzazione: se il trial (giorni definiti nel piano) è scaduto e il
     // negozio è ancora ENABLED, lo portiamo automaticamente in PENDING (persistente).
     let authorization = normalizeAuthorization(shop.authorization);
+    let trackingAuthorization = normalizeAuthorization(shop.trackingAuthorization);
     if (authorization === 'ENABLED' && shop.isInTrial && plan?.trialDays) {
       const trialEnd = shop.installedAt.getTime() + plan.trialDays * 86_400_000;
       if (Date.now() > trialEnd) {
         authorization = 'PENDING';
+        // Alla fine della prova si fermano entrambe: e' quello che il periodo di
+        // prova concede. Restano comunque due interruttori distinti, e l'owner
+        // puo' riaccendere il solo tracciamento senza riaprire l'app.
+        trackingAuthorization = 'PENDING';
         await prisma.shop.update({
           where: { id: shop.id },
-          data: { authorization: 'PENDING' },
+          data: { authorization: 'PENDING', trackingAuthorization: 'PENDING' },
         });
       }
     }
@@ -184,6 +190,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       customersEnabled,
       syncState,
       authorization,
+      trackingAuthorization,
       planChanged,
       currentMaxProducts: plan?.maxProducts ?? null,
       previousMaxProducts: previousPlan?.maxProducts ?? null,
@@ -287,7 +294,7 @@ interface ProductHistoryResponse {
 }
 
 export default function Dashboard() {
-  const { shop, plan, supabaseConnected, supabaseAccountConnected, customersEnabled, authorization, syncState, planChanged, currentMaxProducts, previousMaxProducts, customersTableCreated, customersUpgradePlan } =
+  const { shop, plan, supabaseConnected, supabaseAccountConnected, customersEnabled, authorization, syncState, planChanged, currentMaxProducts, previousMaxProducts, customersTableCreated, customersUpgradePlan, trackingAuthorization } =
     useLoaderData<typeof loader>();
   const blocked = authorization !== 'ENABLED';
   const navigate = useNavigate();
@@ -689,23 +696,14 @@ export default function Dashboard() {
           </Banner>
         )}
 
-        {/* Banner di blocco (non chiudibile): danger se DISABLED, warning se PENDING. */}
-        {authorization === 'DISABLED' && (
-          <Banner tone="critical" title="App disabilitata">
-            <Text as="p">
-              L'utilizzo dell'app è stato disabilitato per questo negozio. Tutte le funzioni e
-              le sincronizzazioni sono sospese.
-            </Text>
+        {/* Banner di sospensione (non chiudibili). Uso dell'app e tracciamento
+            sono due autorizzazioni indipendenti: puo' esserci l'una senza
+            l'altra, e il banner lo dice invece di dare tutto per spento. */}
+        {authorizationBanners(authorization, trackingAuthorization).map((b) => (
+          <Banner key={b.id} tone={b.tone} title={b.title}>
+            <Text as="p">{b.message}</Text>
           </Banner>
-        )}
-        {authorization === 'PENDING' && (
-          <Banner tone="warning" title="Periodo di prova terminato">
-            <Text as="p">
-              Il periodo di prova è terminato: il tracciamento che utilizza le tabelle Supabase
-              è sospeso. Aggiorna il piano per riattivarlo.
-            </Text>
-          </Banner>
-        )}
+        ))}
 
         {/* Quota prodotti agli sgoccioli: non si chiude, perche' resta vero
             finche' il piano non cambia. */}

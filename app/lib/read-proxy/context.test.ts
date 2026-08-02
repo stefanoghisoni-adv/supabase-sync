@@ -15,6 +15,7 @@ import { resolveShopReadContext, clearReadContextCache } from './context.server'
 const shopRow = (over: Record<string, unknown> = {}) => ({
   id: 's1',
   authorization: 'ENABLED',
+  trackingAuthorization: 'ENABLED',
   currentPlan: 'free',
   supabaseConfig: {
     supabaseProjectRef: 'abcref',
@@ -50,7 +51,7 @@ describe('resolveShopReadContext', () => {
       kind: 'ok',
       ctx: {
         shopId: 's1',
-        authorization: 'ENABLED',
+        trackingAuthorization: 'ENABLED',
         canReadData: true,
         projectRef: 'abcref',
         serviceRoleKey: 'svc',
@@ -59,8 +60,8 @@ describe('resolveShopReadContext', () => {
     });
   });
 
-  // Il gate deve fallire CHIUSO: `authorization` è testo libero editato a mano
-  // dall'owner, senza CHECK constraint. Un refuso non deve concedere accesso.
+  // Il gate deve fallire CHIUSO: la colonna è editata a mano dall'owner, e un
+  // refuso non deve concedere accesso.
   it.each([
     ['DISABLED', false],
     ['PENDING', false],
@@ -72,12 +73,33 @@ describe('resolveShopReadContext', () => {
     ['SUSPENDED', false],
     ['', false],
     [null, false],
-  ])('authorization %j → canReadData %s', async (value, expected) => {
-    findUnique.mockResolvedValueOnce(shopRow({ authorization: value }));
+  ])('trackingAuthorization %j → canReadData %s', async (value, expected) => {
+    findUnique.mockResolvedValueOnce(shopRow({ trackingAuthorization: value }));
     planFindUnique.mockResolvedValueOnce({ customersSyncEnabled: false });
     const r = await resolveShopReadContext(`spx_${String(value)}`);
     expect(r.kind).toBe('ok');
     expect((r as { ctx: { canReadData: boolean } }).ctx.canReadData).toBe(expected);
+  });
+
+  // Il senso dello sdoppiamento: chi ha l'app sospesa puo' continuare a
+  // tracciare con i dati gia' sincronizzati, e chi ha l'app attiva puo' avere
+  // il solo tracciamento fermo.
+  it('app sospesa ma tracciamento attivo → le letture passano', async () => {
+    findUnique.mockResolvedValueOnce(
+      shopRow({ authorization: 'DISABLED', trackingAuthorization: 'ENABLED' }),
+    );
+    planFindUnique.mockResolvedValueOnce({ customersSyncEnabled: false });
+    const r = await resolveShopReadContext('spx_app_off');
+    expect((r as { ctx: { canReadData: boolean } }).ctx.canReadData).toBe(true);
+  });
+
+  it('app attiva ma tracciamento sospeso → le letture no', async () => {
+    findUnique.mockResolvedValueOnce(
+      shopRow({ authorization: 'ENABLED', trackingAuthorization: 'DISABLED' }),
+    );
+    planFindUnique.mockResolvedValueOnce({ customersSyncEnabled: false });
+    const r = await resolveShopReadContext('spx_track_off');
+    expect((r as { ctx: { canReadData: boolean } }).ctx.canReadData).toBe(false);
   });
 
   it('usa la cache entro il TTL (una sola query per token)', async () => {

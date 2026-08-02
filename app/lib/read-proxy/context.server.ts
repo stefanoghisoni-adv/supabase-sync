@@ -9,8 +9,10 @@ import { hashReadProxyToken } from './token.server';
 
 export interface ShopReadContext {
   shopId: string;
-  // Stato normalizzato, per messaggi e diagnostica. NON usarlo come gate.
-  authorization: AuthorizationState;
+  // Stato normalizzato del TRACCIAMENTO — non quello dell'uso dell'app: qui si
+  // decide se le letture passano, e le due autorizzazioni sono indipendenti.
+  // Per messaggi e diagnostica. NON usarlo come gate.
+  trackingAuthorization: AuthorizationState;
   // Unico gate valido per l'accesso ai dati: fail-closed sul valore grezzo.
   canReadData: boolean;
   projectRef: string;
@@ -93,8 +95,10 @@ async function loadReadContext(hash: string): Promise<ReadContextResult> {
     kind: 'ok',
     ctx: {
       shopId: shop.id,
-      authorization: normalizeAuthorization(shop.authorization),
-      canReadData: grantsDataAccess(shop.authorization),
+      // Il tracciamento ha la sua autorizzazione: un negozio con l'app sospesa
+      // puo' continuare a leggere i dati gia' sincronizzati.
+      trackingAuthorization: normalizeAuthorization(shop.trackingAuthorization),
+      canReadData: grantsDataAccess(shop.trackingAuthorization),
       projectRef: config.supabaseProjectRef,
       serviceRoleKey,
       customersEnabled: plan?.customersSyncEnabled ?? false,
