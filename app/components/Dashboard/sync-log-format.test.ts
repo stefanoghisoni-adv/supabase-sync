@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import {
   tableCreationMessage,
   syncStatusBadge,
-  formatDuration,
   formatDateTime,
   syncRowNumbers,
   syncErrorMessage,
@@ -23,18 +22,6 @@ describe('syncStatusBadge', () => {
   it('completed', () => expect(syncStatusBadge('completed')).toEqual({ tone: 'success', label: 'Completata' }));
   it('failed', () => expect(syncStatusBadge('failed')).toEqual({ tone: 'critical', label: 'Fallita' }));
   it('running', () => expect(syncStatusBadge('running')).toEqual({ tone: 'info', label: 'In corso' }));
-});
-
-describe('formatDuration', () => {
-  it('senza completamento non c e durata', () => {
-    expect(formatDuration('2026-07-24T00:00:00.000Z', null)).toBeNull();
-  });
-  it('secondi con un decimale', () => {
-    expect(formatDuration('2026-07-24T00:00:00.000Z', '2026-07-24T00:00:03.200Z')).toBe('3.2 s');
-  });
-  it('sotto il secondo in millisecondi', () => {
-    expect(formatDuration('2026-07-24T00:00:00.000Z', '2026-07-24T00:00:00.400Z')).toBe('400 ms');
-  });
 });
 
 describe('formatDateTime', () => {

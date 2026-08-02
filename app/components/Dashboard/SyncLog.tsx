@@ -5,7 +5,6 @@ import type { SyncJob } from '@prisma/client';
 import {
   tableCreationMessage,
   syncStatusBadge,
-  formatDuration,
   formatDateTime,
   syncRowNumbers,
   syncErrorMessage,
@@ -42,12 +41,12 @@ export function SyncLog({ jobs, customersEnabled, timeZone }: SyncLogProps) {
       </BlockStack>
     );
 
-    const duration = formatDuration(job.startedAt, job.completedAt);
-    const when = duration
-      ? `${formatDateTime(job.startedAt, timeZone)} · ${duration}`
-      : formatDateTime(job.startedAt, timeZone);
-
-    return [stateCell, when, syncRowNumbers(job, customersEnabled)];
+    // Solo data e ora: quanto e' durata la corsa non dice nulla al merchant.
+    return [
+      stateCell,
+      formatDateTime(job.startedAt, timeZone),
+      syncRowNumbers(job, customersEnabled),
+    ];
   });
 
   return (

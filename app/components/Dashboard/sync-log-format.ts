@@ -49,18 +49,6 @@ export function syncStatusBadge(status: string): StatusBadge {
   return { tone: 'info', label: 'In corso' };
 }
 
-// null finche' il job non e' concluso: non c'e' ancora una durata da mostrare.
-export function formatDuration(
-  startedAt: string,
-  completedAt: string | null,
-): string | null {
-  if (!completedAt) return null;
-  const ms = new Date(completedAt).getTime() - new Date(startedAt).getTime();
-  if (!Number.isFinite(ms) || ms < 0) return null;
-  if (ms < 1000) return `${ms} ms`;
-  return `${(ms / 1000).toFixed(1)} s`;
-}
-
 // Formatta SEMPRE nel fuso indicato, mai in quello della macchina: cosi' il
 // render sul server e l'idratazione sul client producono la stessa stringa
 // (niente disallineamento) e il merchant legge l'orario del proprio negozio.
