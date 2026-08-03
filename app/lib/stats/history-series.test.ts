@@ -139,12 +139,13 @@ describe('pointDateLabel', () => {
   const monthStart = '2026-08-01T00:00:00.000Z';
 
   it('il giorno diventa la data per esteso', () => {
-    expect(pointDateLabel(7, monthStart)).toBe('07/08/2026');
-    expect(pointDateLabel('31', monthStart)).toBe('31/08/2026');
+    expect(pointDateLabel(1, monthStart)).toBe('1 Agosto 2026');
+    expect(pointDateLabel('31', monthStart)).toBe('31 Agosto 2026');
   });
 
-  it('mesi a una cifra col loro zero davanti', () => {
-    expect(pointDateLabel(3, '2026-01-01T00:00:00.000Z')).toBe('03/01/2026');
+  it('il mese e’ scritto come nel sottotitolo della card', () => {
+    expect(pointDateLabel(3, '2026-01-01T00:00:00.000Z')).toBe('3 Gennaio 2026');
+    expect(pointDateLabel(15, '2026-12-01T00:00:00.000Z')).toBe('15 Dicembre 2026');
   });
 
   it('senza mese o con un giorno illeggibile resta il numero nudo', () => {

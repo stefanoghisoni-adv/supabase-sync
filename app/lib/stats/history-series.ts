@@ -114,7 +114,7 @@ export function pointDateLabel(
   const start = new Date(monthStart);
   if (Number.isNaN(start.getTime())) return raw;
 
-  const dd = String(day).padStart(2, '0');
-  const mm = String(start.getUTCMonth() + 1).padStart(2, '0');
-  return `${dd}/${mm}/${start.getUTCFullYear()}`;
+  // Il mese per esteso, come nel sottotitolo della card: una data si legge
+  // meglio di tre numeri separati da barre.
+  return `${day} ${MONTH_NAMES[start.getUTCMonth()]} ${start.getUTCFullYear()}`;
 }
