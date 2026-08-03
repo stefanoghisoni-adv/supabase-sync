@@ -91,5 +91,8 @@
   /* Senza, il contenuto piu' alto dello spazio disponibile sfonderebbe la card. */
   min-height: 0;
   padding-block-start: var(--p-space-1600);
-  padding-block-end: var(--p-space-800);
+  /* Nessun margine sotto: il grafico arriva fino in fondo allo spazio della
+     card, e quel poco che resta sotto la legenda e' il bordo interno della Card
+     stessa. */
+  padding-block-end: 0;
 }
