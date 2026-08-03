@@ -87,5 +87,7 @@
   justify-content: center;
   /* Senza, il contenuto piu' alto dello spazio disponibile sfonderebbe la card. */
   min-height: 0;
-  padding-block-start: var(--p-space-1000);
+  /* Stacco dal sottotitolo: la tacca piu' alta dell'asse arriva fin sopra il
+     grafico e senza questo respiro finirebbe addosso al mese. */
+  padding-block-start: var(--p-space-1600);
 }
