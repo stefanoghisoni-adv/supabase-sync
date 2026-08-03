@@ -22,6 +22,7 @@ describe('Supabase client factory', () => {
       supabaseProjectRef: null,
       tableNameProducts: 'products',
       tableNameCustomers: 'customers',
+      schemaVersion: 2,
       syncEnabled: true,
       syncIntervalHours: 24,
       connectionVerifiedAt: null,

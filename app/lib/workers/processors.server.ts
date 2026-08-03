@@ -15,6 +15,7 @@ import type { ShopifyCustomer, ShopifyProduct } from '~/types/shopify';
 import { isCustomerOptedIn } from '../stats/customer-consent-stats';
 import { ensureCustomersTable } from '../supabase/ensure-customers-table.server';
 import { ensureProductsTable } from '../supabase/ensure-products-table.server';
+import { applyMerchantSchemaUpdate } from '../supabase/apply-schema-update.server';
 
 // Solo la parte del Job BullMQ che i processor usano davvero. Tipandola cosi'
 // il bulk sync puo' girare anche senza coda (allineamento automatico dal cron),
@@ -253,6 +254,10 @@ export async function processPeriodicSyncCheck(shopId: string): Promise<void> {
   });
 
   try {
+    // Prima di scrivere: le tabelle devono essere alla versione che l'app si
+    // aspetta. E' qui che l'allineamento avviene per la maggior parte dei
+    // negozi, senza che nessuno debba cliccare nulla.
+    await applyMerchantSchemaUpdate(shop.id);
     await requireProductsTable(shop.id, shop.supabaseConfig, supabase);
 
     let totalProducts = 0;
@@ -462,6 +467,10 @@ export async function processInitialBulkSync(
   let nextPageInfo: string | null = null;
 
   try {
+    // Prima di scrivere: le tabelle devono essere alla versione che l'app si
+    // aspetta. E' qui che l'allineamento avviene per la maggior parte dei
+    // negozi, senza che nessuno debba cliccare nulla.
+    await applyMerchantSchemaUpdate(shop.id);
     await requireProductsTable(shop.id, shop.supabaseConfig, supabase);
 
     // Riconciliazione, non ripopolamento da zero: la tabella NON viene svuotata,

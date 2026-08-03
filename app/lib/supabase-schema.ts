@@ -10,6 +10,12 @@
 // Così un progetto Supabase pre-esistente con tabelle datate viene aggiornato
 // alla configurazione corretta senza cancellare nulla.
 
+// Creare o modificare una tabella non basta: le letture e scritture passano
+// dall'API REST del progetto, che tiene una copia in cache dello schema. Finche'
+// non la ricarica risponde con le colonne di prima — o con "Could not find the
+// table ... in the schema cache" per una tabella appena creata.
+export const RELOAD_SCHEMA_SQL = "NOTIFY pgrst, 'reload schema';";
+
 interface Column {
   name: string;
   // Tipo base (usato anche nell'ALTER: niente vincoli che romperebbero su righe

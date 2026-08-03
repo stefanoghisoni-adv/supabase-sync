@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { decrypt } from '~/utils/crypto.server';
 import { getValidAccessToken } from '~/lib/supabase-oauth.server';
 import { runQuery } from '~/lib/supabase-management.server';
+import { RELOAD_SCHEMA_SQL } from '~/lib/supabase-schema';
 import { validateSupabaseUrl } from '~/utils/supabase-url.server';
 
 /**
@@ -20,11 +21,9 @@ export interface EnsureTableResult {
   empty: boolean;
 }
 
-// Creare la tabella non basta: le letture e scritture passano dall'API REST del
-// progetto, che tiene una copia in cache dello schema. Finche' non la ricarica
-// risponde "Could not find the table ... in the schema cache" anche se la
-// tabella esiste. La NOTIFY forza la ricarica.
-export const RELOAD_SCHEMA_SQL = "NOTIFY pgrst, 'reload schema';";
+// Ri-esportata dove la DDL e' definita: la ricarica dello schema serve a ogni
+// modifica delle tabelle, non solo alla creazione.
+export { RELOAD_SCHEMA_SQL };
 
 // La ricarica e' asincrona: si aspetta che la tabella diventi visibile, senza
 // superare il budget di una corsa di sincronizzazione.

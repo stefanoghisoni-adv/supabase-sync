@@ -18,6 +18,7 @@ import {
   tableCreationJobType,
 } from '~/lib/supabase/detect-created-tables';
 import { RELOAD_SCHEMA_SQL } from '~/lib/supabase/ensure-table.server';
+import { LATEST_SCHEMA_VERSION } from '~/lib/supabase/merchant-migrations';
 
 export async function action({ request }: ActionFunctionArgs) {
   const { session } = await authenticate.admin(request);
@@ -131,9 +132,15 @@ export async function action({ request }: ActionFunctionArgs) {
     // Abilita la sincronizzazione al collegamento: senza syncEnabled i
     // processor rifiutano il job. Le successive sync automatiche seguono
     // l'intervallo impostato in Impostazioni.
+    // Lo schema appena creato e' quello corrente: il progetto nasce allineato e
+    // non deve ricevere l'aggiornamento che serve ai collegamenti piu' vecchi.
     await prisma.supabaseConfig.update({
       where: { shopId: shop.id },
-      data: { connectionVerifiedAt: new Date(), syncEnabled: true },
+      data: {
+        connectionVerifiedAt: new Date(),
+        syncEnabled: true,
+        schemaVersion: LATEST_SCHEMA_VERSION,
+      },
     });
 
     // Emette il token-proxy per le letture di tracciamento se lo shop non ne ha

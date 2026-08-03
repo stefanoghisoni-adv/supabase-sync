@@ -1,9 +1,12 @@
+-- SUPERATO — non serve piu' eseguirlo a mano.
+--
+-- Questa rinomina e' ora il passo 1 di app/lib/supabase/merchant-migrations.ts:
+-- l'app la applica da sola sui progetti dei merchant, alla sincronizzazione o
+-- all'apertura della dashboard. Il file resta come storia di com'e' nata.
+--
 -- Rinomina delle colonne identificative della tabella clienti:
 --   email -> email_address
 --   phone -> phone_number
---
--- DA ESEGUIRE PRIMA DEL DEPLOY, nel SQL Editor di OGNI progetto Supabase gia'
--- collegato (quelli dei merchant, non il database dell'app).
 --
 -- Perche' a mano: la DDL dell'app gira al collegamento del progetto e quando
 -- manca la tabella clienti, e sa solo AGGIUNGERE colonne mancanti. Su una

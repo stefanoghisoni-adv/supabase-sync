@@ -105,6 +105,12 @@ model SupabaseConfig {
   syncEnabled            Boolean  @default(false) @map("sync_enabled")
   syncIntervalHours      Int      @default(24) @map("sync_interval_hours")
   connectionVerifiedAt   DateTime? @map("connection_verified_at")
+  // Versione dello schema applicata al database del merchant. Quando l'app ne
+  // pretende una piu' alta (LATEST_SCHEMA_VERSION), l'aggiornamento parte da
+  // solo alla prima occasione utile — sincronizzazione o apertura della
+  // dashboard — senza che il merchant debba toccare tabelle o reinstallare
+  // nulla. 0 = collegamento anteriore a questo meccanismo.
+  schemaVersion          Int      @default(0) @map("schema_version")
   createdAt              DateTime @default(now()) @map("created_at")
   updatedAt              DateTime @updatedAt @map("updated_at")
 

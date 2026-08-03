@@ -41,6 +41,9 @@ import {
 } from '~/components/Dashboard/plan-upgrade';
 import { firstPlanWithCustomersSync } from '~/components/Dashboard/account-format';
 import { authorizationBanners } from '~/components/Dashboard/authorization-banners';
+import { SchemaUpdateBanner } from '~/components/Dashboard/SchemaUpdateBanner';
+import { needsSchemaUpdate } from '~/lib/supabase/merchant-migrations';
+import { triggerMerchantSchemaUpdate } from '~/lib/supabase/apply-schema-update.server';
 
 // Solo per questo store mostriamo il messaggio d'errore reale (utile in debug),
 // invece del generico "Errore interno": gli altri merchant non devono vedere
@@ -136,6 +139,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
     }
 
     const supabaseConnected = !!shop.supabaseConfig?.connectionVerifiedAt;
+    // Tabelle del merchant indietro rispetto a cio' che l'app si aspetta: il
+    // tentativo parte subito in sottofondo (senza attesa, cosi' la dashboard non
+    // rallenta) e il banner resta finche' non e' andato a buon fine.
+    const schemaUpdatePending =
+      supabaseConnected && needsSchemaUpdate(shop.supabaseConfig?.schemaVersion);
+    if (schemaUpdatePending) {
+      triggerMerchantSchemaUpdate(shop.id);
+    }
     const supabaseAccountConnected = oauthToken !== null;
     const customersEnabled = plan?.customersSyncEnabled ?? false;
 
@@ -191,6 +202,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       syncState,
       authorization,
       trackingAuthorization,
+      schemaUpdatePending,
       planChanged,
       currentMaxProducts: plan?.maxProducts ?? null,
       previousMaxProducts: previousPlan?.maxProducts ?? null,
@@ -294,7 +306,7 @@ interface ProductHistoryResponse {
 }
 
 export default function Dashboard() {
-  const { shop, plan, supabaseConnected, supabaseAccountConnected, customersEnabled, authorization, syncState, planChanged, currentMaxProducts, previousMaxProducts, customersTableCreated, customersUpgradePlan, trackingAuthorization } =
+  const { shop, plan, supabaseConnected, supabaseAccountConnected, customersEnabled, authorization, syncState, planChanged, currentMaxProducts, previousMaxProducts, customersTableCreated, customersUpgradePlan, trackingAuthorization, schemaUpdatePending } =
     useLoaderData<typeof loader>();
   const blocked = authorization !== 'ENABLED';
   const navigate = useNavigate();
@@ -704,6 +716,11 @@ export default function Dashboard() {
             <Text as="p">{b.message}</Text>
           </Banner>
         ))}
+
+        {/* Tabelle da allineare: non si chiude finche' l'aggiornamento non e'
+            andato a buon fine. Di norma succede da solo e il banner nemmeno si
+            vede. */}
+        {schemaUpdatePending && <SchemaUpdateBanner />}
 
         {/* Quota prodotti agli sgoccioli: non si chiude, perche' resta vero
             finche' il piano non cambia. */}
