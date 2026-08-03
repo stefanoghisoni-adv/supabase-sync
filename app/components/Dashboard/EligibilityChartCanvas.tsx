@@ -11,6 +11,7 @@
 import { LineChart, PolarisVizProvider } from '@shopify/polaris-viz';
 import { FONT_FAMILY } from '@shopify/polaris-viz-core';
 import type { DataSeries } from '@shopify/polaris-viz-core';
+import { pointDateLabel } from '~/lib/stats/history-series';
 
 // Lo stesso arancione della linea tratteggiata: il numero sull'asse e la soglia
 // che segna sono la stessa cosa e devono leggersi come tale.
@@ -43,6 +44,9 @@ interface Props {
   // Limite del piano: il suo numero sull'asse va in arancione. null = nessun
   // limite, nessun numero da evidenziare.
   limit?: number | null;
+  // Primo giorno del mese mostrato (ISO): serve a scrivere la data per esteso
+  // nel riquadro del punto, dove il solo numero del giorno non basta.
+  monthStart?: string | null;
 }
 
 /**
@@ -82,7 +86,13 @@ function LimitTickLabel({ y, value }: { y: number; value: number }) {
   );
 }
 
-export default function EligibilityChartCanvas({ series, maxY, ticks, limit }: Props) {
+export default function EligibilityChartCanvas({
+  series,
+  maxY,
+  ticks,
+  limit,
+  monthStart,
+}: Props) {
   return (
     // polaris-viz richiede un contenitore con altezza esplicita per disegnare:
     // nessun componente Polaris la impone, quindi qui lo style inline e' l'unica
@@ -94,6 +104,11 @@ export default function EligibilityChartCanvas({ series, maxY, ticks, limit }: P
           yAxisOptions={{
             ...(maxY != null ? { maxYOverride: maxY } : {}),
             ...(ticks != null ? { ticksOverride: ticks } : {}),
+          }}
+          // Nel riquadro del punto la data per esteso: sull'asse basta il
+          // giorno, ma li' "7" da solo non dice di che mese si parli.
+          tooltipOptions={{
+            titleFormatter: (key) => pointDateLabel(key ?? '', monthStart),
           }}
           slots={
             limit != null

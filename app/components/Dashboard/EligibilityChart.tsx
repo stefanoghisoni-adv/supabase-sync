@@ -29,6 +29,8 @@ interface EligibilityChartProps {
   points: EligibilityPoint[];
   /** Mese mostrato sull'asse, es. "Agosto 2026". */
   monthLabel?: string;
+  /** Primo giorno di quel mese (ISO): serve alle date del riquadro del punto. */
+  monthStart?: string | null;
   planLimit: number | null;
   loading: boolean;
 }
@@ -95,6 +97,7 @@ function ChartCard({
 export function EligibilityChart({
   points,
   monthLabel,
+  monthStart,
   planLimit,
   loading,
 }: EligibilityChartProps) {
@@ -164,6 +167,7 @@ export function EligibilityChart({
             maxY={maxY}
             ticks={ticks}
             limit={planLimit}
+            monthStart={monthStart}
           />
         </Suspense>
       </ChartErrorBoundary>

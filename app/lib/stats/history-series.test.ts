@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildMonthSeries, monthLabel } from './history-series';
+import { buildMonthSeries, monthLabel, pointDateLabel } from './history-series';
 import type { ProductEligibilitySnapshot } from '@prisma/client';
 
 function snapshot(day: string, eligibleCount: number): ProductEligibilitySnapshot {
@@ -132,5 +132,27 @@ describe('buildMonthSeries', () => {
 
     expect(result[0].count).toBe(6);
     expect(result.slice(1).every((p) => p.count === null)).toBe(true);
+  });
+});
+
+describe('pointDateLabel', () => {
+  const monthStart = '2026-08-01T00:00:00.000Z';
+
+  it('il giorno diventa la data per esteso', () => {
+    expect(pointDateLabel(7, monthStart)).toBe('07/08/2026');
+    expect(pointDateLabel('31', monthStart)).toBe('31/08/2026');
+  });
+
+  it('mesi a una cifra col loro zero davanti', () => {
+    expect(pointDateLabel(3, '2026-01-01T00:00:00.000Z')).toBe('03/01/2026');
+  });
+
+  it('senza mese o con un giorno illeggibile resta il numero nudo', () => {
+    // Meglio un numero nudo di una data inventata.
+    expect(pointDateLabel(7, null)).toBe('7');
+    expect(pointDateLabel(7, 'non-una-data')).toBe('7');
+    expect(pointDateLabel('Prodotti', monthStart)).toBe('Prodotti');
+    expect(pointDateLabel(0, monthStart)).toBe('0');
+    expect(pointDateLabel(32, monthStart)).toBe('32');
   });
 });

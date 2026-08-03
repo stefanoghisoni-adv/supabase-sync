@@ -92,3 +92,29 @@ export function buildMonthSeries(
 
   return points;
 }
+
+/**
+ * La data per esteso di un punto del grafico: sull'asse c'e' solo il giorno,
+ * ma nel riquadro che compare al passaggio del puntatore "7" da solo non dice
+ * di che mese si parli.
+ *
+ * `monthStart` e' il primo giorno del mese mostrato, in ISO. Se manca o il
+ * giorno non e' leggibile si tiene quello che c'era: meglio un numero nudo di
+ * una data inventata.
+ */
+export function pointDateLabel(
+  dayKey: string | number,
+  monthStart: string | null | undefined,
+): string {
+  const raw = String(dayKey);
+  const day = Number(raw);
+  if (!Number.isInteger(day) || day < 1 || day > 31) return raw;
+  if (!monthStart) return raw;
+
+  const start = new Date(monthStart);
+  if (Number.isNaN(start.getTime())) return raw;
+
+  const dd = String(day).padStart(2, '0');
+  const mm = String(start.getUTCMonth() + 1).padStart(2, '0');
+  return `${dd}/${mm}/${start.getUTCFullYear()}`;
+}

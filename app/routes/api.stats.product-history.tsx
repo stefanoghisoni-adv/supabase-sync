@@ -35,6 +35,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
   return json({
     points: buildMonthSeries(previous ? [previous, ...inMonth] : inMonth, now),
     monthLabel: monthLabel(now),
+    // Primo giorno del mese mostrato: al grafico serve per scrivere la data per
+    // esteso nel riquadro del punto, dove il solo giorno non basterebbe.
+    monthStart: monthStart.toISOString(),
     // null = piano senza tetto: il grafico non disegnera' la soglia
     planLimit: plan?.maxProducts ?? null,
   });

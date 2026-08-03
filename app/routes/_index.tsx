@@ -307,6 +307,8 @@ interface ProductHistoryResponse {
   /** Un punto per giorno del mese corrente; count null = giorno non ancora arrivato. */
   points: { day: number; count: number | null }[];
   monthLabel: string;
+  /** Primo giorno del mese mostrato, in ISO. */
+  monthStart: string;
   planLimit: number | null;
 }
 
@@ -801,6 +803,7 @@ export default function Dashboard() {
           <EligibilityChart
             points={historyFetcher.data?.points ?? []}
             monthLabel={historyFetcher.data?.monthLabel}
+            monthStart={historyFetcher.data?.monthStart}
             planLimit={historyFetcher.data?.planLimit ?? null}
             loading={!historyFetcher.data}
           />
