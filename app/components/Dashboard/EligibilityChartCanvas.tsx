@@ -8,7 +8,7 @@
 // require non avviene mai.
 //
 // Non importare questo file staticamente da nessuna parte.
-import { LineChart, PolarisVizProvider } from '@shopify/polaris-viz';
+import { LineChart, PolarisVizProvider, TooltipContent } from '@shopify/polaris-viz';
 import { FONT_FAMILY } from '@shopify/polaris-viz-core';
 import type { DataSeries } from '@shopify/polaris-viz-core';
 import { pointDateLabel } from '~/lib/stats/history-series';
@@ -105,10 +105,26 @@ export default function EligibilityChartCanvas({
             ...(maxY != null ? { maxYOverride: maxY } : {}),
             ...(ticks != null ? { ticksOverride: ticks } : {}),
           }}
-          // Nel riquadro del punto la data per esteso: sull'asse basta il
-          // giorno, ma li' "7" da solo non dice di che mese si parli.
+          // Riquadro del punto disegnato da noi, con il componente di
+          // polaris-viz: il suo formattatore scarta le righe senza valore, e sui
+          // giorni non ancora arrivati "Prodotti sincronizzabili" sparirebbe
+          // invece di dire che li' un dato non c'e'.
           tooltipOptions={{
-            titleFormatter: (key) => pointDateLabel(key ?? '', monthStart),
+            renderTooltipContent: (tooltip) => (
+              <TooltipContent
+                theme={tooltip.theme}
+                title={pointDateLabel(tooltip.title ?? '', monthStart)}
+                data={tooltip.data.map((series) => ({
+                  shape: series.shape,
+                  name: series.name,
+                  data: series.data.map((point) => ({
+                    ...point,
+                    key: String(point.key),
+                    value: point.value == null ? '—' : String(point.value),
+                  })),
+                }))}
+              />
+            ),
           }}
           slots={
             limit != null
