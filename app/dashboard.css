@@ -84,10 +84,12 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  /* Appoggiato in basso, non centrato: la card e' alta quanto quella accanto e
+     lo spazio che avanza stava tutto sotto la legenda, mentre in cima la tacca
+     piu' alta dell'asse finiva addosso al mese. */
+  justify-content: flex-end;
   /* Senza, il contenuto piu' alto dello spazio disponibile sfonderebbe la card. */
   min-height: 0;
-  /* Stacco dal sottotitolo: la tacca piu' alta dell'asse arriva fin sopra il
-     grafico e senza questo respiro finirebbe addosso al mese. */
   padding-block-start: var(--p-space-1600);
+  padding-block-end: var(--p-space-800);
 }
