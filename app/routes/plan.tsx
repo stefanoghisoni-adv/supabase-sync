@@ -16,7 +16,7 @@ import {
 import { SettingsIcon } from '@shopify/polaris-icons';
 import { authenticate } from '~/shopify.server';
 import { prisma } from '~/db.server';
-import { PLAN_CATALOG } from '~/components/Billing/plan-catalog';
+import { buildPlanCards, formatPrice, type PlanCard } from '~/components/Billing/plan-catalog';
 import { shouldHighlightRecommended } from '~/components/Billing/plan-highlight';
 import { canAccessPlanTab } from '~/components/Billing/plan-access';
 import { PlanFeatureList } from '~/components/Billing/PlanFeatureList';
@@ -33,17 +33,35 @@ export async function loader({ request }: LoaderFunctionArgs) {
   // Il link sparisce dalla NavMenu, ma /plan resta digitabile: il blocco vero sta
   // qui. 403 anche nello status, non solo a schermo.
   if (!canAccessPlanTab(currentPlan)) {
-    return json({ currentPlan, blocked: true as const }, { status: 403 });
+    return json(
+      { currentPlan, blocked: true as const, cards: [] as PlanCard[] },
+      { status: 403 },
+    );
   }
 
-  return json({ currentPlan, blocked: false as const });
+  // Le card vengono dal listino registrato, non da una copia nel codice: nomi,
+  // prezzi e limiti sono quelli che l'app applica davvero.
+  const plans = await prisma.plan.findMany();
+  const cards = buildPlanCards(
+    plans.map((plan) => ({
+      planName: plan.planName,
+      priceMonthly: Number(plan.priceMonthly),
+      maxProducts: plan.maxProducts,
+      maxCustomers: plan.maxCustomers,
+      maxSyncFrequencyHours: plan.maxSyncFrequencyHours,
+      customersSyncEnabled: plan.customersSyncEnabled,
+      supportLevel: plan.supportLevel,
+    })),
+  );
+
+  return json({ currentPlan, blocked: false as const, cards });
 }
 
 export default function Plan() {
-  const { currentPlan, blocked } = useLoaderData<typeof loader>();
+  const { currentPlan, blocked, cards } = useLoaderData<typeof loader>();
 
   // Il "Consigliato" si risalta solo se e' un upgrade rispetto al piano attuale.
-  const highlightRecommended = shouldHighlightRecommended(currentPlan);
+  const highlightRecommended = shouldHighlightRecommended(cards, currentPlan);
 
   // Stesso comportamento di Dashboard/Logs: spinner + disabilita mentre Remix
   // carica /settings/supabase.
@@ -106,8 +124,8 @@ export default function Plan() {
         </Card>
 
         <InlineGrid columns={{ xs: 1, sm: 2, lg: 4 }} gap="400">
-          {PLAN_CATALOG.map((plan) => {
-            const isCurrent = plan.id === currentPlan;
+          {cards.map((plan) => {
+            const isCurrent = plan.name.trim().toLowerCase() === currentPlan;
             const isHighlighted = plan.recommended && highlightRecommended;
             return (
               // Il consigliato non ha uno sfondo diverso (sembrava disabilitato) ma un
@@ -116,7 +134,7 @@ export default function Plan() {
               // la card non si restringe) con il raggio della Card. display:grid fa
               // stirare la Card all'altezza della riga, come le altre colonne.
               <div
-                key={plan.id}
+                key={plan.name}
                 style={{
                   display: 'grid',
                   height: '100%',
@@ -146,7 +164,7 @@ export default function Plan() {
 
                         <InlineStack gap="100" blockAlign="baseline">
                           <Text as="span" variant="heading3xl">
-                            €{plan.priceMonthly}
+                            €{formatPrice(plan.priceMonthly)}
                           </Text>
                           <Text as="span" tone="subdued">
                             /mese
@@ -177,8 +195,8 @@ export default function Plan() {
         </InlineGrid>
 
         <Text as="p" tone="subdued" variant="bodySm" alignment="center">
-          Prezzi mensili in euro, IVA esclusa. L'addebito avviene tramite Shopify, insieme
-          alla fattura del tuo negozio, e puoi cambiare o disdire il piano quando vuoi.
+          L'addebito avviene tramite Shopify, insieme alla fattura del tuo negozio, e
+          puoi cambiare o disdire il piano quando vuoi.
         </Text>
       </BlockStack>
 

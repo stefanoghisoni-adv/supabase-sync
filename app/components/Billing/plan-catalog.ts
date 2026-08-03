@@ -1,11 +1,17 @@
-// Catalogo di presentazione della tab Piano. NON e' la fonte dei limiti tecnici
-// di billing (quelli vivono nel modello Plan): qui e' solo copy commerciale, cosi'
-// possiamo elencare anche feature senza campo nel DB (es. "Push manuale").
-export type PlanId = 'free' | 'pro' | 'business' | 'enterprise';
+import { syncFrequencyLabel } from '~/components/Dashboard/account-format';
+import { canAccessPlanTab } from './plan-access';
+
+// Le card della tab Piano si costruiscono dalla tabella `plans`: nome, prezzo e
+// limiti sono quelli registrati li', non una copia scritta a mano che col tempo
+// finirebbe per raccontare qualcosa di diverso da cio' che l'app applica
+// davvero. Il nome compare com'e' scritto nella colonna, senza ritocchi.
+//
+// Resta qui il solo testo che nel database non c'e': le righe che descrivono il
+// livello di assistenza.
 
 // Ogni card mostra ESATTAMENTE queste righe, in questo ordine: cambia solo la
 // disponibilita' (spunta verde / X grigia) e il valore dentro la label. Cosi' le
-// righe delle 4 card restano allineate e le card hanno la stessa altezza.
+// righe delle card restano allineate e le card hanno la stessa altezza.
 export const FEATURE_ORDER = [
   'products',
   'sync',
@@ -19,75 +25,111 @@ export type FeatureKey = (typeof FEATURE_ORDER)[number];
 
 export interface PlanFeature {
   key: FeatureKey;
-  // Label corta per scelta: nella griglia a 4 colonne una label lunga andrebbe a
-  // capo, alzando solo quella card. Vedi il test sulla lunghezza massima.
+  // Label corta per scelta: nella griglia a piu' colonne una label lunga andrebbe
+  // a capo, alzando solo quella card. Vedi il test sulla lunghezza massima.
   label: string;
   included: boolean; // true = SI (verde), false = NO (grigio)
 }
 
 export interface PlanCard {
-  id: PlanId;
+  /** Nome del piano com'e' scritto nella tabella: e' anche la chiave. */
   name: string;
-  priceMonthly: number; // euro, intero
-  recommended: boolean; // true solo per Pro
+  priceMonthly: number;
+  recommended: boolean;
   features: PlanFeature[];
 }
 
-export const PLAN_CATALOG: PlanCard[] = [
-  {
-    id: 'free',
-    name: 'Free',
-    priceMonthly: 0,
-    recommended: false,
-    features: [
-      { key: 'products', label: 'Fino a 50 prodotti', included: true },
-      { key: 'sync', label: 'Sync ogni 7 giorni', included: true },
-      { key: 'email', label: 'Supporto via email', included: true },
-      { key: 'customers', label: 'Sync clienti', included: false },
-      { key: 'push', label: 'Push manuale', included: false },
-      { key: 'chat', label: 'Chat dedicata', included: false },
-    ],
-  },
-  {
-    id: 'pro',
-    name: 'Pro',
-    priceMonthly: 29,
-    recommended: true,
-    features: [
-      { key: 'products', label: 'Fino a 100 prodotti', included: true },
-      { key: 'sync', label: 'Sync ogni 4 giorni', included: true },
-      { key: 'email', label: 'Supporto via email', included: true },
-      { key: 'customers', label: 'Fino a 5.000 clienti', included: true },
-      { key: 'push', label: 'Push manuale', included: false },
-      { key: 'chat', label: 'Chat dedicata', included: false },
-    ],
-  },
-  {
-    id: 'business',
-    name: 'Business',
-    priceMonthly: 99,
-    recommended: false,
-    features: [
-      { key: 'products', label: 'Fino a 400 prodotti', included: true },
-      { key: 'sync', label: 'Sync ogni 2 giorni', included: true },
-      { key: 'email', label: 'Supporto via email', included: true },
-      { key: 'customers', label: 'Fino a 50.000 clienti', included: true },
-      { key: 'push', label: 'Push manuale', included: true },
-      { key: 'chat', label: 'Chat dedicata', included: false },
-    ],
-  },
-  {
-    id: 'enterprise',
-    name: 'Enterprise',
-    priceMonthly: 299,
-    recommended: false,
-    features: [
-      { key: 'products', label: 'Prodotti illimitati', included: true },
-      { key: 'sync', label: 'Sync ogni giorno', included: true },
-      { key: 'email', label: 'Supporto via email', included: true },
-      { key: 'customers', label: 'Clienti illimitati', included: true },
-      { key: 'push', label: 'Push manuale', included: true },
-      { key: 'chat', label: 'Chat dedicata', included: true },
-    ],
-  },
-];
+/** La riga di `plans` per come serve alla tab. */
+export interface PlanRow {
+  planName: string;
+  priceMonthly: number;
+  maxProducts: number | null;
+  maxCustomers: number | null;
+  maxSyncFrequencyHours: number;
+  customersSyncEnabled: boolean;
+  supportLevel: string;
+}
+
+// Piano proposto per primo. Il confronto e' senza maiuscole perche' il nome nella
+// tabella lo scrive l'owner e puo' cambiare forma.
+const RECOMMENDED_PLAN = 'pro';
+
+/** I numeri lunghi si leggono a colpo d'occhio solo raggruppati: 50.000. */
+function amount(value: number): string {
+  return value.toLocaleString('it-IT');
+}
+
+function productsFeature(plan: PlanRow): PlanFeature {
+  return {
+    key: 'products',
+    label:
+      plan.maxProducts == null
+        ? 'Prodotti illimitati'
+        : `Fino a ${amount(plan.maxProducts)} prodotti`,
+    included: true,
+  };
+}
+
+function customersFeature(plan: PlanRow): PlanFeature {
+  if (!plan.customersSyncEnabled) {
+    return { key: 'customers', label: 'Sync clienti', included: false };
+  }
+  return {
+    key: 'customers',
+    label:
+      plan.maxCustomers == null
+        ? 'Clienti illimitati'
+        : `Fino a ${amount(plan.maxCustomers)} clienti`,
+    included: true,
+  };
+}
+
+// Assistenza: nella tabella c'e' un livello (`support_level`), qui diventa le tre
+// righe che il merchant legge.
+const PUSH_LEVELS = new Set(['priority', 'dedicated']);
+const CHAT_LEVELS = new Set(['dedicated']);
+
+export function buildPlanFeatures(plan: PlanRow): PlanFeature[] {
+  const level = (plan.supportLevel ?? '').trim().toLowerCase();
+  return [
+    productsFeature(plan),
+    {
+      key: 'sync',
+      // "Ogni 7 giorni" -> "Sync ogni 7 giorni".
+      label: `Sync ${syncFrequencyLabel(plan.maxSyncFrequencyHours).toLowerCase()}`,
+      included: true,
+    },
+    { key: 'email', label: 'Supporto via email', included: true },
+    customersFeature(plan),
+    { key: 'push', label: 'Push manuale', included: PUSH_LEVELS.has(level) },
+    { key: 'chat', label: 'Chat dedicata', included: CHAT_LEVELS.has(level) },
+  ];
+}
+
+/**
+ * Le card da mostrare, dal piano piu' economico al piu' caro.
+ *
+ * Fuori restano i piani non acquistabili (lifetime, assegnato dall'owner): non
+ * c'e' nulla da comprare e non hanno posto in un listino.
+ */
+export function buildPlanCards(plans: PlanRow[]): PlanCard[] {
+  return plans
+    .filter((plan) => canAccessPlanTab(plan.planName))
+    .sort((a, b) => a.priceMonthly - b.priceMonthly || a.planName.localeCompare(b.planName))
+    .map((plan) => ({
+      name: plan.planName,
+      priceMonthly: plan.priceMonthly,
+      recommended: plan.planName.trim().toLowerCase() === RECOMMENDED_PLAN,
+      features: buildPlanFeatures(plan),
+    }));
+}
+
+/** Prezzo come va scritto sulla card: "29", "0", "9,90". */
+export function formatPrice(priceMonthly: number): string {
+  return Number.isInteger(priceMonthly)
+    ? String(priceMonthly)
+    : priceMonthly.toLocaleString('it-IT', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      });
+}

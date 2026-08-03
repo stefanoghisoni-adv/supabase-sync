@@ -96,3 +96,31 @@ export function parseStoredCosts(raw: string | null): Record<number, string> {
     return {};
   }
 }
+
+/**
+ * Quanto pesa il costo sul prezzo di vendita, in percentuale.
+ *
+ * Si aggiorna mentre il merchant digita, quindi deve reggere anche cio' che sta
+ * scrivendo a meta': un campo vuoto, un meno, una virgola sola. In tutti quei
+ * casi non si mostra un numero, si mostra un trattino — un "0%" sarebbe una
+ * risposta, e sbagliata.
+ *
+ * Il prezzo arriva da Shopify come stringa ("19.90"): senza prezzo, o a prezzo
+ * zero, la percentuale non esiste.
+ */
+export function costRatioLabel(
+  cost: string | null | undefined,
+  price: string | null | undefined,
+): string {
+  const costValue = Number(normalizeCost(cost ?? ''));
+  const priceValue = Number(normalizeCost(price ?? ''));
+
+  if (!(cost ?? '').trim() || !Number.isFinite(costValue) || costValue < 0) return '—';
+  if (!Number.isFinite(priceValue) || priceValue <= 0) return '—';
+
+  const percent = (costValue / priceValue) * 100;
+  // Un decimale: sotto si perde la differenza fra 33,3% e 33,8%, sopra si legge
+  // un numero che nessuno userebbe per decidere.
+  const rounded = Math.round(percent * 10) / 10;
+  return `${rounded.toLocaleString('it-IT', { maximumFractionDigits: 1 })}%`;
+}

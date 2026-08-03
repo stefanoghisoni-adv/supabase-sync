@@ -45,6 +45,7 @@ import {
   costFieldDisabled,
   collectPendingCosts,
   parseStoredCosts,
+  costRatioLabel,
 } from '~/lib/stats/cost-edit';
 
 const PER_PAGE = 20;
@@ -304,6 +305,14 @@ function CostRow({
             error={error}
           />
         </div>
+      </IndexTable.Cell>
+      {/* Quanto pesa il costo appena digitato sul prezzo di vendita: si aggiorna
+          a ogni tasto, cosi' il merchant vede il margine mentre decide invece di
+          doverlo calcolare a parte. */}
+      <IndexTable.Cell>
+        <Text as="span" tone="subdued" numeric>
+          {costRatioLabel(value, row.price)}
+        </Text>
       </IndexTable.Cell>
     </IndexTable.Row>
   );
@@ -567,6 +576,7 @@ export default function ProblemProducts() {
                 { title: 'SKU' },
                 { title: 'Prezzo' },
                 { title: 'cost_per_item' },
+                { title: '%' },
               ]}
             >
               {visibleRows.map((r, i) => (

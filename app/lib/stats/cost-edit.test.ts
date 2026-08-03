@@ -4,6 +4,7 @@ import {
   costFieldDisabled,
   collectPendingCosts,
   parseStoredCosts,
+  costRatioLabel,
 } from './cost-edit';
 
 const ROWS = [
@@ -99,5 +100,40 @@ describe('parseStoredCosts', () => {
   });
   it('scarta le voci di forma inattesa', () => {
     expect(parseStoredCosts('{"1":12,"due":"3","4":"7"}')).toEqual({ 4: '7' });
+  });
+});
+
+describe('costRatioLabel', () => {
+  it('quanto pesa il costo sul prezzo', () => {
+    expect(costRatioLabel('5', '10')).toBe('50%');
+    expect(costRatioLabel('4.50', '10.00')).toBe('45%');
+    expect(costRatioLabel('3.33', '10')).toBe('33,3%');
+  });
+
+  it('la virgola vale quanto il punto: si digita come viene', () => {
+    expect(costRatioLabel('4,50', '10.00')).toBe('45%');
+  });
+
+  it('mentre si digita non si mostra un numero inventato', () => {
+    // Campo vuoto o a meta': un "0%" sarebbe una risposta, e sbagliata.
+    expect(costRatioLabel('', '10')).toBe('—');
+    expect(costRatioLabel('   ', '10')).toBe('—');
+    expect(costRatioLabel(',', '10')).toBe('—');
+    expect(costRatioLabel('-', '10')).toBe('—');
+    expect(costRatioLabel('-5', '10')).toBe('—');
+  });
+
+  it('senza prezzo utilizzabile non c’e’ percentuale', () => {
+    expect(costRatioLabel('5', null)).toBe('—');
+    expect(costRatioLabel('5', '')).toBe('—');
+    expect(costRatioLabel('5', '0')).toBe('—');
+  });
+
+  it('un costo che supera il prezzo si vede', () => {
+    expect(costRatioLabel('12', '10')).toBe('120%');
+  });
+
+  it('costo zero e’ un valore vero, non un campo vuoto', () => {
+    expect(costRatioLabel('0', '10')).toBe('0%');
   });
 });
