@@ -1,7 +1,7 @@
 import { useState, useEffect, lazy, Suspense, Component } from 'react';
 import type { ReactNode } from 'react';
 import { Card, Text, BlockStack, Box } from '@shopify/polaris';
-import { computeChartYMax } from './chart-scale';
+import { computeChartYMax, computeChartYTicks } from './chart-scale';
 
 // Import DINAMICO: il modulo che contiene polaris-viz non deve finire nel grafo
 // del server. Su Vercel il suo build CJS fa require('d3-scale'), che e' ESM-only,
@@ -147,18 +147,24 @@ export function EligibilityChart({
     });
   }
 
-  // Tetto dell'asse Y sopra il limite del piano: senza, la linea tratteggiata
-  // arancione cadrebbe sul bordo superiore (con 3 sincronizzabili su un limite
-  // di 100 sarebbe quasi invisibile). Con il tetto un po' piu' alto resta a mezza
-  // altezza e ben leggibile.
+  // Con un tetto di piano l'asse lo dettano le tacche: il limite dev'essere una
+  // di loro (e' quella che si scrive in arancione) e sopra deve restarci
+  // margine, cosi' la tratteggiata non finisce incollata al bordo superiore.
+  // Senza tetto non c'e' nulla da far cadere su una tacca e basta il massimo.
   const maxData = points.reduce((m, p) => Math.max(m, p.count ?? 0), 0);
-  const maxY = computeChartYMax(planLimit, maxData);
+  const ticks = computeChartYTicks(planLimit, maxData);
+  const maxY = ticks ? ticks[ticks.length - 1] : computeChartYMax(planLimit, maxData);
 
   return (
     <ChartCard subtitle={subtitle}>
       <ChartErrorBoundary>
         <Suspense fallback={skeleton}>
-          <EligibilityChartCanvas series={series} maxY={maxY} />
+          <EligibilityChartCanvas
+            series={series}
+            maxY={maxY}
+            ticks={ticks}
+            limit={planLimit}
+          />
         </Suspense>
       </ChartErrorBoundary>
     </ChartCard>
