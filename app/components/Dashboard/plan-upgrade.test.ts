@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
   hasPlanChanged,
-  syncStepTitle,
   planChangeBanner,
   shouldTriggerPlanCatchUp,
   syncCtaState,
@@ -20,15 +19,6 @@ describe('hasPlanChanged', () => {
   });
   it('vale anche in downgrade', () => {
     expect(hasPlanChanged('free', 'pro')).toBe(true);
-  });
-});
-
-describe('syncStepTitle', () => {
-  it('con clienti inclusi', () => {
-    expect(syncStepTitle({ customersEnabled: true })).toBe('Sincronizzazione prodotti e clienti');
-  });
-  it('senza clienti', () => {
-    expect(syncStepTitle({ customersEnabled: false })).toBe('Sincronizzazione prodotti');
   });
 });
 

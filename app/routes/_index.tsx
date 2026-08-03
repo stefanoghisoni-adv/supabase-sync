@@ -34,7 +34,6 @@ import { authenticate } from '~/shopify.server';
 import { ShopifyAPIClient } from '~/lib/shopify-api.server';
 import {
   hasPlanChanged,
-  syncStepTitle,
   planChangeBanner,
   shouldTriggerPlanCatchUp,
   syncCtaState,
@@ -447,7 +446,6 @@ export default function Dashboard() {
   });
 
   const steps = resolveStepStates(supabaseAccountConnected, supabaseConnected);
-  const syncTitle = syncStepTitle({ customersEnabled });
 
   const planBanner = planChangeBanner({
     planChanged,
@@ -588,7 +586,9 @@ export default function Dashboard() {
     },
     {
       id: 'sync',
-      title: syncTitle,
+      // Cosa entra nella sincronizzazione lo dice il riquadro qui sotto, riga
+      // per riga: ripeterlo nel titolo lo allungava senza aggiungere nulla.
+      title: 'Sincronizzazione',
       state: steps.sync,
       // A sync completata: nessun badge sullo step (né "In corso" né altro).
       hideBadge: syncCompleted,
