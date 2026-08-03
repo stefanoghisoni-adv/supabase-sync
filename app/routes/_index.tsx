@@ -44,6 +44,10 @@ import { authorizationBanners } from '~/components/Dashboard/authorization-banne
 import { SchemaUpdateBanner } from '~/components/Dashboard/SchemaUpdateBanner';
 import { needsSchemaUpdate } from '~/lib/supabase/merchant-migrations';
 import { triggerMerchantSchemaUpdate } from '~/lib/supabase/apply-schema-update.server';
+import {
+  refreshShopProfile,
+  triggerShopProfileRefresh,
+} from '~/lib/shop/refresh-shop-profile.server';
 
 // Solo per questo store mostriamo il messaggio d'errore reale (utile in debug),
 // invece del generico "Errore interno": gli altri merchant non devono vedere
@@ -60,24 +64,26 @@ export async function loader({ request }: LoaderFunctionArgs) {
     // race durante l'embedded auth) invece di mandare l'app in 404.
     const shop = await getOrCreateShop(session);
 
-    // Il fuso del negozio si legge una volta sola e resta memorizzato: lo consuma
-    // la tab Logs, che lo trova gia' pronto sullo shop. Best effort — se Shopify
-    // non risponde le date ricadranno su UTC e la dashboard si carica comunque.
+    // Dati che vivono su Shopify e possono cambiare senza dirci nulla: il
+    // dominio principale e il fuso orario.
+    //
+    // Al primo giro si aspetta: il fuso lo consuma subito la tab Logs, e senza
+    // le date ricadrebbero su UTC. Dalle volte successive il controllo va in
+    // sottofondo (ogni ora al massimo), cosi' l'apertura dell'app non paga una
+    // chiamata a Shopify per un dato che cambia una volta ogni tanto.
+    // Best effort in entrambi i casi: se Shopify non risponde, la dashboard si
+    // carica comunque.
     if (!shop.ianaTimezone) {
       try {
-        const info = await new ShopifyAPIClient(shop.shopDomain, shop.accessToken).getShopInfo();
-        if (info.ianaTimezone) {
-          await prisma.shop.update({
-            where: { id: shop.id },
-            data: { ianaTimezone: info.ianaTimezone },
-          });
-        }
+        await refreshShopProfile(shop);
       } catch (err) {
         console.warn(
-          '[dashboard loader] lettura fuso orario negozio fallita:',
+          '[dashboard loader] lettura dati negozio fallita:',
           err instanceof Error ? err.message : 'errore sconosciuto',
         );
       }
+    } else {
+      triggerShopProfileRefresh(shop);
     }
 
     // Piano e job recenti dipendono entrambi solo da `shop`: in parallelo, così

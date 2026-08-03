@@ -198,18 +198,29 @@ describe('Shopify API Client', () => {
     expect(count).toBe(42);
   });
 
-  it('getShopInfo restituisce il fuso orario del negozio', async () => {
+  it('getShopInfo restituisce fuso orario e dominio principale del negozio', async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       headers: { get: () => null },
-      json: async () => ({ shop: { iana_timezone: 'Europe/Rome' } }),
+      // `domain` e' il dominio su cui navigano i clienti, diverso dal
+      // myshopify quando il merchant ne ha collegato uno proprio.
+      json: async () => ({
+        shop: {
+          iana_timezone: 'Europe/Rome',
+          domain: 'negozio.it',
+          myshopify_domain: 'test-shop.myshopify.com',
+        },
+      }),
     }) as unknown as typeof fetch;
 
     const client = new ShopifyAPIClient('test-shop.myshopify.com', 'enc');
-    expect(await client.getShopInfo()).toEqual({ ianaTimezone: 'Europe/Rome' });
+    expect(await client.getShopInfo()).toEqual({
+      ianaTimezone: 'Europe/Rome',
+      primaryDomain: 'negozio.it',
+    });
   });
 
-  it('getShopInfo senza fuso restituisce null', async () => {
+  it('getShopInfo senza quei campi restituisce null', async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       headers: { get: () => null },
@@ -217,6 +228,9 @@ describe('Shopify API Client', () => {
     }) as unknown as typeof fetch;
 
     const client = new ShopifyAPIClient('test-shop.myshopify.com', 'enc');
-    expect(await client.getShopInfo()).toEqual({ ianaTimezone: null });
+    expect(await client.getShopInfo()).toEqual({
+      ianaTimezone: null,
+      primaryDomain: null,
+    });
   });
 });

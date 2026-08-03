@@ -174,9 +174,18 @@ export class ShopifyAPIClient {
   // le date nel fuso del NEGOZIO: il server non puo' conoscere quello del browser,
   // e usare l'ora locale della macchina produrrebbe stringhe diverse fra render
   // server e idratazione client.
-  async getShopInfo(): Promise<{ ianaTimezone: string | null }> {
+  async getShopInfo(): Promise<{
+    ianaTimezone: string | null;
+    /** Dominio su cui navigano i clienti: proprio se collegato, myshopify altrimenti. */
+    primaryDomain: string | null;
+  }> {
     const { data } = await this.makeRequest('shop.json');
-    const shop = (data as { shop?: { iana_timezone?: string | null } }).shop;
-    return { ianaTimezone: shop?.iana_timezone ?? null };
+    const shop = (data as {
+      shop?: { iana_timezone?: string | null; domain?: string | null };
+    }).shop;
+    return {
+      ianaTimezone: shop?.iana_timezone ?? null,
+      primaryDomain: shop?.domain ?? null,
+    };
   }
 }
