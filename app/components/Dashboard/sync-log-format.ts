@@ -74,15 +74,3 @@ export function formatDateTime(iso: string, timeZone?: string | null): string {
     return formatIn(iso, 'UTC');
   }
 }
-
-// Terza colonna: vuota per le creazioni tabella, altrimenti varianti idonee e —
-// solo se il piano li include — i clienti.
-export function syncRowNumbers(
-  job: { jobType: string; variantsSynced: number; customersSynced: number },
-  customersEnabled: boolean,
-): string {
-  if (tableCreationMessage(job.jobType) !== null) return '';
-  const parts = [`${job.variantsSynced} varianti idonee`];
-  if (customersEnabled) parts.push(`${job.customersSynced} clienti`);
-  return parts.join(' · ');
-}

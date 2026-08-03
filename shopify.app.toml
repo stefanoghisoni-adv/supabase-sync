@@ -44,6 +44,10 @@ topics = ["customers/delete"]
 uri = "/webhooks/customers/delete"
 
 [[webhooks.subscriptions]]
+topics = ["app_subscriptions/update"]
+uri = "/webhooks/app-subscriptions/update"
+
+[[webhooks.subscriptions]]
 compliance_topics = ["customers/data_request"]
 uri = "/webhooks/gdpr/data-request"
 

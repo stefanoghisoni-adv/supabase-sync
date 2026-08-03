@@ -11,7 +11,14 @@ import { isProductLimitReached } from '../limits/product-limit';
 import { enrichVariantCosts } from '../stats/inventory-cost.server';
 import { filterEligibleProductRows } from '../eligibility/product-eligibility';
 import { sortByCreatedAtAsc } from '../sync/product-order';
-import type { ShopifyCustomer, ShopifyProduct } from '~/types/shopify';
+import {
+  createEventBuffer,
+  formatCustomerLabel,
+  formatProductLabel,
+  type SyncEventBuffer,
+} from '../sync/job-events';
+import { createEventCollector, pruneOldEvents } from '../sync/job-events.server';
+import type { ShopifyCustomer, ShopifyProduct, SupabaseProductRow } from '~/types/shopify';
 import { isCustomerOptedIn } from '../stats/customer-consent-stats';
 import { ensureCustomersTable } from '../supabase/ensure-customers-table.server';
 import { ensureProductsTable } from '../supabase/ensure-products-table.server';
@@ -46,6 +53,158 @@ async function requireProductsTable(
   }
 }
 
+// --- Dettaglio della corsa: righe toccate da delete e update -----------------
+
+interface ReturningResult {
+  data?: unknown;
+  error?: { message?: string } | null;
+}
+
+interface ReturningBuilder extends PromiseLike<ReturningResult> {
+  select?: (columns: string) => PromiseLike<ReturningResult>;
+}
+
+/**
+ * PostgREST restituisce le righe toccate da una delete o da una update solo se
+ * ci si concatena `.select(...)`.
+ *
+ * La concatenazione si tenta e basta: se il client non la espone (client piu'
+ * vecchi, doppioni nei test) si aspetta la query com'era e si prosegue senza
+ * righe. La scrittura resta identica in entrambi i casi — quello che si perde e'
+ * solo il dettaglio, che non deve mai valere quanto la sincronizzazione.
+ */
+async function runReturningRows<T>(
+  pending: ReturningBuilder,
+  columns: string,
+): Promise<{ rows: T[]; error: { message?: string } | null }> {
+  const chained =
+    typeof pending.select === 'function' ? pending.select(columns) : pending;
+  const result = ((await chained) ?? {}) as ReturningResult;
+
+  return {
+    rows: Array.isArray(result.data) ? (result.data as T[]) : [],
+    error: result.error ?? null,
+  };
+}
+
+/** Colonne che bastano a descrivere una riga prodotto sparita. */
+const REMOVED_PRODUCT_COLUMNS =
+  'shopify_product_id, shopify_variant_id, product_title, variant_title';
+
+interface RemovedProductRow {
+  shopify_product_id?: number | null;
+  shopify_variant_id?: number | null;
+  product_title?: string | null;
+  variant_title?: string | null;
+}
+
+function collectRemovedProducts(
+  events: SyncEventBuffer,
+  rows: RemovedProductRow[],
+): void {
+  for (const row of rows) {
+    events.add({
+      entity: 'product',
+      action: 'removed',
+      shopifyId: row.shopify_product_id ?? null,
+      variantId: row.shopify_variant_id ?? null,
+      label: formatProductLabel(row),
+      sublabel: row.variant_title ?? null,
+    });
+  }
+}
+
+function collectAddedProducts(
+  events: SyncEventBuffer,
+  rows: SupabaseProductRow[],
+): void {
+  for (const row of rows) {
+    events.add({
+      entity: 'product',
+      action: 'added',
+      shopifyId: row.shopify_product_id,
+      variantId: row.shopify_variant_id,
+      label: formatProductLabel(row),
+      sublabel: row.variant_title ?? null,
+    });
+  }
+}
+
+/**
+ * Quali dei clienti della pagina sono gia' su Supabase: chi c'e' verra'
+ * aggiornato dall'upsert, chi manca aggiunto. Va chiesto PRIMA dell'upsert,
+ * che e' proprio l'operazione che cancella la differenza.
+ *
+ * null quando la lettura non riesce: senza risposta non si tira a indovinare
+ * fra aggiunta e aggiornamento, si rinuncia al dettaglio.
+ */
+async function fetchExistingCustomerIds(
+  supabase: SupabaseClient,
+  tableName: string,
+  ids: number[],
+): Promise<Set<number> | null> {
+  if (ids.length === 0) return new Set();
+
+  try {
+    const { data, error } = await supabase
+      .from(tableName)
+      .select('shopify_customer_id')
+      .in('shopify_customer_id', ids);
+
+    if (error || !data) return null;
+    return new Set(data.map((row) => row.shopify_customer_id as number));
+  } catch (error) {
+    console.warn('Lettura dei clienti gia\' presenti fallita:', error);
+    return null;
+  }
+}
+
+/**
+ * Insieme degli shopify_variant_id gia' presenti nella tabella prodotti, in
+ * pagine da 1000 (limite PostgREST). Serve solo al dettaglio: le varianti che
+ * non compaiono qui sono le aggiunte di questa corsa.
+ *
+ * null quando la lettura non riesce: si rinuncia al dettaglio delle aggiunte
+ * piuttosto che dichiarare "aggiunto" tutto il catalogo.
+ */
+async function fetchExistingVariantIds(
+  supabase: SupabaseClient,
+  tableName: string,
+): Promise<Set<number> | null> {
+  const ids = new Set<number>();
+  const pageSize = 1000;
+  let from = 0;
+
+  try {
+    for (;;) {
+      const { data, error } = await supabase
+        .from(tableName)
+        .select('shopify_variant_id')
+        .range(from, from + pageSize - 1);
+
+      if (error) return null;
+      if (!data || data.length === 0) break;
+
+      for (const row of data) {
+        if (row.shopify_variant_id != null) ids.add(row.shopify_variant_id as number);
+      }
+      if (data.length < pageSize) break;
+      from += pageSize;
+    }
+  } catch (error) {
+    console.warn('Lettura delle varianti gia\' presenti fallita:', error);
+    return null;
+  }
+
+  return ids;
+}
+
+/** Esito della sync clienti: totale come prima, piu' il dettaglio raccolto. */
+interface CustomerSyncResult {
+  total: number;
+  events: SyncEventBuffer;
+}
+
 /**
  * Syncs customers from Shopify into the merchant's Supabase `customers` table.
  * Paginated upsert keyed on shopify_customer_id. When `updatedAtMin` is provided
@@ -60,9 +219,13 @@ async function syncCustomers(
   supabase: SupabaseClient,
   tableName: string,
   updatedAtMin?: string
-): Promise<number> {
+): Promise<CustomerSyncResult> {
   let total = 0;
   let nextPageInfo: string | null = null;
+  // Raccoglitore locale, con lo stesso tetto per categoria: su un negozio da
+  // centomila clienti tenere una riga di dettaglio per ognuno vorrebbe dire
+  // portarsele tutte in memoria fino alla fine della corsa.
+  const events = createEventBuffer();
 
   do {
     const { customers, nextPageInfo: nextPage } = await shopifyClient.getCustomers({
@@ -75,8 +238,16 @@ async function syncCustomers(
 
     // Due destini diversi per due categorie diverse.
     const page = customers as ShopifyCustomer[];
-    const rows = page.filter(isCustomerOptedIn).map(transformCustomer);
-    const revokedIds = page.filter((c) => !isCustomerOptedIn(c)).map((c) => c.id);
+    const optedIn = page.filter(isCustomerOptedIn);
+    const revoked = page.filter((c) => !isCustomerOptedIn(c));
+    const rows = optedIn.map(transformCustomer);
+    const revokedIds = revoked.map((c) => c.id);
+
+    const alreadyPresent = await fetchExistingCustomerIds(
+      supabase,
+      tableName,
+      optedIn.map((c) => c.id),
+    );
 
     const chunkSize = 1000;
     for (let i = 0; i < rows.length; i += chunkSize) {
@@ -91,19 +262,55 @@ async function syncCustomers(
       }
     }
 
+    // Dopo l'upsert: un upsert fallito lancia, e non ha aggiunto nessuno.
+    if (alreadyPresent) {
+      for (const customer of optedIn) {
+        events.add({
+          entity: 'customer',
+          action: alreadyPresent.has(customer.id) ? 'updated' : 'added',
+          shopifyId: customer.id,
+          label: formatCustomerLabel(customer),
+        });
+      }
+    }
+
     // Chi non ha acconsentito non entra: nessuna insert. Ma se una riga sua e'
     // gia' su Supabase — sincronizzata quando il consenso c'era — va marcata,
     // perche' il proxy decide il 403 leggendo proprio questa colonna. Una
     // `update` non crea righe: sui clienti mai sincronizzati e' un no-op.
     if (revokedIds.length > 0) {
-      const { error: revokeError } = await supabase
-        .from(tableName)
-        .update({ accepts_marketing: false })
-        .in('shopify_customer_id', revokedIds);
+      const { rows: suspendedRows, error: revokeError } = await runReturningRows<{
+        shopify_customer_id?: number | null;
+      }>(
+        supabase
+          .from(tableName)
+          .update({ accepts_marketing: false })
+          .in('shopify_customer_id', revokedIds) as unknown as ReturningBuilder,
+        'shopify_customer_id',
+      );
 
       if (revokeError) {
         // Non fatale: gli opt-in sono gia' scritti, la corsa successiva ritenta.
         console.warn('Marcatura dei consensi revocati fallita:', revokeError.message);
+      } else {
+        // Sospesi sono solo quelli che la update ha davvero toccato: chi non era
+        // mai stato sincronizzato non ha perso nessun accesso, e mostrarlo nel
+        // dettaglio farebbe sembrare successo qualcosa che non e' successo.
+        const suspendedIds = new Set(
+          suspendedRows
+            .map((row) => row.shopify_customer_id)
+            .filter((id): id is number => id != null),
+        );
+
+        for (const customer of revoked) {
+          if (!suspendedIds.has(customer.id)) continue;
+          events.add({
+            entity: 'customer',
+            action: 'suspended',
+            shopifyId: customer.id,
+            label: formatCustomerLabel(customer),
+          });
+        }
       }
     }
 
@@ -111,7 +318,7 @@ async function syncCustomers(
     nextPageInfo = nextPage;
   } while (nextPageInfo);
 
-  return total;
+  return { total, events };
 }
 
 /**
@@ -134,15 +341,15 @@ async function syncCustomersIfEnabled(opts: {
   shopifyClient: ShopifyAPIClient;
   supabase: SupabaseClient;
   updatedAtMin?: string;
-}): Promise<number> {
-  if (!opts.customersSyncEnabled) return 0;
+}): Promise<CustomerSyncResult> {
+  if (!opts.customersSyncEnabled) return { total: 0, events: createEventBuffer() };
 
   const table = await ensureCustomersTable(opts.shopId, opts.config, opts.supabase);
   if (table.status === 'unavailable') {
     console.warn(
       `Tabella clienti non disponibile per lo shop ${opts.shopId}: sync clienti saltata`,
     );
-    return 0;
+    return { total: 0, events: createEventBuffer() };
   }
 
   // Tabella ancora vuota (appena creata, o creata in una corsa precedente): non
@@ -253,6 +460,10 @@ export async function processPeriodicSyncCheck(shopId: string): Promise<void> {
     },
   });
 
+  // Dettaglio della corsa (cosa e' entrato, cosa e' uscito): vive fuori dal try
+  // perche' anche il percorso di errore deve poterlo salvare.
+  const collector = createEventCollector();
+
   try {
     // Prima di scrivere: le tabelle devono essere alla versione che l'app si
     // aspetta. E' qui che l'allineamento avviene per la maggior parte dei
@@ -308,10 +519,30 @@ export async function processPeriodicSyncCheck(shopId: string): Promise<void> {
         );
 
         // Fetch existing rows from Supabase for this product
-        const { data: existingRows } = await supabase
+        const { data: existingRows, error: existingRowsError } = await supabase
           .from(shop.supabaseConfig.tableNameProducts)
           .select('shopify_variant_id')
           .eq('shopify_product_id', product.id);
+
+        // Le varianti gia' presenti secondo questa stessa lettura: nessuna query
+        // in piu' per sapere quali righe idonee sono nuove. Se la lettura e'
+        // fallita non si distingue nulla — una risposta vuota per errore farebbe
+        // passare per "aggiunto" un catalogo che c'era gia'.
+        const knownVariantIds = existingRowsError
+          ? null
+          : new Set(
+              (existingRows || [])
+                .map((row) => row.shopify_variant_id as number | null)
+                .filter((id): id is number => id != null),
+            );
+        const addedRows =
+          knownVariantIds == null
+            ? []
+            : eligibleRows.filter(
+                (row) =>
+                  row.shopify_variant_id != null &&
+                  !knownVariantIds.has(row.shopify_variant_id),
+              );
 
         // Riconcilia: elimina le righe del prodotto il cui variant_id non è più
         // presente in Shopify. Copre sia le varianti rimosse sia le transizioni
@@ -323,25 +554,35 @@ export async function processPeriodicSyncCheck(shopId: string): Promise<void> {
         const hasLegacyNullRows = (existingRows || []).some(row => row.shopify_variant_id == null);
 
         if (orphanedVariantIds.length > 0) {
-          const { error: deleteError } = await supabase
-            .from(shop.supabaseConfig.tableNameProducts)
-            .delete()
-            .eq('shopify_product_id', product.id)
-            .in('shopify_variant_id', orphanedVariantIds);
+          const { rows: removedRows, error: deleteError } = await runReturningRows<RemovedProductRow>(
+            supabase
+              .from(shop.supabaseConfig.tableNameProducts)
+              .delete()
+              .eq('shopify_product_id', product.id)
+              .in('shopify_variant_id', orphanedVariantIds) as unknown as ReturningBuilder,
+            REMOVED_PRODUCT_COLUMNS,
+          );
 
           if (deleteError) {
             console.warn(`Could not delete orphaned variants for product ${product.id}:`, deleteError);
+          } else {
+            collectRemovedProducts(collector, removedRows);
           }
         }
         if (hasLegacyNullRows) {
-          const { error: deleteError } = await supabase
-            .from(shop.supabaseConfig.tableNameProducts)
-            .delete()
-            .eq('shopify_product_id', product.id)
-            .is('shopify_variant_id', null);
+          const { rows: removedRows, error: deleteError } = await runReturningRows<RemovedProductRow>(
+            supabase
+              .from(shop.supabaseConfig.tableNameProducts)
+              .delete()
+              .eq('shopify_product_id', product.id)
+              .is('shopify_variant_id', null) as unknown as ReturningBuilder,
+            REMOVED_PRODUCT_COLUMNS,
+          );
 
           if (deleteError) {
             console.warn(`Could not delete legacy null-variant row for product ${product.id}:`, deleteError);
+          } else {
+            collectRemovedProducts(collector, removedRows);
           }
         }
 
@@ -362,6 +603,8 @@ export async function processPeriodicSyncCheck(shopId: string): Promise<void> {
           continue;
         }
 
+        collectAddedProducts(collector, addedRows);
+
         totalProducts++;
         totalVariants += eligibleRows.length;
         // Aggiorna il conteggio prodotti distinti (no-op se già presente).
@@ -373,7 +616,7 @@ export async function processPeriodicSyncCheck(shopId: string): Promise<void> {
     } while (nextPageInfo);
 
     // Incremental customer sync (delta) if the shop's plan includes customer sync
-    const totalCustomers = await syncCustomersIfEnabled({
+    const customers = await syncCustomersIfEnabled({
       shopId: shop.id,
       config: shop.supabaseConfig,
       customersSyncEnabled: plan?.customersSyncEnabled ?? false,
@@ -381,8 +624,11 @@ export async function processPeriodicSyncCheck(shopId: string): Promise<void> {
       supabase,
       updatedAtMin: lastSyncTime.toISOString(),
     });
+    const totalCustomers = customers.total;
+    collector.absorb(customers.events);
 
     // Mark completed
+    const eventCounters = await collector.flush(syncJob.id);
     await prisma.syncJob.update({
       where: { id: syncJob.id },
       data: {
@@ -391,12 +637,18 @@ export async function processPeriodicSyncCheck(shopId: string): Promise<void> {
         productsSynced: totalProducts,
         variantsSynced: totalVariants,
         customersSynced: totalCustomers,
+        ...eventCounters,
       },
     });
+
+    await pruneOldEvents(shop.id);
 
     console.log(`Periodic sync check completed: ${totalProducts} products checked, ${totalVariants} variants synced, ${totalCustomers} customers synced`);
 
   } catch (error) {
+    // Anche una corsa interrotta ha fatto qualcosa prima di fermarsi: il
+    // dettaglio raccolto fin li' e' esattamente cio' che spiega dove si e' rotta.
+    const eventCounters = await collector.flush(syncJob.id);
     await prisma.syncJob.update({
       where: { id: syncJob.id },
       data: {
@@ -405,6 +657,7 @@ export async function processPeriodicSyncCheck(shopId: string): Promise<void> {
         errors: {
           message: error instanceof Error ? error.message : 'Unknown error',
         },
+        ...eventCounters,
       },
     });
 
@@ -466,12 +719,24 @@ export async function processInitialBulkSync(
   let totalVariants = 0;
   let nextPageInfo: string | null = null;
 
+  // Dettaglio della corsa (cosa e' entrato, cosa e' uscito): vive fuori dal try
+  // perche' anche il percorso di errore deve poterlo salvare.
+  const collector = createEventCollector();
+
   try {
     // Prima di scrivere: le tabelle devono essere alla versione che l'app si
     // aspetta. E' qui che l'allineamento avviene per la maggior parte dei
     // negozi, senza che nessuno debba cliccare nulla.
     await applyMerchantSchemaUpdate(shop.id);
     await requireProductsTable(shop.id, shop.supabaseConfig, supabase);
+
+    // Fotografia di cosa c'era prima di partire: serve solo al dettaglio, per
+    // distinguere le varianti nuove da quelle che l'upsert si limita ad
+    // aggiornare. Da qui in poi l'insieme si arricchisce da solo.
+    const knownVariantIds = await fetchExistingVariantIds(
+      supabase,
+      shop.supabaseConfig.tableNameProducts,
+    );
 
     // Riconciliazione, non ripopolamento da zero: la tabella NON viene svuotata,
     // cosi' resta leggibile per tutta la sync (con l'azzeramento il tracciamento
@@ -501,10 +766,21 @@ export async function processInitialBulkSync(
       // quindi qui si riordina la pagina appena scaricata e l'insieme resta in
       // ordine anche fra pagine diverse.
       const allRows = [];
+      // Le righe la cui variante non c'era prima: si registrano dopo l'upsert,
+      // perche' un upsert fallito non ha aggiunto niente.
+      const addedRows: SupabaseProductRow[] = [];
       for (const product of sortByCreatedAtAsc(products as ShopifyProduct[])) {
         if (maxProducts != null && totalProducts >= maxProducts) break;
         const eligibleRows = filterEligibleProductRows(transformProduct(product));
         if (eligibleRows.length === 0) continue; // nessuna variante idonea: niente quota
+        if (knownVariantIds != null) {
+          for (const row of eligibleRows) {
+            if (row.shopify_variant_id == null) continue;
+            if (knownVariantIds.has(row.shopify_variant_id)) continue;
+            knownVariantIds.add(row.shopify_variant_id);
+            addedRows.push(row);
+          }
+        }
         allRows.push(...eligibleRows);
         totalProducts++;
         totalVariants += eligibleRows.length;
@@ -530,6 +806,8 @@ export async function processInitialBulkSync(
           }
         }
       }
+
+      collectAddedProducts(collector, addedRows);
 
       // Update job progress
       await job?.updateProgress({
@@ -564,33 +842,42 @@ export async function processInitialBulkSync(
     //
     // Le righe con synced_at NULL sopravvivono (in SQL un confronto con NULL non
     // e' mai vero): non le ha scritte l'app, non le tocchiamo.
-    const { error: sweepError } = await supabase
-      .from(shop.supabaseConfig.tableNameProducts)
-      .delete()
-      .lt('synced_at', runStartedAt);
+    const { rows: sweptRows, error: sweepError } = await runReturningRows<RemovedProductRow>(
+      supabase
+        .from(shop.supabaseConfig.tableNameProducts)
+        .delete()
+        .lt('synced_at', runStartedAt) as unknown as ReturningBuilder,
+      REMOVED_PRODUCT_COLUMNS,
+    );
 
     if (sweepError) {
       // Non fatale: i prodotti idonei sono gia' stati scritti. Le righe obsolete
       // verranno rimosse alla corsa successiva.
       console.warn('Spazzata dei prodotti obsoleti fallita:', sweepError);
+    } else {
+      collectRemovedProducts(collector, sweptRows);
     }
 
     // Sync customers if the shop's plan includes customer sync
-    const totalCustomers = await syncCustomersIfEnabled({
+    const customers = await syncCustomersIfEnabled({
       shopId: shop.id,
       config: shop.supabaseConfig,
       customersSyncEnabled: plan?.customersSyncEnabled ?? false,
       shopifyClient,
       supabase,
     });
+    const totalCustomers = customers.total;
+    collector.absorb(customers.events);
 
     // Mark sync job as completed
+    const eventCounters = await collector.flush(syncJob.id);
     await prisma.syncJob.update({
       where: { id: syncJob.id },
       data: {
         status: 'completed',
         completedAt: new Date(),
         customersSynced: totalCustomers,
+        ...eventCounters,
       },
     });
 
@@ -602,9 +889,15 @@ export async function processInitialBulkSync(
       data: { lastSyncedPlan: shop.currentPlan },
     });
 
+    await pruneOldEvents(shop.id);
+
     console.log(`Bulk sync completed: ${totalProducts} products, ${totalVariants} variants, ${totalCustomers} customers`);
 
   } catch (error) {
+    // Anche una corsa interrotta ha fatto qualcosa prima di fermarsi: il
+    // dettaglio raccolto fin li' e' esattamente cio' che spiega dove si e' rotta.
+    const eventCounters = await collector.flush(syncJob.id);
+
     // Mark sync job as failed
     await prisma.syncJob.update({
       where: { id: syncJob.id },
@@ -614,6 +907,7 @@ export async function processInitialBulkSync(
         errors: {
           message: error instanceof Error ? error.message : 'Unknown error',
         },
+        ...eventCounters,
       },
     });
 

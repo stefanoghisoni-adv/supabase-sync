@@ -172,9 +172,18 @@ model SyncJob {
   productsSynced  Int       @default(0) @map("products_synced")
   variantsSynced  Int       @default(0) @map("variants_synced")
   customersSynced Int       @default(0) @map("customers_synced")
+  // Conteggi dettagliati per categoria di evento. Stanno qui perché il dettaglio
+  // vero (SyncJobEvent) viene troncato a 500 righe per categoria per job: senza
+  // questi il modal non può scrivere "mostrate 500 di 3.412".
+  productsAdded      Int @default(0) @map("products_added")
+  productsRemoved    Int @default(0) @map("products_removed")
+  customersAdded     Int @default(0) @map("customers_added")
+  customersUpdated   Int @default(0) @map("customers_updated")
+  customersSuspended Int @default(0) @map("customers_suspended")
   errors          Json?
 
-  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  shop   Shop           @relation(fields: [shopId], references: [id], onDelete: Cascade)
+  events SyncJobEvent[]
 
   @@index([shopId])
   @@index([status])
@@ -237,4 +246,25 @@ model ProductEligibilitySnapshot {
 
   @@unique([shopId, day])
   @@map("product_eligibility_snapshots")
+}
+
+model SyncJobEvent {
+  id        String   @id @default(uuid())
+  syncJobId String   @map("sync_job_id")
+  // 'product' | 'customer'
+  entity    String
+  // prodotti: 'added' | 'removed' — clienti: 'added' | 'updated' | 'suspended'
+  action    String
+  shopifyId BigInt?  @map("shopify_id")
+  variantId BigInt?  @map("variant_id")
+  // Riga principale: titolo del prodotto, oppure nome e cognome del cliente.
+  label     String
+  // Riga secondaria: titolo della variante, oppure null.
+  sublabel  String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  syncJob SyncJob @relation(fields: [syncJobId], references: [id], onDelete: Cascade)
+
+  @@index([syncJobId])
+  @@map("sync_job_events")
 }

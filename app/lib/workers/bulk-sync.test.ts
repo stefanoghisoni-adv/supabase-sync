@@ -11,6 +11,12 @@ vi.mock('../../db.server', () => ({
     syncJob: {
       create: vi.fn(),
       update: vi.fn(),
+      // Usata dalla potatura del dettaglio: quali corse restano raggiungibili.
+      findMany: vi.fn(async () => []),
+    },
+    syncJobEvent: {
+      createMany: vi.fn(async () => ({ count: 0 })),
+      deleteMany: vi.fn(async () => ({ count: 0 })),
     },
     plan: {
       findUnique: vi.fn(),
@@ -52,6 +58,16 @@ import { createSupabaseClient } from '../supabase.server';
 import { transformProduct } from '../transformers/product.server';
 import { prisma } from '../../db.server';
 import { ensureProductsTable } from '../supabase/ensure-products-table.server';
+
+/**
+ * La sync legge le varianti già presenti (in pagine, con .range) per capire
+ * quali righe sono aggiunte di questa corsa. È una lettura accessoria: qui la
+ * si serve vuota, così i test che non guardano il dettaglio restano come erano.
+ */
+const emptyProductsSelect = () => ({
+  range: async () => ({ data: [], error: null }),
+  in: async () => ({ data: [], error: null }),
+});
 
 describe('Initial bulk sync processor', () => {
   beforeEach(() => {
@@ -131,6 +147,8 @@ describe('Initial bulk sync processor', () => {
     const mockFrom = vi.fn().mockReturnValue({
       upsert: mockUpsert,
       delete: mockDelete,
+      // Lettura delle varianti già presenti: serve solo al dettaglio.
+      select: emptyProductsSelect,
     });
 
     vi.mocked(createSupabaseClient).mockReturnValue({
@@ -231,6 +249,7 @@ describe('Initial bulk sync processor', () => {
       from: vi.fn().mockReturnValue({
         delete: vi.fn().mockReturnValue({ gte: mockGte, lt: mockLt }),
         upsert: vi.fn().mockReturnValue({ error: null }),
+        select: emptyProductsSelect,
       }),
     } as any);
 
@@ -340,6 +359,7 @@ describe('Initial bulk sync processor', () => {
       from: vi.fn().mockReturnValue({
         delete: vi.fn().mockReturnValue({ gte: mockGte, lt: mockLt }),
         upsert: mockUpsert,
+        select: emptyProductsSelect,
       }),
     } as any);
 
@@ -413,6 +433,7 @@ describe('Initial bulk sync processor', () => {
           lt: async () => ({ error: null }),
         }),
         upsert: async (rows: any[]) => { upserted.push(...rows); return { error: null }; },
+        select: emptyProductsSelect,
       }),
     };
     (createSupabaseClient as any).mockReturnValue(supabaseMock);
@@ -471,6 +492,7 @@ describe('Initial bulk sync processor', () => {
           lt: async (...a: any[]) => { deleteCalls.push({ method: 'lt', args: a }); return { error: null }; },
         }),
         upsert: async () => ({ error: null }),
+        select: emptyProductsSelect,
       }),
     };
     (createSupabaseClient as any).mockReturnValue(supabaseMock);
@@ -513,6 +535,7 @@ describe('Initial bulk sync processor', () => {
           lt: async (...a: any[]) => { deleteCalls.push({ method: 'lt', args: a }); return { error: null }; },
         }),
         upsert: async () => ({ error: null }),
+        select: emptyProductsSelect,
       }),
     };
     (createSupabaseClient as any).mockReturnValue(supabaseMock);
@@ -559,6 +582,7 @@ describe('Initial bulk sync processor', () => {
           lt: async (...a: any[]) => { deleteCalls.push({ method: 'lt', args: a }); return { error: null }; },
         }),
         upsert: async () => ({ error: null }),
+        select: emptyProductsSelect,
       }),
     };
     (createSupabaseClient as any).mockReturnValue(supabaseMock);
@@ -606,6 +630,7 @@ describe('Initial bulk sync processor', () => {
           lt: async (...a: any[]) => { deleteCalls.push({ method: 'lt', args: a }); return { error: null }; },
         }),
         upsert: async () => ({ error: null }),
+        select: emptyProductsSelect,
       }),
     };
     (createSupabaseClient as any).mockReturnValue(supabaseMock);
@@ -650,6 +675,7 @@ describe('Initial bulk sync processor', () => {
       from: () => ({
         upsert: vi.fn().mockReturnValue({ error: null }),
         delete: () => ({ gte: mockGte, lt: mockLt }),
+        select: emptyProductsSelect,
       }),
     } as any);
     vi.mocked(ShopifyAPIClient).mockImplementation(() => ({
@@ -693,7 +719,11 @@ describe('Initial bulk sync processor', () => {
       from: () => ({
         upsert: (rows: any[]) => { upserted.push(...rows); return { error: null }; },
         // Verifica della tabella clienti: qui c'e' gia' ed e' popolata.
-        select: () => ({ limit: async () => ({ data: [{ shopify_customer_id: 1 }], error: null }) }),
+        select: () => ({
+          limit: async () => ({ data: [{ shopify_customer_id: 1 }], error: null }),
+          range: async () => ({ data: [], error: null }),
+          in: async () => ({ data: [], error: null }),
+        }),
         update: () => ({
           in: () => ({ error: null }),
         }),
@@ -752,7 +782,11 @@ describe('Initial bulk sync processor', () => {
     vi.mocked(createSupabaseClient).mockReturnValue({
       from: () => ({
         upsert: (rows: any[]) => { upserted.push(...rows); return { error: null }; },
-        select: () => ({ limit: async () => ({ data: [{ shopify_customer_id: 1 }], error: null }) }),
+        select: () => ({
+          limit: async () => ({ data: [{ shopify_customer_id: 1 }], error: null }),
+          range: async () => ({ data: [], error: null }),
+          in: async () => ({ data: [], error: null }),
+        }),
         update: (payload: any) => ({
           in: (_col: string, ids: any) => {
             revokedUpdates.push({ payload, ids });
@@ -786,5 +820,275 @@ describe('Initial bulk sync processor', () => {
     expect(revokedUpdates).toHaveLength(1);
     expect(revokedUpdates[0].payload).toEqual({ accepts_marketing: false });
     expect(revokedUpdates[0].ids).toEqual([2, 4]);
+  });
+
+  it('registra il dettaglio dei prodotti: nuove varianti aggiunte, righe spazzate rimosse', async () => {
+    const mockShop = {
+      id: 'shop-1',
+      shopDomain: 'test-shop.myshopify.com',
+      accessToken: 'encrypted-token',
+      authorization: 'ENABLED',
+      currentPlan: 'pro',
+      supabaseConfig: {
+        syncEnabled: true,
+        tableNameProducts: 'products',
+        tableNameCustomers: 'customers',
+        supabaseUrl: 'https://test.supabase.co',
+        supabasePublicKey: 'k',
+        supabaseServiceRoleKey: 's',
+      },
+    };
+    vi.mocked(prisma.shop.findUnique).mockResolvedValue(mockShop as any);
+    vi.mocked(prisma.plan.findUnique).mockResolvedValue({ maxProducts: null, customersSyncEnabled: false } as any);
+    vi.mocked(prisma.syncJob.create).mockResolvedValue({ id: 'job-1' } as any);
+    vi.mocked(prisma.syncJob.update).mockResolvedValue({} as any);
+    vi.mocked(prisma.shop.update).mockResolvedValue({} as any);
+
+    vi.mocked(createSupabaseClient).mockReturnValue({
+      from: () => ({
+        // Prima della corsa c'era solo la variante 10.
+        select: () => ({
+          range: async () => ({ data: [{ shopify_variant_id: 10 }], error: null }),
+        }),
+        upsert: async () => ({ error: null }),
+        delete: () => ({
+          lt: () => ({
+            // PostgREST restituisce le righe cancellate se si concatena .select().
+            select: async () => ({
+              data: [
+                {
+                  shopify_product_id: 9,
+                  shopify_variant_id: 90,
+                  product_title: 'Fuori catalogo',
+                  variant_title: 'Taglia L',
+                },
+              ],
+              error: null,
+            }),
+          }),
+        }),
+      }),
+    } as any);
+
+    vi.mocked(ShopifyAPIClient).mockImplementation(() => ({
+      getProducts: vi.fn().mockResolvedValue({ products: [{ id: 1 }], nextPageInfo: null }),
+    }) as any);
+    vi.mocked(transformProduct).mockReturnValue([
+      { shopify_product_id: 1, shopify_variant_id: 10, product_title: 'Maglietta', variant_title: 'S', cost_per_item: 5, net_value: 5 },
+      { shopify_product_id: 1, shopify_variant_id: 11, product_title: 'Maglietta', variant_title: 'M', cost_per_item: 5, net_value: 5 },
+    ] as any);
+
+    await processInitialBulkSync('shop-1', { updateProgress: vi.fn() } as any);
+
+    // La 10 c'era già: solo la 11 è un'aggiunta. La riga spazzata è una rimozione.
+    const written = (vi.mocked(prisma.syncJobEvent.createMany).mock.calls[0][0] as any).data as any[];
+    expect(written).toEqual([
+      {
+        syncJobId: 'job-1',
+        entity: 'product',
+        action: 'added',
+        shopifyId: 1n,
+        variantId: 11n,
+        label: 'Maglietta',
+        sublabel: 'M',
+      },
+      {
+        syncJobId: 'job-1',
+        entity: 'product',
+        action: 'removed',
+        shopifyId: 9n,
+        variantId: 90n,
+        label: 'Fuori catalogo',
+        sublabel: 'Taglia L',
+      },
+    ]);
+
+    // I contatori viaggiano con lo stesso update che marca il job completato.
+    const completedCall = vi.mocked(prisma.syncJob.update).mock.calls.find(
+      (call: any) => call[0].data?.status === 'completed',
+    );
+    expect(completedCall?.[0].data).toMatchObject({
+      productsAdded: 1,
+      productsRemoved: 1,
+      customersAdded: 0,
+    });
+
+    // Il dettaglio delle corse non più raggiungibili dalla tab Logs viene potato.
+    expect(prisma.syncJobEvent.deleteMany).toHaveBeenCalled();
+  });
+
+  it('registra il dettaglio dei clienti: aggiunti, aggiornati e sospesi davvero', async () => {
+    const mockShop = {
+      id: 'shop-1',
+      shopDomain: 'test-shop.myshopify.com',
+      accessToken: 'encrypted-token',
+      authorization: 'ENABLED',
+      currentPlan: 'pro',
+      supabaseConfig: {
+        syncEnabled: true,
+        tableNameProducts: 'products',
+        tableNameCustomers: 'customers',
+        supabaseUrl: 'https://test.supabase.co',
+        supabasePublicKey: 'k',
+        supabaseServiceRoleKey: 's',
+      },
+    };
+    vi.mocked(prisma.shop.findUnique).mockResolvedValue(mockShop as any);
+    vi.mocked(prisma.plan.findUnique).mockResolvedValue({ maxProducts: null, customersSyncEnabled: true } as any);
+    vi.mocked(prisma.syncJob.create).mockResolvedValue({ id: 'job-1' } as any);
+    vi.mocked(prisma.syncJob.update).mockResolvedValue({} as any);
+    vi.mocked(prisma.shop.update).mockResolvedValue({} as any);
+
+    vi.mocked(createSupabaseClient).mockReturnValue({
+      from: () => ({
+        select: () => ({
+          limit: async () => ({ data: [{ shopify_customer_id: 1 }], error: null }),
+          range: async () => ({ data: [], error: null }),
+          // Dei consenzienti (1 e 3) solo il primo era già sincronizzato.
+          in: async () => ({ data: [{ shopify_customer_id: 1 }], error: null }),
+        }),
+        upsert: async () => ({ error: null }),
+        update: () => ({
+          in: () => ({
+            // Dei due revocanti (2 e 4) solo il 2 aveva una riga da sospendere.
+            select: async () => ({ data: [{ shopify_customer_id: 2 }], error: null }),
+          }),
+        }),
+        delete: () => ({ lt: async () => ({ error: null }) }),
+      }),
+    } as any);
+
+    vi.mocked(ShopifyAPIClient).mockImplementation(() => ({
+      getProducts: vi.fn().mockResolvedValue({ products: [], nextPageInfo: null }),
+      getCustomers: vi.fn().mockResolvedValue({
+        customers: [
+          { id: 1, first_name: 'Mario', last_name: 'Rossi', email_marketing_consent: { state: 'subscribed' } },
+          { id: 3, first_name: 'Anna', last_name: null, email_marketing_consent: { state: 'subscribed' } },
+          { id: 2, first_name: null, last_name: null, email_marketing_consent: { state: 'unsubscribed' } },
+          { id: 4, first_name: 'Luca', last_name: 'Bianchi', email_marketing_consent: { state: 'unsubscribed' } },
+        ],
+        nextPageInfo: null,
+      }),
+    }) as any);
+
+    await processInitialBulkSync('shop-1', { updateProgress: vi.fn() } as any);
+
+    const written = (vi.mocked(prisma.syncJobEvent.createMany).mock.calls[0][0] as any).data as any[];
+    expect(written).toEqual([
+      { syncJobId: 'job-1', entity: 'customer', action: 'updated', shopifyId: 1n, variantId: null, label: 'Mario Rossi', sublabel: null },
+      { syncJobId: 'job-1', entity: 'customer', action: 'added', shopifyId: 3n, variantId: null, label: 'Anna', sublabel: null },
+      // Il 4 ha revocato ma non era mai stato sincronizzato: non c'è nulla da sospendere.
+      { syncJobId: 'job-1', entity: 'customer', action: 'suspended', shopifyId: 2n, variantId: null, label: 'Cliente 2', sublabel: null },
+    ]);
+
+    const completedCall = vi.mocked(prisma.syncJob.update).mock.calls.find(
+      (call: any) => call[0].data?.status === 'completed',
+    );
+    expect(completedCall?.[0].data).toMatchObject({
+      customersAdded: 1,
+      customersUpdated: 1,
+      customersSuspended: 1,
+    });
+  });
+
+  it('una corsa fallita salva comunque il dettaglio raccolto fino all\'errore', async () => {
+    const mockShop = {
+      id: 'shop-1',
+      shopDomain: 'test-shop.myshopify.com',
+      accessToken: 'encrypted-token',
+      authorization: 'ENABLED',
+      currentPlan: 'pro',
+      supabaseConfig: {
+        syncEnabled: true,
+        tableNameProducts: 'products',
+        tableNameCustomers: 'customers',
+        supabaseUrl: 'https://test.supabase.co',
+        supabasePublicKey: 'k',
+        supabaseServiceRoleKey: 's',
+      },
+    };
+    vi.mocked(prisma.shop.findUnique).mockResolvedValue(mockShop as any);
+    vi.mocked(prisma.plan.findUnique).mockResolvedValue({ maxProducts: null, customersSyncEnabled: false } as any);
+    vi.mocked(prisma.syncJob.create).mockResolvedValue({ id: 'job-1' } as any);
+    vi.mocked(prisma.syncJob.update).mockResolvedValue({} as any);
+
+    vi.mocked(createSupabaseClient).mockReturnValue({
+      from: () => ({
+        select: emptyProductsSelect,
+        upsert: async () => ({ error: null }),
+        delete: () => ({ lt: async () => ({ error: null }) }),
+      }),
+    } as any);
+
+    // Prima pagina sincronizzata, seconda in errore.
+    vi.mocked(ShopifyAPIClient).mockImplementation(() => ({
+      getProducts: vi
+        .fn()
+        .mockResolvedValueOnce({ products: [{ id: 1 }], nextPageInfo: 'p2' })
+        .mockRejectedValueOnce(new Error('Shopify API error')),
+    }) as any);
+    vi.mocked(transformProduct).mockReturnValue([
+      { shopify_product_id: 1, shopify_variant_id: 10, product_title: 'Maglietta', variant_title: null, cost_per_item: 5, net_value: 5 },
+    ] as any);
+
+    await expect(
+      processInitialBulkSync('shop-1', { updateProgress: vi.fn() } as any),
+    ).rejects.toThrow('Shopify API error');
+
+    expect(prisma.syncJobEvent.createMany).toHaveBeenCalled();
+    const failedCall = vi.mocked(prisma.syncJob.update).mock.calls.find(
+      (call: any) => call[0].data?.status === 'failed',
+    );
+    expect(failedCall?.[0].data).toMatchObject({ productsAdded: 1 });
+  });
+
+  it('se il dettaglio non si scrive la sync arriva comunque in fondo', async () => {
+    const mockShop = {
+      id: 'shop-1',
+      shopDomain: 'test-shop.myshopify.com',
+      accessToken: 'encrypted-token',
+      authorization: 'ENABLED',
+      currentPlan: 'pro',
+      supabaseConfig: {
+        syncEnabled: true,
+        tableNameProducts: 'products',
+        tableNameCustomers: 'customers',
+        supabaseUrl: 'https://test.supabase.co',
+        supabasePublicKey: 'k',
+        supabaseServiceRoleKey: 's',
+      },
+    };
+    vi.mocked(prisma.shop.findUnique).mockResolvedValue(mockShop as any);
+    vi.mocked(prisma.plan.findUnique).mockResolvedValue({ maxProducts: null, customersSyncEnabled: false } as any);
+    vi.mocked(prisma.syncJob.create).mockResolvedValue({ id: 'job-1' } as any);
+    vi.mocked(prisma.syncJob.update).mockResolvedValue({} as any);
+    vi.mocked(prisma.shop.update).mockResolvedValue({} as any);
+    vi.mocked(prisma.syncJobEvent.createMany).mockRejectedValueOnce(new Error('tabella dettaglio assente') as never);
+
+    vi.mocked(createSupabaseClient).mockReturnValue({
+      from: () => ({
+        select: emptyProductsSelect,
+        upsert: async () => ({ error: null }),
+        delete: () => ({ lt: async () => ({ error: null }) }),
+      }),
+    } as any);
+    vi.mocked(ShopifyAPIClient).mockImplementation(() => ({
+      getProducts: vi.fn().mockResolvedValue({ products: [{ id: 1 }], nextPageInfo: null }),
+    }) as any);
+    vi.mocked(transformProduct).mockReturnValue([
+      { shopify_product_id: 1, shopify_variant_id: 10, product_title: 'Maglietta', variant_title: null, cost_per_item: 5, net_value: 5 },
+    ] as any);
+
+    await processInitialBulkSync('shop-1', { updateProgress: vi.fn() } as any);
+
+    // I totali storici restano quelli di sempre: il dettaglio è accessorio.
+    const completedCall = vi.mocked(prisma.syncJob.update).mock.calls.find(
+      (call: any) => call[0].data?.status === 'completed',
+    );
+    expect(completedCall).toBeDefined();
+    const progressCall = vi.mocked(prisma.syncJob.update).mock.calls.find(
+      (call: any) => call[0].data?.variantsSynced === 1,
+    );
+    expect(progressCall).toBeDefined();
   });
 });

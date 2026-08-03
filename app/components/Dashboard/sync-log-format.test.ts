@@ -3,7 +3,6 @@ import {
   tableCreationMessage,
   syncStatusBadge,
   formatDateTime,
-  syncRowNumbers,
   syncErrorMessage,
 } from './sync-log-format';
 
@@ -44,19 +43,6 @@ describe('formatDateTime', () => {
 
   it('fuso diverso produce un orario diverso dallo stesso istante', () => {
     expect(formatDateTime(iso, 'America/New_York')).toBe('24/07/2026 08:05');
-  });
-});
-
-describe('syncRowNumbers', () => {
-  const job = { jobType: 'initial_bulk', variantsSynced: 12, customersSynced: 148 };
-  it('senza clienti nel piano mostra solo le varianti', () => {
-    expect(syncRowNumbers(job, false)).toBe('12 varianti idonee');
-  });
-  it('con clienti nel piano mostra entrambi', () => {
-    expect(syncRowNumbers(job, true)).toBe('12 varianti idonee · 148 clienti');
-  });
-  it('per la creazione tabelle la colonna e vuota', () => {
-    expect(syncRowNumbers({ ...job, jobType: 'table_create_both' }, true)).toBe('');
   });
 });
 

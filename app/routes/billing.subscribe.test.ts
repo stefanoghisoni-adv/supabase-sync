@@ -1,0 +1,210 @@
+// app/routes/billing.subscribe.test.ts
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+const findUniqueShop = vi.fn();
+const updateShop = vi.fn();
+const findUniquePlan = vi.fn();
+const createCharge = vi.fn();
+const updateManyCharges = vi.fn();
+
+const isDevelopmentStore = vi.fn();
+const createAppSubscription = vi.fn();
+const cancelAppSubscription = vi.fn();
+
+const admin = { graphql: vi.fn() };
+
+vi.mock('~/shopify.server', () => ({
+  authenticate: {
+    admin: async () => ({ session: { shop: 'test-shop.myshopify.com' }, admin }),
+  },
+}));
+vi.mock('~/db.server', () => ({
+  prisma: {
+    shop: {
+      findUnique: (...a: unknown[]) => findUniqueShop(...a),
+      update: (...a: unknown[]) => updateShop(...a),
+    },
+    plan: { findUnique: (...a: unknown[]) => findUniquePlan(...a) },
+    billingCharge: {
+      create: (...a: unknown[]) => createCharge(...a),
+      updateMany: (...a: unknown[]) => updateManyCharges(...a),
+    },
+  },
+}));
+vi.mock('~/lib/billing/subscription.server', () => ({
+  isDevelopmentStore: (...a: unknown[]) => isDevelopmentStore(...a),
+  createAppSubscription: (...a: unknown[]) => createAppSubscription(...a),
+  cancelAppSubscription: (...a: unknown[]) => cancelAppSubscription(...a),
+}));
+
+import { action } from './billing.subscribe';
+
+const SHOP = {
+  id: 'shop-1',
+  shopDomain: 'test-shop.myshopify.com',
+  currentPlan: 'Free',
+  activeChargeId: null as string | null,
+  authorization: 'ENABLED',
+  trackingAuthorization: 'ENABLED',
+};
+
+function call(plan: string | null, opts: { method?: string; url?: string } = {}) {
+  const body = new URLSearchParams();
+  if (plan !== null) body.set('plan', plan);
+  const request = new Request(opts.url ?? 'https://app.example.com/billing/subscribe', {
+    method: opts.method ?? 'POST',
+    body: opts.method && opts.method !== 'POST' ? undefined : body,
+  });
+  return action({ request, params: {}, context: {} } as any);
+}
+
+describe('/billing/subscribe', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.SHOPIFY_APP_URL = 'https://app.example.com';
+    findUniqueShop.mockResolvedValue({ ...SHOP });
+    isDevelopmentStore.mockResolvedValue(false);
+  });
+
+  it('metodo diverso da POST → 405', async () => {
+    const res = await call(null, { method: 'GET' });
+    expect(res.status).toBe(405);
+  });
+
+  it('negozio bloccato dall owner → 403 e nessun addebito', async () => {
+    findUniqueShop.mockResolvedValue({ ...SHOP, authorization: 'DISABLED' });
+    const res = await call('Pro');
+    expect(res.status).toBe(403);
+    expect(createAppSubscription).not.toHaveBeenCalled();
+  });
+
+  it('piano interno senza acquisti (lifetime) → 403', async () => {
+    findUniqueShop.mockResolvedValue({ ...SHOP, currentPlan: 'lifetime' });
+    const res = await call('Pro');
+    expect(res.status).toBe(403);
+    expect(findUniquePlan).not.toHaveBeenCalled();
+  });
+
+  it('piano inesistente → 400 con messaggio per il merchant', async () => {
+    findUniquePlan.mockResolvedValue(null);
+    const res = await call('Inventato');
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: 'Il piano scelto non è disponibile.' });
+  });
+
+  it('piano non acquistabile → 400', async () => {
+    findUniquePlan.mockResolvedValue({ planName: 'lifetime', priceMonthly: 0, trialDays: null });
+    const res = await call('lifetime');
+    expect(res.status).toBe(400);
+    expect(createAppSubscription).not.toHaveBeenCalled();
+  });
+
+  it('piano gia attuale → 400', async () => {
+    findUniquePlan.mockResolvedValue({ planName: 'Free', priceMonthly: 0, trialDays: 7 });
+    const res = await call('Free');
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: 'Stai già usando questo piano.' });
+  });
+
+  it('piano gratuito: cancella l abbonamento in corso e applica subito il piano', async () => {
+    findUniqueShop.mockResolvedValue({ ...SHOP, currentPlan: 'Pro', activeChargeId: '9876' });
+    findUniquePlan.mockResolvedValue({ planName: 'Free', priceMonthly: 0, trialDays: null });
+
+    const res = await call('Free');
+
+    expect(cancelAppSubscription).toHaveBeenCalledWith(
+      admin,
+      'gid://shopify/AppSubscription/9876',
+    );
+    expect(updateManyCharges).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { shopId: 'shop-1', shopifyChargeId: 9876n },
+        data: expect.objectContaining({ status: 'cancelled' }),
+      }),
+    );
+    expect(updateShop).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'shop-1' },
+        data: expect.objectContaining({ currentPlan: 'Free', activeChargeId: null }),
+      }),
+    );
+    expect(createAppSubscription).not.toHaveBeenCalled();
+    expect(await res.json()).toEqual({ ok: true });
+  });
+
+  it('piano a pagamento: restituisce confirmationUrl e registra l addebito in attesa', async () => {
+    findUniquePlan.mockResolvedValue({ planName: 'Pro', priceMonthly: 29, trialDays: 7 });
+    createAppSubscription.mockResolvedValue({
+      confirmationUrl: 'https://shopify/confirm/1',
+      subscriptionGid: 'gid://shopify/AppSubscription/1234',
+      chargeId: 1234n,
+    });
+
+    const res = await call('Pro');
+
+    expect(await res.json()).toEqual({ confirmationUrl: 'https://shopify/confirm/1' });
+    expect(createCharge).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          shopId: 'shop-1',
+          shopifyChargeId: 1234n,
+          planType: 'Pro',
+          status: 'pending',
+          billingCycle: 'monthly',
+          trialDays: 7,
+          confirmationUrl: 'https://shopify/confirm/1',
+        }),
+      }),
+    );
+    // Il piano NON si applica qui: l'addebito e' solo proposto.
+    expect(updateShop).not.toHaveBeenCalled();
+  });
+
+  it('l URL di ritorno rientra nel contesto embedded', async () => {
+    findUniquePlan.mockResolvedValue({ planName: 'Pro', priceMonthly: 29, trialDays: 7 });
+    createAppSubscription.mockResolvedValue({
+      confirmationUrl: 'https://shopify/confirm/1',
+      subscriptionGid: 'gid://shopify/AppSubscription/1234',
+      chargeId: 1234n,
+    });
+
+    await call('Pro');
+
+    const returnUrl = new URL(createAppSubscription.mock.calls[0][1].returnUrl);
+    expect(returnUrl.origin).toBe('https://app.example.com');
+    expect(returnUrl.pathname).toBe('/billing/callback');
+    expect(returnUrl.searchParams.get('shop')).toBe('test-shop.myshopify.com');
+    expect(returnUrl.searchParams.get('embedded')).toBe('1');
+    expect(
+      Buffer.from(returnUrl.searchParams.get('host') ?? '', 'base64').toString('utf8'),
+    ).toBe('admin.shopify.com/store/test-shop');
+  });
+
+  it('negozio di sviluppo: addebito di prova', async () => {
+    isDevelopmentStore.mockResolvedValue(true);
+    findUniquePlan.mockResolvedValue({ planName: 'Pro', priceMonthly: 29, trialDays: 7 });
+    createAppSubscription.mockResolvedValue({
+      confirmationUrl: 'https://shopify/confirm/1',
+      subscriptionGid: 'gid://shopify/AppSubscription/1234',
+      chargeId: 1234n,
+    });
+
+    await call('Pro');
+
+    expect(createAppSubscription.mock.calls[0][1].test).toBe(true);
+  });
+
+  it('guasto su Shopify → 500 senza dettagli tecnici', async () => {
+    findUniquePlan.mockResolvedValue({ planName: 'Pro', priceMonthly: 29, trialDays: 7 });
+    createAppSubscription.mockRejectedValue(new Error('appSubscriptionCreate: boom'));
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const res = await call('Pro');
+
+    expect(res.status).toBe(500);
+    expect(await res.json()).toEqual({
+      error: 'Non è stato possibile avviare il cambio di piano. Riprova.',
+    });
+    errorSpy.mockRestore();
+  });
+});

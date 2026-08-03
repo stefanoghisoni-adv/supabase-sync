@@ -1,6 +1,6 @@
 import type { LoaderFunctionArgs } from '@remix-run/node';
 import { json } from '@remix-run/node';
-import { useLoaderData, useNavigation } from '@remix-run/react';
+import { useLoaderData, useNavigation, useFetcher, useSearchParams } from '@remix-run/react';
 import {
   Page,
   InlineGrid,
@@ -20,6 +20,14 @@ import { buildPlanCards, formatPrice, type PlanCard } from '~/components/Billing
 import { shouldHighlightRecommended } from '~/components/Billing/plan-highlight';
 import { canAccessPlanTab } from '~/components/Billing/plan-access';
 import { PlanFeatureList } from '~/components/Billing/PlanFeatureList';
+import {
+  planButtonLabel,
+  planButtonState,
+  billingOutcome,
+  BILLING_SUCCESS_BANNER,
+  BILLING_ERROR_BANNER,
+} from '~/components/Billing/plan-cta';
+import { useEffect, useState } from 'react';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const { session } = await authenticate.admin(request);
@@ -57,10 +65,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
   return json({ currentPlan, blocked: false as const, cards });
 }
 
+// Contratto della risposta di /billing/subscribe (endpoint di un altro task).
+type SubscribeResponse =
+  | { confirmationUrl: string }   // serve uscire dall'iframe verso questo URL
+  | { ok: true }                  // piano applicato subito (piano gratuito): ricarica
+  | { error: string };            // messaggio già in italiano, da mostrare in un Banner
+
 export default function Plan() {
   const { currentPlan, blocked, cards } = useLoaderData<typeof loader>();
 
-  // Il "Consigliato" si risalta solo se e' un upgrade rispetto al piano attuale.
+  // Il "Consigliato" si risalta solo se è un upgrade rispetto al piano attuale.
   const highlightRecommended = shouldHighlightRecommended(cards, currentPlan);
 
   // Stesso comportamento di Dashboard/Logs: spinner + disabilita mentre Remix
@@ -69,6 +83,42 @@ export default function Plan() {
   const loadingSettings =
     navigation.state === 'loading' &&
     navigation.location?.pathname === '/settings/supabase';
+
+  // Fetcher per inviare il POST a /billing/subscribe. Un fetcher per pagina, non
+  // uno per card: lo stato locale (submittingPlan) traccia quale piano è in corso.
+  const fetcher = useFetcher<SubscribeResponse>();
+  const [submittingPlan, setSubmittingPlan] = useState<string | null>(null);
+
+  // Legge il parametro querystring ?billing=ok|ko dopo il ritorno dal flusso.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const outcome = billingOutcome(searchParams.get('billing'));
+
+  // Gestione dell'errore generico: se il fetcher fallisce del tutto (es. network),
+  // mostra un banner critico con messaggio generico.
+  const [fetcherError, setFetcherError] = useState<string | null>(null);
+
+  // Quando arriva confirmationUrl, naviga la finestra contenitore (uscita dall'iframe).
+  // App Bridge intercetta open(..., '_top') e naviga il parent.
+  useEffect(() => {
+    if (fetcher.data && 'confirmationUrl' in fetcher.data) {
+      window.open(fetcher.data.confirmationUrl, '_top');
+    }
+  }, [fetcher.data]);
+
+  // Quando il fetcher completa, azzera lo stato di sottomissione.
+  useEffect(() => {
+    if (fetcher.state === 'idle' && fetcher.data) {
+      setSubmittingPlan(null);
+      // Se la risposta è { ok: true }, ricarica la pagina per aggiornare i dati.
+      if ('ok' in fetcher.data && fetcher.data.ok) {
+        window.location.reload();
+      }
+      // Se c'è un errore nella risposta, lo mostra (il banner è renderizzato sotto).
+      if ('error' in fetcher.data) {
+        setFetcherError(fetcher.data.error);
+      }
+    }
+  }, [fetcher.state, fetcher.data]);
 
   // Sezione non disponibile: pagina vuota, ritorno alla dashboard e avviso rosso.
   // Nessuna card e nessun prezzo, cosi' non si suggerisce un upgrade che non serve.
@@ -102,6 +152,49 @@ export default function Plan() {
       ]}
     >
       <BlockStack gap="500">
+        {/* Banner di esito dopo il ritorno dal flusso di addebito. */}
+        {outcome === 'success' && (
+          <Banner
+            tone="success"
+            title={BILLING_SUCCESS_BANNER.title}
+            onDismiss={() => {
+              setSearchParams((prev) => {
+                const next = new URLSearchParams(prev);
+                next.delete('billing');
+                return next;
+              });
+            }}
+          >
+            <Text as="p">{BILLING_SUCCESS_BANNER.message}</Text>
+          </Banner>
+        )}
+        {outcome === 'error' && (
+          <Banner
+            tone="warning"
+            title={BILLING_ERROR_BANNER.title}
+            onDismiss={() => {
+              setSearchParams((prev) => {
+                const next = new URLSearchParams(prev);
+                next.delete('billing');
+                return next;
+              });
+            }}
+          >
+            <Text as="p">{BILLING_ERROR_BANNER.message}</Text>
+          </Banner>
+        )}
+
+        {/* Errore dalla risposta di /billing/subscribe. */}
+        {fetcherError && (
+          <Banner
+            tone="critical"
+            title="Errore"
+            onDismiss={() => setFetcherError(null)}
+          >
+            <Text as="p">{fetcherError}</Text>
+          </Banner>
+        )}
+
         {/* Intestazione informativa: riempie lo spazio sopra la griglia e dice
             cosa NON cambia al cambio di piano (dubbio tipico prima di pagare).
             Copy solo in termini di beneficio per il merchant: nessun riferimento a
@@ -176,15 +269,22 @@ export default function Plan() {
                     </BlockStack>
 
                     {/* marginBlockStart:auto tiene la CTA in fondo alla colonna anche
-                        se il contenuto sopra e' piu' corto. CTA placeholder finche'
-                        non colleghiamo Shopify Billing (slice successiva). */}
+                        se il contenuto sopra è più corto. */}
                     <div style={{ marginBlockStart: 'auto', paddingBlockStart: 'var(--p-space-500)' }}>
                       <Button
                         variant={isHighlighted ? 'primary' : undefined}
-                        disabled={isCurrent}
+                        {...planButtonState(plan.name, isCurrent, submittingPlan)}
                         fullWidth
+                        onClick={() => {
+                          setSubmittingPlan(plan.name);
+                          setFetcherError(null); // Azzera eventuali errori precedenti
+                          fetcher.submit(
+                            { plan: plan.name },
+                            { method: 'POST', action: '/billing/subscribe' },
+                          );
+                        }}
                       >
-                        {isCurrent ? 'Piano attuale' : `Scegli ${plan.name}`}
+                        {planButtonLabel(plan.name, isCurrent)}
                       </Button>
                     </div>
                   </div>

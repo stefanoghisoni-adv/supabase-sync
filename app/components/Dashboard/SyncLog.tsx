@@ -1,14 +1,15 @@
 // app/components/Dashboard/SyncLog.tsx
-import { Card, BlockStack, Text, Badge, DataTable } from '@shopify/polaris';
+import { Card, BlockStack, Text, Badge, DataTable, Button } from '@shopify/polaris';
 import type { SerializeFrom } from '@remix-run/node';
 import type { SyncJob } from '@prisma/client';
+import { useState } from 'react';
 import {
   tableCreationMessage,
   syncStatusBadge,
   formatDateTime,
-  syncRowNumbers,
   syncErrorMessage,
 } from './sync-log-format';
+import { SyncJobDetailsModal } from './SyncJobDetailsModal';
 
 type SerializedSyncJob = SerializeFrom<SyncJob>;
 
@@ -19,6 +20,10 @@ interface SyncLogProps {
 }
 
 export function SyncLog({ jobs, customersEnabled, timeZone }: SyncLogProps) {
+  const [detailsJobId, setDetailsJobId] = useState<string | null>(null);
+
+  const detailsJob = detailsJobId ? jobs.find((j) => j.id === detailsJobId) : null;
+
   const rows = jobs.map((job) => {
     const creation = tableCreationMessage(job.jobType);
     const status = syncStatusBadge(job.status);
@@ -41,32 +46,51 @@ export function SyncLog({ jobs, customersEnabled, timeZone }: SyncLogProps) {
       </BlockStack>
     );
 
+    // Terza colonna: vuota per le creazioni tabella, altrimenti pulsante "Vedi
+    // dettagli" che apre il modal.
+    const detailsCell = creation ? (
+      ''
+    ) : (
+      <Button variant="plain" onClick={() => setDetailsJobId(job.id)}>
+        Vedi dettagli
+      </Button>
+    );
+
     // Solo data e ora: quanto e' durata la corsa non dice nulla al merchant.
-    return [
-      stateCell,
-      formatDateTime(job.startedAt, timeZone),
-      syncRowNumbers(job, customersEnabled),
-    ];
+    return [stateCell, formatDateTime(job.startedAt, timeZone), detailsCell];
   });
 
   return (
-    <Card>
-      <BlockStack gap="400">
-        <Text as="h2" variant="headingMd">
-          Log di sincronizzazione
-        </Text>
-        {jobs.length === 0 ? (
-          <Text as="p" tone="subdued">
-            Nessuna attività registrata
+    <>
+      <Card>
+        <BlockStack gap="400">
+          <Text as="h2" variant="headingMd">
+            Log di sincronizzazione
           </Text>
-        ) : (
-          <DataTable
-            columnContentTypes={['text', 'text', 'text']}
-            headings={['Stato', 'Data/ora', 'Prodotti e clienti']}
-            rows={rows}
-          />
-        )}
-      </BlockStack>
-    </Card>
+          {jobs.length === 0 ? (
+            <Text as="p" tone="subdued">
+              Nessuna attività registrata
+            </Text>
+          ) : (
+            <DataTable
+              columnContentTypes={['text', 'text', 'text']}
+              headings={['Stato', 'Data/ora', 'Dettagli']}
+              rows={rows}
+            />
+          )}
+        </BlockStack>
+      </Card>
+
+      {detailsJob && (
+        <SyncJobDetailsModal
+          open={!!detailsJobId}
+          onClose={() => setDetailsJobId(null)}
+          jobId={detailsJob.id}
+          jobStartedAt={detailsJob.startedAt}
+          timeZone={timeZone}
+          customersEnabled={customersEnabled}
+        />
+      )}
+    </>
   );
 }

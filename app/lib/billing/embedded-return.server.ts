@@ -1,0 +1,50 @@
+// Il giro dell'addebito esce dall'iframe: il merchant conferma sulla pagina di
+// Shopify e torna sulla FINESTRA DI PRIMO LIVELLO. Una rotta dell'app raggiunta
+// cosi' non ha nessun token di sessione addosso, e senza i parametri giusti in
+// coda all'URL non riesce piu' a rientrare dentro l'admin: finisce sulla pagina
+// che chiede il dominio del negozio, dopo che il merchant ha appena pagato.
+//
+// Qui si costruisce quella coda una volta sola, cosi' l'URL di ritorno passato a
+// Shopify e il rimando finale alla tab Piano non possono divergere.
+
+/**
+ * Ricostruisce il parametro `host` a partire dal solo dominio del negozio.
+ *
+ * L'azione che avvia l'acquisto e' una POST del riquadro embedded: il `host`
+ * originale c'e' quasi sempre, ma non e' garantito. Perderlo significherebbe
+ * mandare il merchant al modulo di login al ritorno dal pagamento, quindi lo
+ * ricalcoliamo nella stessa forma che usa l'admin (base64 di
+ * `admin.shopify.com/store/<negozio>`).
+ */
+export function fallbackHost(shopDomain: string): string {
+  const handle = shopDomain.trim().replace(/\.myshopify\.com$/i, '');
+  return Buffer.from(`admin.shopify.com/store/${handle}`, 'utf8').toString('base64');
+}
+
+export interface EmbeddedContextOptions {
+  /** URL della richiesta in corso: prima fonte di `host`. */
+  requestUrl?: URL | null;
+  /** Dominio myshopify del negozio. */
+  shopDomain: string;
+  /** `host` fornito dal client (campo del form), usato se manca nell'URL. */
+  host?: string | null;
+}
+
+/**
+ * Parametri che permettono a una rotta dell'app di rientrare nell'admin.
+ *
+ * `embedded=1` non e' decorativo: senza, una richiesta di primo livello viene
+ * dirottata sulla home dell'app dentro l'admin e il percorso richiesto — con
+ * l'esito dell'addebito — si perde per strada.
+ */
+export function embeddedContextParams(opts: EmbeddedContextOptions): URLSearchParams {
+  const fromUrl = opts.requestUrl?.searchParams.get('host')?.trim();
+  const fromForm = opts.host?.trim();
+  const host = fromUrl || fromForm || fallbackHost(opts.shopDomain);
+
+  const params = new URLSearchParams();
+  params.set('shop', opts.shopDomain);
+  params.set('host', host);
+  params.set('embedded', '1');
+  return params;
+}

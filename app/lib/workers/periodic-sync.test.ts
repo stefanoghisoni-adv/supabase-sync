@@ -10,6 +10,12 @@ vi.mock('../../db.server', () => ({
       create: vi.fn(),
       update: vi.fn(),
       findFirst: vi.fn(),
+      // Usata dalla potatura del dettaglio: quali corse restano raggiungibili.
+      findMany: vi.fn(async () => []),
+    },
+    syncJobEvent: {
+      createMany: vi.fn(async () => ({ count: 0 })),
+      deleteMany: vi.fn(async () => ({ count: 0 })),
     },
     plan: {
       findUnique: vi.fn(),
@@ -601,7 +607,12 @@ describe('Periodic sync check processor', () => {
     (prisma.syncJob.update as any).mockResolvedValue({});
     (createSupabaseClient as any).mockReturnValue({
       from: () => ({
-        select: () => ({ eq: async () => ({ data: [] }), limit: () => ({ error: null }) }),
+        select: () => ({
+          eq: async () => ({ data: [] }),
+          limit: () => ({ error: null }),
+          // Chi c'era già fra i clienti della pagina: serve solo al dettaglio.
+          in: async () => ({ data: [], error: null }),
+        }),
         upsert: async () => ({ error: null }),
         update: () => ({ in: async () => ({ error: null }) }),
         delete: () => ({ eq: () => ({ in: async () => ({ error: null }), is: async () => ({ error: null }) }) }),
@@ -662,5 +673,154 @@ describe('Periodic sync check processor', () => {
         data: expect.objectContaining({ status: 'completed', customersSynced: 0 }),
       }),
     );
+  });
+
+  it('registra il dettaglio: varianti nuove aggiunte, orfane rimosse', async () => {
+    const mockShop = {
+      id: 'shop-1',
+      shopDomain: 'test-shop.myshopify.com',
+      accessToken: 'encrypted-token',
+      authorization: 'ENABLED',
+      currentPlan: 'free',
+      supabaseConfig: {
+        syncEnabled: true,
+        tableNameProducts: 'products',
+        updatedAt: new Date('2026-07-01T00:00:00Z'),
+      },
+    };
+    (prisma.shop.findUnique as any).mockResolvedValue(mockShop);
+    (prisma.plan.findUnique as any).mockResolvedValue({ maxProducts: null, customersSyncEnabled: false });
+    (prisma.syncJob.findFirst as any).mockResolvedValue(null);
+    (prisma.syncJob.create as any).mockResolvedValue({ id: 'job-1' });
+    (prisma.syncJob.update as any).mockResolvedValue({});
+
+    (createSupabaseClient as any).mockReturnValue({
+      from: () => ({
+        // Prima della corsa il prodotto aveva le varianti 11 e 99.
+        select: () => ({ eq: async () => ({ data: [{ shopify_variant_id: 11 }, { shopify_variant_id: 99 }] }) }),
+        delete: () => ({
+          eq: () => ({
+            // PostgREST restituisce le righe cancellate se si concatena .select().
+            in: () => ({
+              select: async () => ({
+                data: [
+                  {
+                    shopify_product_id: 1,
+                    shopify_variant_id: 99,
+                    product_title: 'Maglietta',
+                    variant_title: 'XL',
+                  },
+                ],
+                error: null,
+              }),
+            }),
+            is: async () => ({ error: null }),
+          }),
+        }),
+        upsert: async () => ({ error: null }),
+      }),
+    });
+    (ShopifyAPIClient as any).mockImplementation(() => ({
+      getProducts: vi
+        .fn()
+        .mockResolvedValueOnce({ products: [{ id: 1 }], nextPageInfo: null })
+        .mockResolvedValue({ products: [], nextPageInfo: null }),
+    }));
+    // Ora il prodotto ha la 11 (già presente) e la 12 (nuova).
+    (transformProduct as any).mockReturnValue([
+      { shopify_product_id: 1, shopify_variant_id: 11, product_title: 'Maglietta', variant_title: 'S', cost_per_item: 5, net_value: 5 },
+      { shopify_product_id: 1, shopify_variant_id: 12, product_title: 'Maglietta', variant_title: 'M', cost_per_item: 5, net_value: 5 },
+    ]);
+
+    await processPeriodicSyncCheck('shop-1');
+
+    const written = (prisma.syncJobEvent.createMany as any).mock.calls[0][0].data;
+    expect(written).toEqual([
+      {
+        syncJobId: 'job-1',
+        entity: 'product',
+        action: 'removed',
+        shopifyId: 1n,
+        variantId: 99n,
+        label: 'Maglietta',
+        sublabel: 'XL',
+      },
+      {
+        syncJobId: 'job-1',
+        entity: 'product',
+        action: 'added',
+        shopifyId: 1n,
+        variantId: 12n,
+        label: 'Maglietta',
+        sublabel: 'M',
+      },
+    ]);
+
+    const completedCall = (prisma.syncJob.update as any).mock.calls.find(
+      (call: any) => call[0].data?.status === 'completed',
+    );
+    expect(completedCall?.[0].data).toMatchObject({
+      productsAdded: 1,
+      productsRemoved: 1,
+    });
+  });
+
+  it('senza .select() concatenato alle delete il dettaglio resta vuoto ma la sync passa', async () => {
+    // Client che non regge la concatenazione (o versioni più vecchie): la
+    // cancellazione avviene comunque, semplicemente non si sa cosa è sparito.
+    const mockShop = {
+      id: 'shop-1',
+      shopDomain: 'test-shop.myshopify.com',
+      accessToken: 'encrypted-token',
+      authorization: 'ENABLED',
+      currentPlan: 'free',
+      supabaseConfig: {
+        syncEnabled: true,
+        tableNameProducts: 'products',
+        updatedAt: new Date('2026-07-01T00:00:00Z'),
+      },
+    };
+    (prisma.shop.findUnique as any).mockResolvedValue(mockShop);
+    (prisma.plan.findUnique as any).mockResolvedValue({ maxProducts: null, customersSyncEnabled: false });
+    (prisma.syncJob.findFirst as any).mockResolvedValue(null);
+    (prisma.syncJob.create as any).mockResolvedValue({ id: 'job-1' });
+    (prisma.syncJob.update as any).mockResolvedValue({});
+
+    const deletedIds: any[] = [];
+    (createSupabaseClient as any).mockReturnValue({
+      from: () => ({
+        select: () => ({ eq: async () => ({ data: [{ shopify_variant_id: 99 }] }) }),
+        delete: () => ({
+          eq: () => ({
+            in: async (_col: string, ids: any[]) => { deletedIds.push(...ids); return { error: null }; },
+            is: async () => ({ error: null }),
+          }),
+        }),
+        upsert: async () => ({ error: null }),
+      }),
+    });
+    (ShopifyAPIClient as any).mockImplementation(() => ({
+      getProducts: vi
+        .fn()
+        .mockResolvedValueOnce({ products: [{ id: 1 }], nextPageInfo: null })
+        .mockResolvedValue({ products: [], nextPageInfo: null }),
+    }));
+    (transformProduct as any).mockReturnValue([
+      { shopify_product_id: 1, shopify_variant_id: 12, product_title: 'Maglietta', variant_title: 'M', cost_per_item: 5, net_value: 5 },
+    ]);
+
+    await processPeriodicSyncCheck('shop-1');
+
+    // La cancellazione è avvenuta come prima...
+    expect(deletedIds).toEqual([99]);
+    // ...ma delle rimozioni non si sa nulla: si conta zero e si prosegue.
+    const completedCall = (prisma.syncJob.update as any).mock.calls.find(
+      (call: any) => call[0].data?.status === 'completed',
+    );
+    expect(completedCall?.[0].data).toMatchObject({
+      productsAdded: 1,
+      productsRemoved: 0,
+      variantsSynced: 1,
+    });
   });
 });
