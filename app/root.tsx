@@ -25,6 +25,28 @@ import { authenticate } from './shopify.server';
 import { prisma } from './db.server';
 import { canAccessPlanTab } from './components/Billing/plan-access';
 
+// Rete di sicurezza del tema chiaro, in linea nel documento e DOPO i fogli di
+// stile: force-light.css fa il lavoro completo, ma e' un file esterno, e se per
+// qualsiasi motivo non arriva (ordine diverso in una pagina d'errore, richiesta
+// caduta) la pagina resterebbe scura. Qui ci sono i soli token che decidono se
+// una schermata si legge: sfondo, superfici, testo, bordi.
+const FORCE_LIGHT_CRITICAL = `
+:root,html,body{color-scheme:light !important}
+html,body{background:#f1f1f1 !important}
+[class*="p-theme-dark"]{
+  color-scheme:light !important;
+  --p-color-bg:#f1f1f1 !important;
+  --p-color-bg-surface:#fff !important;
+  --p-color-bg-surface-secondary:#f7f7f7 !important;
+  --p-color-bg-surface-tertiary:#f3f3f3 !important;
+  --p-color-bg-fill:#fff !important;
+  --p-color-text:#303030 !important;
+  --p-color-text-secondary:#616161 !important;
+  --p-color-border:#e3e3e3 !important;
+  --p-color-border-secondary:#ebebeb !important;
+  --p-color-icon:#4a4a4a !important;
+}`;
+
 export const links: LinksFunction = () => [
   { rel: 'stylesheet', href: polarisStyles },
   { rel: 'stylesheet', href: vizStyles },
@@ -69,14 +91,11 @@ export default function App() {
         {/* Forza sempre il tema chiaro: Polaris è light-only e non vogliamo che
             il canvas del browser in dark mode traspaia dietro le superfici. */}
         <meta name="color-scheme" content="light" />
-        <style
-          dangerouslySetInnerHTML={{
-            __html:
-              ':root,html,body{color-scheme:light !important}html,body{background:#f1f1f1 !important}',
-          }}
-        />
         <Meta />
         <Links />
+        {/* Dopo <Links />: in coda al documento vince sull'ordine, oltre che
+            per !important. */}
+        <style dangerouslySetInnerHTML={{ __html: FORCE_LIGHT_CRITICAL }} />
       </head>
       <body>
         <AppProvider isEmbeddedApp apiKey={apiKey} theme="light">
@@ -139,14 +158,11 @@ export function ErrorBoundary() {
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <meta name="color-scheme" content="light" />
-        <style
-          dangerouslySetInnerHTML={{
-            __html:
-              ':root,html,body{color-scheme:light !important}html,body{background:#f1f1f1 !important}',
-          }}
-        />
         <Meta />
         <Links />
+        {/* Dopo <Links />: in coda al documento vince sull'ordine, oltre che
+            per !important. */}
+        <style dangerouslySetInnerHTML={{ __html: FORCE_LIGHT_CRITICAL }} />
       </head>
       <body>
         <AppProvider isEmbeddedApp apiKey={apiKey} theme="light">
