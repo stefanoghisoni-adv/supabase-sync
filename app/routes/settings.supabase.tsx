@@ -93,7 +93,7 @@ export default function SupabaseSettings() {
   const { account, config } = useLoaderData<typeof loader>();
 
   return (
-    <Page title="Impostazioni Supabase" backAction={{ url: '/' }}>
+    <Page title="Impostazioni" backAction={{ url: '/' }}>
       <Layout>
         <Layout.Section>
           <BlockStack gap="400">
