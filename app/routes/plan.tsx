@@ -1,6 +1,12 @@
 import type { LoaderFunctionArgs } from '@remix-run/node';
 import { json } from '@remix-run/node';
-import { useLoaderData, useNavigation, useFetcher, useSearchParams } from '@remix-run/react';
+import {
+  useLoaderData,
+  useNavigation,
+  useFetcher,
+  useSearchParams,
+  useRevalidator,
+} from '@remix-run/react';
 import {
   Page,
   InlineGrid,
@@ -97,6 +103,12 @@ export default function Plan() {
   // mostra un banner critico con messaggio generico.
   const [fetcherError, setFetcherError] = useState<string | null>(null);
 
+  // Rilegge i dati della pagina senza ricaricare il documento. Ricaricarlo
+  // significherebbe ripetere la richiesta della URL corrente del riquadro, che
+  // non e' detto sia una pagina: e' cosi' che dopo un passaggio al piano
+  // gratuito compariva una risposta grezza al posto della tab.
+  const revalidator = useRevalidator();
+
   // Quando arriva confirmationUrl, naviga la finestra contenitore (uscita dall'iframe).
   // App Bridge intercetta open(..., '_top') e naviga il parent.
   useEffect(() => {
@@ -109,15 +121,18 @@ export default function Plan() {
   useEffect(() => {
     if (fetcher.state === 'idle' && fetcher.data) {
       setSubmittingPlan(null);
-      // Se la risposta è { ok: true }, ricarica la pagina per aggiornare i dati.
+      // Se la risposta è { ok: true }, rilegge i dati della pagina: il piano
+      // attuale è cambiato e le card devono rifletterlo.
       if ('ok' in fetcher.data && fetcher.data.ok) {
-        window.location.reload();
+        revalidator.revalidate();
       }
       // Se c'è un errore nella risposta, lo mostra (il banner è renderizzato sotto).
       if ('error' in fetcher.data) {
         setFetcherError(fetcher.data.error);
       }
     }
+    // revalidator fuori dalle dipendenze di proposito: revalidate() ne cambia lo
+    // stato, e averlo qui rifarebbe partire l'effetto all'infinito.
   }, [fetcher.state, fetcher.data]);
 
   // Sezione non disponibile: pagina vuota, ritorno alla dashboard e avviso rosso.

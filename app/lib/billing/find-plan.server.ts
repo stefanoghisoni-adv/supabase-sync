@@ -1,5 +1,6 @@
 import type { Plan } from '@prisma/client';
 import { prisma } from '~/db.server';
+import { canAccessPlanTab } from '~/components/Billing/plan-access';
 
 // Il nome del piano viaggia in due posti che non si aggiornano insieme: la
 // colonna `plans.plan_name` (il listino) e `shops.current_plan` (quello scritto
@@ -45,10 +46,16 @@ const FALLBACK_FREE_PLAN_NAME = 'Free';
  * puo' cambiare, e un nome inventato qui darebbe un negozio senza piano valido.
  */
 export async function findFreePlan(): Promise<Plan | null> {
-  return prisma.plan.findFirst({
+  const freeOfCharge = await prisma.plan.findMany({
     where: { priceMonthly: 0 },
     orderBy: { createdAt: 'asc' },
   });
+
+  // I piani interni assegnati dall'owner (lifetime) costano zero ma non sono un
+  // ripiego: finirci per la cancellazione di un abbonamento regalerebbe un
+  // piano senza limiti. Il piano gratuito e' quello che un merchant puo'
+  // davvero ritrovarsi.
+  return freeOfCharge.find((plan) => canAccessPlanTab(plan.planName)) ?? null;
 }
 
 /** Il nome esatto del piano gratuito, per chi deve solo scriverlo su uno shop. */
