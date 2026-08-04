@@ -109,9 +109,14 @@ export default function App() {
       <body>
         <AppProvider isEmbeddedApp apiKey={apiKey} theme="light">
           <NavMenu>
+            {/* rel="home" e' la radice dell'app: l'admin la usa per il nome
+                dell'app in cima al menu e non la elenca come voce. Serve quindi
+                un secondo link alla stessa pagina, che e' quello visibile —
+                senza, per tornare alla dashboard bisogna cliccare il nome. */}
             <Link to="/" rel="home">
               Dashboard
             </Link>
+            <Link to="/">Dashboard</Link>
             <Link to="/products/issues">Prodotti non idonei</Link>
             <Link to="/logs">Logs</Link>
             {/* Nascosta sui piani senza nulla da acquistare (lifetime). */}
@@ -178,9 +183,14 @@ export function ErrorBoundary() {
       <body>
         <AppProvider isEmbeddedApp apiKey={apiKey} theme="light">
           <NavMenu>
+            {/* rel="home" e' la radice dell'app: l'admin la usa per il nome
+                dell'app in cima al menu e non la elenca come voce. Serve quindi
+                un secondo link alla stessa pagina, che e' quello visibile —
+                senza, per tornare alla dashboard bisogna cliccare il nome. */}
             <Link to="/" rel="home">
               Dashboard
             </Link>
+            <Link to="/">Dashboard</Link>
             <Link to="/products/issues">Prodotti non idonei</Link>
             <Link to="/logs">Logs</Link>
             {canSeePlanTab && <Link to="/plan">Piano</Link>}

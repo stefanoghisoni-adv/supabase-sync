@@ -1,7 +1,7 @@
-import { useNavigation } from '@remix-run/react';
 import { Card, BlockStack, Text, Button } from '@shopify/polaris';
 import { MetricRow } from './MetricRow';
 import { planLabel, syncStatusBadge } from './account-format';
+import { useNavLoading } from './nav-loading';
 
 export interface AccountCardProps {
   planName: string;
@@ -23,9 +23,9 @@ export function AccountCard({
 }: AccountCardProps) {
   // Stesso comportamento degli altri link della dashboard: mentre Remix carica
   // /plan il link mostra lo spinner e si disabilita.
-  const navigation = useNavigation();
-  const loadingPlan =
-    navigation.state === 'loading' && navigation.location?.pathname === '/plan';
+  // Lo spinner si accende solo se e' stato questo link a far partire la
+  // navigazione: dal menu laterale dell'admin deve restare fermo.
+  const plan = useNavLoading('/plan');
 
   const upgrade = !customersSyncActive && Boolean(customersUpgradePlan);
 
@@ -51,8 +51,9 @@ export function AccountCard({
               <Button
                 variant="plain"
                 url="/plan"
-                disabled={loadingPlan}
-                loading={loadingPlan}
+                onClick={plan.start}
+                disabled={plan.loading}
+                loading={plan.loading}
               >
                 {`Aggiorna a ${planLabel(customersUpgradePlan)}`}
               </Button>

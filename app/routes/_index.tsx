@@ -1,6 +1,6 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from '@remix-run/node';
 import { json } from '@remix-run/node';
-import { useLoaderData, useFetcher, useRevalidator, useNavigate, useNavigation } from '@remix-run/react';
+import { useLoaderData, useFetcher, useRevalidator, useNavigate } from '@remix-run/react';
 import { useEffect, useState } from 'react';
 import {
   Page,
@@ -48,6 +48,7 @@ import {
   refreshShopProfile,
   triggerShopProfileRefresh,
 } from '~/lib/shop/refresh-shop-profile.server';
+import { useNavLoading } from '~/components/Dashboard/nav-loading';
 
 // Solo per questo store mostriamo il messaggio d'errore reale (utile in debug),
 // invece del generico "Errore interno": gli altri merchant non devono vedere
@@ -325,13 +326,11 @@ export default function Dashboard() {
 
   // Pulsanti-link (Impostazioni, Vedi logs): mentre Remix carica la rotta di
   // destinazione mostriamo lo spinner e disabilitiamo il pulsante, così un clic
-  // su un DB remoto (Vercel) non sembra "morto". navigation.location e' valorizzato
-  // solo durante una navigazione: confrontiamo il pathname di arrivo.
-  const navigation = useNavigation();
-  const navigatingTo =
-    navigation.state === 'loading' ? navigation.location?.pathname : undefined;
-  const loadingSettings = navigatingTo === '/settings/supabase';
-  const loadingLogs = navigatingTo === '/logs';
+  // su un DB remoto (Vercel) non sembra "morto". Solo pero' se e' stato quel
+  // pulsante a far partire la navigazione: cambiando sezione dal menu laterale
+  // dell'admin si accendevano lo stesso, senza che nessuno li avesse premuti.
+  const settingsNav = useNavLoading('/settings/supabase');
+  const logsNav = useNavLoading('/logs');
 
   // Stato del collegamento Supabase per il badge del primo step: Non collegato
   // (grigio) → In corso (arancione) → Fallito (rosso) / Collegato (verde).
@@ -675,9 +674,14 @@ export default function Dashboard() {
               </Button>
               {syncCompleted ? (
                 <>
-                  {/* url + Remix Link: la navigazione a /logs attiva loadingLogs,
-                      che disabilita il pulsante e mostra lo spinner in caricamento. */}
-                  <Button url="/logs" disabled={loadingLogs} loading={loadingLogs}>
+                  {/* url + Remix Link: il clic arma logsNav, che disabilita il
+                      pulsante e mostra lo spinner fino all'arrivo su /logs. */}
+                  <Button
+                    url="/logs"
+                    onClick={logsNav.start}
+                    disabled={logsNav.loading}
+                    loading={logsNav.loading}
+                  >
                     Vedi logs
                   </Button>
                   {planChanged ? (
@@ -715,8 +719,9 @@ export default function Dashboard() {
           icon: SettingsIcon,
           url: '/settings/supabase',
           accessibilityLabel: 'Impostazioni',
-          disabled: loadingSettings,
-          loading: loadingSettings,
+          onAction: settingsNav.start,
+          disabled: settingsNav.loading,
+          loading: settingsNav.loading,
         },
       ]}
     >

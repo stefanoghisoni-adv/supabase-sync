@@ -2,7 +2,6 @@ import type { LoaderFunctionArgs } from '@remix-run/node';
 import { json } from '@remix-run/node';
 import {
   useLoaderData,
-  useNavigation,
   useFetcher,
   useSearchParams,
   useRevalidator,
@@ -34,6 +33,7 @@ import {
   BILLING_ERROR_BANNER,
 } from '~/components/Billing/plan-cta';
 import { useEffect, useState } from 'react';
+import { useNavLoading } from '~/components/Dashboard/nav-loading';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const { session } = await authenticate.admin(request);
@@ -83,12 +83,9 @@ export default function Plan() {
   // Il "Consigliato" si risalta solo se è un upgrade rispetto al piano attuale.
   const highlightRecommended = shouldHighlightRecommended(cards, currentPlan);
 
-  // Stesso comportamento di Dashboard/Logs: spinner + disabilita mentre Remix
-  // carica /settings/supabase.
-  const navigation = useNavigation();
-  const loadingSettings =
-    navigation.state === 'loading' &&
-    navigation.location?.pathname === '/settings/supabase';
+  // Spinner e disabilitazione solo se e' stato questo pulsante a far partire
+  // la navigazione: dal menu laterale dell'admin deve restare fermo.
+  const settings = useNavLoading('/settings/supabase');
 
   // Fetcher per inviare il POST a /billing/subscribe. Un fetcher per pagina, non
   // uno per card: lo stato locale (submittingPlan) traccia quale piano è in corso.
@@ -161,8 +158,9 @@ export default function Plan() {
           icon: SettingsIcon,
           url: '/settings/supabase',
           accessibilityLabel: 'Impostazioni',
-          disabled: loadingSettings,
-          loading: loadingSettings,
+          onAction: settings.start,
+          disabled: settings.loading,
+          loading: settings.loading,
         },
       ]}
     >

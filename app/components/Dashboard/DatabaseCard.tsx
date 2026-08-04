@@ -1,5 +1,13 @@
-import { useCallback, useState } from 'react';
-import { Card, BlockStack, InlineStack, Text, Button, Tooltip } from '@shopify/polaris';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  Card,
+  BlockStack,
+  InlineStack,
+  Text,
+  Button,
+  Tooltip,
+  Divider,
+} from '@shopify/polaris';
 import { MetricRow } from './MetricRow';
 import { middleTruncate, copyToClipboard } from './copy-value';
 
@@ -9,6 +17,8 @@ export interface DatabaseCardProps {
   appUrl: string | null;
   /** Chiave di lettura da usare insieme all'indirizzo qui sopra. */
   readKey: string | null;
+  /** Indirizzo del database del merchant, per aprirlo da qui. */
+  databaseUrl: string | null;
 }
 
 /**
@@ -80,7 +90,53 @@ function ValueRow({
   return <CopyableRow label={label} value={value} />;
 }
 
-export function DatabaseCard({ connected, appUrl, readKey }: DatabaseCardProps) {
+/**
+ * L'indirizzo del database per esteso, con il pulsante che lo apre.
+ *
+ * Non e' una riga da copiare come le altre: si legge tutto intero e sta a
+ * sinistra, perche' e' un indirizzo e va riconosciuto a colpo d'occhio. Il
+ * pulsante porta fuori dall'admin, quindi il caricamento non e' una navigazione
+ * che possiamo seguire: lo stato di attesa e' a tempo, il minimo per non far
+ * partire due schede con due clic ravvicinati.
+ */
+function DatabaseAddress({ url }: { url: string }) {
+  const [opening, setOpening] = useState(false);
+
+  useEffect(() => {
+    if (!opening) return;
+    const timer = setTimeout(() => setOpening(false), 1500);
+    return () => clearTimeout(timer);
+  }, [opening]);
+
+  return (
+    <BlockStack gap="200">
+      <Text as="span" variant="bodyMd">
+        URL Database proprietario
+      </Text>
+      <InlineStack align="space-between" blockAlign="center" gap="300" wrap={false}>
+        <Text as="span" tone="subdued" breakWord>
+          {url}
+        </Text>
+        <Button
+          url={url}
+          target="_blank"
+          onClick={() => setOpening(true)}
+          loading={opening}
+          disabled={opening}
+        >
+          Vai al database
+        </Button>
+      </InlineStack>
+    </BlockStack>
+  );
+}
+
+export function DatabaseCard({
+  connected,
+  appUrl,
+  readKey,
+  databaseUrl,
+}: DatabaseCardProps) {
   return (
     <Card>
       <BlockStack gap="300">
@@ -100,6 +156,12 @@ export function DatabaseCard({ connected, appUrl, readKey }: DatabaseCardProps) 
           value={readKey}
           available={connected}
         />
+        {connected && databaseUrl && (
+          <>
+            <Divider />
+            <DatabaseAddress url={databaseUrl} />
+          </>
+        )}
       </BlockStack>
     </Card>
   );

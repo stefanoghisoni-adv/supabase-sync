@@ -1,12 +1,13 @@
 import type { LoaderFunctionArgs } from '@remix-run/node';
 import { json } from '@remix-run/node';
-import { useLoaderData, useNavigation } from '@remix-run/react';
+import { useLoaderData } from '@remix-run/react';
 import { Page, Layout, Box } from '@shopify/polaris';
 import { SettingsIcon } from '@shopify/polaris-icons';
 import { authenticate } from '~/shopify.server';
 import { prisma } from '~/db.server';
 import { SyncLog } from '~/components/Dashboard/SyncLog';
 import { findPlanByName } from '~/lib/billing/find-plan.server';
+import { useNavLoading } from '~/components/Dashboard/nav-loading';
 
 // Quanti eventi mostrare: la tabella resta una lista unica senza paginazione,
 // quindi teniamo il tetto a 20 righe per non allungarla a dismisura.
@@ -42,12 +43,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
 export default function Logs() {
   const { jobs, customersEnabled, timeZone } = useLoaderData<typeof loader>();
 
-  // Stesso comportamento della dashboard: mentre Remix carica /settings/supabase
-  // il pulsante mostra lo spinner e si disabilita.
-  const navigation = useNavigation();
-  const loadingSettings =
-    navigation.state === 'loading' &&
-    navigation.location?.pathname === '/settings/supabase';
+  // Spinner e disabilitazione solo se e' stato questo pulsante a far partire
+  // la navigazione: dal menu laterale dell'admin deve restare fermo.
+  const settings = useNavLoading('/settings/supabase');
 
   return (
     <Page
@@ -59,8 +57,9 @@ export default function Logs() {
           icon: SettingsIcon,
           url: '/settings/supabase',
           accessibilityLabel: 'Impostazioni',
-          disabled: loadingSettings,
-          loading: loadingSettings,
+          onAction: settings.start,
+          disabled: settings.loading,
+          loading: settings.loading,
         },
       ]}
     >

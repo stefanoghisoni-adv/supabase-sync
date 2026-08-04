@@ -1,6 +1,6 @@
-import { useNavigation } from '@remix-run/react';
 import { Banner, BlockStack, InlineStack, Text, Button } from '@shopify/polaris';
 import { productLimitMessage } from './product-quota';
+import { useNavLoading } from './nav-loading';
 
 export interface PlanLimitBannerProps {
   /** Prodotti idonei conteggiati ora. */
@@ -17,9 +17,7 @@ export interface PlanLimitBannerProps {
  * idonei scendono sotto la soglia.
  */
 export function PlanLimitBanner({ count, limit }: PlanLimitBannerProps) {
-  const navigation = useNavigation();
-  const loadingPlan =
-    navigation.state === 'loading' && navigation.location?.pathname === '/plan';
+  const plan = useNavLoading('/plan');
 
   const message = productLimitMessage(count, limit);
   if (!message) return null;
@@ -29,7 +27,12 @@ export function PlanLimitBanner({ count, limit }: PlanLimitBannerProps) {
       <BlockStack gap="200">
         <Text as="p">{message}</Text>
         <InlineStack>
-          <Button url="/plan" disabled={loadingPlan} loading={loadingPlan}>
+          <Button
+            url="/plan"
+            onClick={plan.start}
+            disabled={plan.loading}
+            loading={plan.loading}
+          >
             Aggiorna piano
           </Button>
         </InlineStack>

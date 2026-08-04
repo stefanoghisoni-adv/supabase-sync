@@ -1,6 +1,6 @@
-import { useNavigation } from '@remix-run/react';
 import { Card, BlockStack, Text, Button, Box } from '@shopify/polaris';
 import { MetricRow } from './MetricRow';
+import { useNavLoading } from './nav-loading';
 
 const OPT_IN_INFO = 'Qui vengono identificati i clienti che hanno acconsentito al marketing';
 const OPT_OUT_INFO = 'Qui vengono identificati i clienti che non hanno acconsentito al marketing';
@@ -24,9 +24,7 @@ export function CustomersCard({
 
   // Stesso comportamento degli altri pulsanti-link della dashboard: mentre Remix
   // carica /plan il pulsante mostra lo spinner e si disabilita.
-  const navigation = useNavigation();
-  const loadingPlan =
-    navigation.state === 'loading' && navigation.location?.pathname === '/plan';
+  const plan = useNavLoading('/plan');
 
   return (
     <Card>
@@ -66,8 +64,9 @@ export function CustomersCard({
               <Button
                 variant="primary"
                 url="/plan"
-                disabled={loadingPlan}
-                loading={loadingPlan}
+                onClick={plan.start}
+                disabled={plan.loading}
+                loading={plan.loading}
               >
                 Aggiorna piano
               </Button>

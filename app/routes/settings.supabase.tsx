@@ -78,6 +78,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
     config: {
       readToken,
       proxyBaseUrl,
+      // Indirizzo del progetto del merchant: e' suo, e da qui ci arriva con un
+      // clic invece di ricordarselo.
+      databaseUrl: config.supabaseUrl,
       syncIntervalHours: config.syncIntervalHours,
     },
   });
@@ -115,6 +118,7 @@ export default function SupabaseSettings() {
                 connected={account.connected}
                 appUrl={config?.proxyBaseUrl || null}
                 readKey={config?.readToken ?? null}
+                databaseUrl={config?.databaseUrl ?? null}
               />
             </InlineGrid>
 
