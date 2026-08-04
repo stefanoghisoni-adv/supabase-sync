@@ -1,4 +1,5 @@
 import { planLabel } from './account-format';
+import { samePlanName } from '~/lib/billing/plan-name';
 
 // `lastSyncedPlan` null significa "nessuna sync completata": e' il flusso normale
 // di primo utilizzo, non un cambio di piano da segnalare.
@@ -7,7 +8,11 @@ export function hasPlanChanged(
   lastSyncedPlan: string | null,
 ): boolean {
   if (!lastSyncedPlan) return false;
-  return currentPlan !== lastSyncedPlan;
+  // Confronto insensibile a maiuscole e spazi: i due nomi vengono scritti in
+  // momenti diversi, e una semplice differenza di scrittura ("pro" contro
+  // "Pro") farebbe credere a un cambio di piano che non c'e' — con il banner
+  // "Piano modificato" e il recupero che ripartono a ogni giro.
+  return !samePlanName(currentPlan, lastSyncedPlan);
 }
 
 

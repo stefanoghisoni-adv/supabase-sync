@@ -4,6 +4,7 @@ import { json } from '@remix-run/node';
 import { authenticate } from '~/shopify.server';
 import { prisma } from '~/db.server';
 import { buildMonthSeries, monthLabel } from '~/lib/stats/history-series';
+import { findPlanByName } from '~/lib/billing/find-plan.server';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const { session } = await authenticate.admin(request);
@@ -29,7 +30,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       where: { shopId: shop.id, day: { lt: monthStart } },
       orderBy: { day: 'desc' },
     }),
-    prisma.plan.findUnique({ where: { planName: shop.currentPlan } }),
+    findPlanByName(shop.currentPlan),
   ]);
 
   return json({

@@ -4,16 +4,24 @@ vi.mock('~/lib/webhooks/verify.server', () => ({ verifyWebhook: () => true }));
 vi.mock('~/lib/billing/apply-plan.server', () => ({
   applyPlanToShop: vi.fn(),
 }));
+// Le due ricerche di piano restano distinte di proposito: il piano
+// dell'abbonamento passa da findPlanByName (confronto per nome, insensibile a
+// maiuscole), quello gratuito da una query per prezzo. Mockarle insieme
+// renderebbe impossibile distinguerle.
+vi.mock('~/lib/billing/find-plan.server', () => ({
+  findPlanByName: vi.fn(),
+}));
 vi.mock('~/db.server', () => ({
   prisma: {
     shop: { findUnique: vi.fn() },
-    plan: { findUnique: vi.fn(), findFirst: vi.fn() },
+    plan: { findFirst: vi.fn() },
     billingCharge: { updateMany: vi.fn() },
   },
 }));
 
 import { action } from './webhooks.app-subscriptions.update';
 import { applyPlanToShop } from '~/lib/billing/apply-plan.server';
+import { findPlanByName } from '~/lib/billing/find-plan.server';
 import { prisma } from '~/db.server';
 
 function req(
@@ -72,7 +80,7 @@ describe('webhook app_subscriptions/update', () => {
       id: 'shop-1',
       activeChargeId: '999',
     });
-    (prisma.plan.findUnique as any).mockResolvedValue({
+    (findPlanByName as any).mockResolvedValue({
       planName: 'pro',
       trialDays: 7,
     });
@@ -101,9 +109,35 @@ describe('webhook app_subscriptions/update', () => {
     });
   });
 
+  it('ACTIVE gia allineato → non riapplica (il periodo di prova non riparte)', async () => {
+    // Shopify puo' consegnare piu' volte lo stesso ACTIVE. Riapplicare il piano
+    // ricalcolerebbe trialEndsAt da adesso, regalando giorni di prova a ogni
+    // consegna. Il confronto sul nome non guarda le maiuscole: il listino puo'
+    // essere stato rinominato dopo l'attivazione.
+    (prisma.shop.findUnique as any).mockResolvedValue({
+      id: 'shop-1',
+      currentPlan: 'pro',
+      activeChargeId: '123',
+    });
+    (findPlanByName as any).mockResolvedValue({ planName: 'Pro', trialDays: 7 });
+
+    const payload = {
+      app_subscription: {
+        admin_graphql_api_id: 'gid://shopify/AppSubscription/123',
+        name: 'Pro',
+        status: 'ACTIVE',
+      },
+    };
+
+    const res = await action({ request: req(payload) } as any);
+
+    expect(res.status).toBe(200);
+    expect(applyPlanToShop).not.toHaveBeenCalled();
+  });
+
   it('ACTIVE + piano non nel listino → ignora', async () => {
     (prisma.shop.findUnique as any).mockResolvedValue({ id: 'shop-1' });
-    (prisma.plan.findUnique as any).mockResolvedValue(null);
+    (findPlanByName as any).mockResolvedValue(null);
 
     const payload = {
       app_subscription: {

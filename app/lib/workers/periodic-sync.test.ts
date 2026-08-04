@@ -18,7 +18,7 @@ vi.mock('../../db.server', () => ({
       deleteMany: vi.fn(async () => ({ count: 0 })),
     },
     plan: {
-      findUnique: vi.fn(),
+      findFirst: vi.fn(),
     },
   },
 }));
@@ -537,7 +537,7 @@ describe('Periodic sync check processor', () => {
       },
     };
     (prisma.shop.findUnique as any).mockResolvedValue(mockShop);
-    (prisma.plan.findUnique as any).mockResolvedValue({ maxProducts: null, customersSyncEnabled: false });
+    (prisma.plan.findFirst as any).mockResolvedValue({ maxProducts: null, customersSyncEnabled: false });
     (prisma.syncJob.findFirst as any).mockResolvedValue(null);
     (prisma.syncJob.create as any).mockResolvedValue({ id: 'job-1' });
     (prisma.syncJob.update as any).mockResolvedValue({});
@@ -596,7 +596,7 @@ describe('Periodic sync check processor', () => {
         updatedAt: new Date('2026-07-01T00:00:00Z'),
       },
     });
-    (prisma.plan.findUnique as any).mockResolvedValue({
+    (prisma.plan.findFirst as any).mockResolvedValue({
       maxProducts: null,
       customersSyncEnabled: true,
     });
@@ -689,7 +689,7 @@ describe('Periodic sync check processor', () => {
       },
     };
     (prisma.shop.findUnique as any).mockResolvedValue(mockShop);
-    (prisma.plan.findUnique as any).mockResolvedValue({ maxProducts: null, customersSyncEnabled: false });
+    (prisma.plan.findFirst as any).mockResolvedValue({ maxProducts: null, customersSyncEnabled: false });
     (prisma.syncJob.findFirst as any).mockResolvedValue(null);
     (prisma.syncJob.create as any).mockResolvedValue({ id: 'job-1' });
     (prisma.syncJob.update as any).mockResolvedValue({});
@@ -781,7 +781,7 @@ describe('Periodic sync check processor', () => {
       },
     };
     (prisma.shop.findUnique as any).mockResolvedValue(mockShop);
-    (prisma.plan.findUnique as any).mockResolvedValue({ maxProducts: null, customersSyncEnabled: false });
+    (prisma.plan.findFirst as any).mockResolvedValue({ maxProducts: null, customersSyncEnabled: false });
     (prisma.syncJob.findFirst as any).mockResolvedValue(null);
     (prisma.syncJob.create as any).mockResolvedValue({ id: 'job-1' });
     (prisma.syncJob.update as any).mockResolvedValue({});

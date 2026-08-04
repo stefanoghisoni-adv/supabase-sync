@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const findUniqueShop = vi.fn();
 const updateShop = vi.fn();
-const findUniquePlan = vi.fn();
+const findPlanMock = vi.fn();
 const createCharge = vi.fn();
 const updateManyCharges = vi.fn();
 
@@ -24,7 +24,7 @@ vi.mock('~/db.server', () => ({
       findUnique: (...a: unknown[]) => findUniqueShop(...a),
       update: (...a: unknown[]) => updateShop(...a),
     },
-    plan: { findUnique: (...a: unknown[]) => findUniquePlan(...a) },
+    plan: { findFirst: (...a: unknown[]) => findPlanMock(...a) },
     billingCharge: {
       create: (...a: unknown[]) => createCharge(...a),
       updateMany: (...a: unknown[]) => updateManyCharges(...a),
@@ -62,6 +62,7 @@ describe('/billing/subscribe', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.SHOPIFY_APP_URL = 'https://app.example.com';
+    delete process.env.SHOPIFY_BILLING_TEST;
     findUniqueShop.mockResolvedValue({ ...SHOP });
     isDevelopmentStore.mockResolvedValue(false);
   });
@@ -82,25 +83,25 @@ describe('/billing/subscribe', () => {
     findUniqueShop.mockResolvedValue({ ...SHOP, currentPlan: 'lifetime' });
     const res = await call('Pro');
     expect(res.status).toBe(403);
-    expect(findUniquePlan).not.toHaveBeenCalled();
+    expect(findPlanMock).not.toHaveBeenCalled();
   });
 
   it('piano inesistente → 400 con messaggio per il merchant', async () => {
-    findUniquePlan.mockResolvedValue(null);
+    findPlanMock.mockResolvedValue(null);
     const res = await call('Inventato');
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({ error: 'Il piano scelto non è disponibile.' });
   });
 
   it('piano non acquistabile → 400', async () => {
-    findUniquePlan.mockResolvedValue({ planName: 'lifetime', priceMonthly: 0, trialDays: null });
+    findPlanMock.mockResolvedValue({ planName: 'lifetime', priceMonthly: 0, trialDays: null });
     const res = await call('lifetime');
     expect(res.status).toBe(400);
     expect(createAppSubscription).not.toHaveBeenCalled();
   });
 
   it('piano gia attuale → 400', async () => {
-    findUniquePlan.mockResolvedValue({ planName: 'Free', priceMonthly: 0, trialDays: 7 });
+    findPlanMock.mockResolvedValue({ planName: 'Free', priceMonthly: 0, trialDays: 7 });
     const res = await call('Free');
     expect(res.status).toBe(400);
     expect(await res.json()).toEqual({ error: 'Stai già usando questo piano.' });
@@ -108,7 +109,7 @@ describe('/billing/subscribe', () => {
 
   it('piano gratuito: cancella l abbonamento in corso e applica subito il piano', async () => {
     findUniqueShop.mockResolvedValue({ ...SHOP, currentPlan: 'Pro', activeChargeId: '9876' });
-    findUniquePlan.mockResolvedValue({ planName: 'Free', priceMonthly: 0, trialDays: null });
+    findPlanMock.mockResolvedValue({ planName: 'Free', priceMonthly: 0, trialDays: null });
 
     const res = await call('Free');
 
@@ -133,7 +134,7 @@ describe('/billing/subscribe', () => {
   });
 
   it('piano a pagamento: restituisce confirmationUrl e registra l addebito in attesa', async () => {
-    findUniquePlan.mockResolvedValue({ planName: 'Pro', priceMonthly: 29, trialDays: 7 });
+    findPlanMock.mockResolvedValue({ planName: 'Pro', priceMonthly: 29, trialDays: 7 });
     createAppSubscription.mockResolvedValue({
       confirmationUrl: 'https://shopify/confirm/1',
       subscriptionGid: 'gid://shopify/AppSubscription/1234',
@@ -161,7 +162,7 @@ describe('/billing/subscribe', () => {
   });
 
   it('l URL di ritorno rientra nel contesto embedded', async () => {
-    findUniquePlan.mockResolvedValue({ planName: 'Pro', priceMonthly: 29, trialDays: 7 });
+    findPlanMock.mockResolvedValue({ planName: 'Pro', priceMonthly: 29, trialDays: 7 });
     createAppSubscription.mockResolvedValue({
       confirmationUrl: 'https://shopify/confirm/1',
       subscriptionGid: 'gid://shopify/AppSubscription/1234',
@@ -182,7 +183,7 @@ describe('/billing/subscribe', () => {
 
   it('negozio di sviluppo: addebito di prova', async () => {
     isDevelopmentStore.mockResolvedValue(true);
-    findUniquePlan.mockResolvedValue({ planName: 'Pro', priceMonthly: 29, trialDays: 7 });
+    findPlanMock.mockResolvedValue({ planName: 'Pro', priceMonthly: 29, trialDays: 7 });
     createAppSubscription.mockResolvedValue({
       confirmationUrl: 'https://shopify/confirm/1',
       subscriptionGid: 'gid://shopify/AppSubscription/1234',
@@ -194,8 +195,52 @@ describe('/billing/subscribe', () => {
     expect(createAppSubscription.mock.calls[0][1].test).toBe(true);
   });
 
+  it('SHOPIFY_BILLING_TEST=true: addebito di prova anche fuori dai negozi di sviluppo', async () => {
+    process.env.SHOPIFY_BILLING_TEST = 'true';
+    isDevelopmentStore.mockResolvedValue(false);
+    findPlanMock.mockResolvedValue({ planName: 'Pro', priceMonthly: 29, trialDays: 7 });
+    createAppSubscription.mockResolvedValue({
+      confirmationUrl: 'https://shopify/confirm/1',
+      subscriptionGid: 'gid://shopify/AppSubscription/1234',
+      chargeId: 1234n,
+    });
+
+    await call('Pro');
+
+    expect(createAppSubscription.mock.calls[0][1].test).toBe(true);
+    // Interruttore acceso: non serve nemmeno chiedere a Shopify che negozio e'.
+    expect(isDevelopmentStore).not.toHaveBeenCalled();
+  });
+
+  it('SHOPIFY_BILLING_TEST con un valore diverso da true: addebito reale', async () => {
+    process.env.SHOPIFY_BILLING_TEST = '1';
+    isDevelopmentStore.mockResolvedValue(false);
+    findPlanMock.mockResolvedValue({ planName: 'Pro', priceMonthly: 29, trialDays: 7 });
+    createAppSubscription.mockResolvedValue({
+      confirmationUrl: 'https://shopify/confirm/1',
+      subscriptionGid: 'gid://shopify/AppSubscription/1234',
+      chargeId: 1234n,
+    });
+
+    await call('Pro');
+
+    expect(createAppSubscription.mock.calls[0][1].test).toBe(false);
+  });
+
+  it('stesso piano scritto con altre maiuscole → nessun cambio da fare', async () => {
+    // Il listino e' stato rinominato dopo l'attivazione: shops.current_plan dice
+    // "Free", il merchant chiede "free". E' lo stesso piano.
+    findPlanMock.mockResolvedValue({ planName: 'Free', priceMonthly: 0, trialDays: null });
+
+    const res = await call('free');
+
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ error: 'Stai già usando questo piano.' });
+    expect(createAppSubscription).not.toHaveBeenCalled();
+  });
+
   it('guasto su Shopify → 500 senza dettagli tecnici', async () => {
-    findUniquePlan.mockResolvedValue({ planName: 'Pro', priceMonthly: 29, trialDays: 7 });
+    findPlanMock.mockResolvedValue({ planName: 'Pro', priceMonthly: 29, trialDays: 7 });
     createAppSubscription.mockRejectedValue(new Error('appSubscriptionCreate: boom'));
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 

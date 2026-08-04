@@ -39,6 +39,7 @@ import {
   syncCtaState,
 } from '~/components/Dashboard/plan-upgrade';
 import { firstPlanWithCustomersSync } from '~/components/Dashboard/account-format';
+import { samePlanName } from '~/lib/billing/plan-name';
 import { authorizationBanners } from '~/components/Dashboard/authorization-banners';
 import { SchemaUpdateBanner } from '~/components/Dashboard/SchemaUpdateBanner';
 import { needsSchemaUpdate } from '~/lib/supabase/merchant-migrations';
@@ -122,7 +123,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       }),
     ]);
 
-    const plan = plans.find((p) => p.planName === shop.currentPlan) ?? null;
+    const plan = plans.find((p) => samePlanName(p.planName, shop.currentPlan)) ?? null;
 
     // Autorizzazione: se il trial (giorni definiti nel piano) è scaduto e il
     // negozio è ancora ENABLED, lo portiamo automaticamente in PENDING (persistente).
@@ -169,7 +170,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const planChanged = hasPlanChanged(shop.currentPlan, shop.lastSyncedPlan);
     // I piani sono gia' tutti in memoria: nessuna seconda interrogazione.
     const previousPlan = planChanged && shop.lastSyncedPlan
-      ? plans.find((p) => p.planName === shop.lastSyncedPlan) ?? null
+      ? plans.find((p) => samePlanName(p.planName, shop.lastSyncedPlan)) ?? null
       : null;
 
     // Cambio di piano: l'allineamento non lo chiediamo al merchant, parte da solo.

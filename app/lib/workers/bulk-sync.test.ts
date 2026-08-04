@@ -19,7 +19,7 @@ vi.mock('../../db.server', () => ({
       deleteMany: vi.fn(async () => ({ count: 0 })),
     },
     plan: {
-      findUnique: vi.fn(),
+      findFirst: vi.fn(),
     },
   },
 }));
@@ -332,7 +332,7 @@ describe('Initial bulk sync processor', () => {
 
     vi.mocked(prisma.shop.findUnique).mockResolvedValue(mockShop as any);
     // Piano con tetto di 2 prodotti.
-    vi.mocked(prisma.plan.findUnique).mockResolvedValue({ maxProducts: 2 } as any);
+    vi.mocked(prisma.plan.findFirst).mockResolvedValue({ maxProducts: 2 } as any);
     vi.mocked(prisma.syncJob.create).mockResolvedValue({ id: 'sync-free' } as any);
     vi.mocked(prisma.syncJob.update).mockResolvedValue({} as any);
 
@@ -419,7 +419,7 @@ describe('Initial bulk sync processor', () => {
       },
     };
     (prisma.shop.findUnique as any).mockResolvedValue(mockShop);
-    (prisma.plan.findUnique as any).mockResolvedValue({ maxProducts: null, customersSyncEnabled: false });
+    (prisma.plan.findFirst as any).mockResolvedValue({ maxProducts: null, customersSyncEnabled: false });
     (prisma.syncJob.create as any).mockResolvedValue({ id: 'job-1' });
     (prisma.syncJob.update as any).mockResolvedValue({});
 
@@ -480,7 +480,7 @@ describe('Initial bulk sync processor', () => {
       },
     };
     (prisma.shop.findUnique as any).mockResolvedValue(mockShop);
-    (prisma.plan.findUnique as any).mockResolvedValue({ maxProducts: null, customersSyncEnabled: false });
+    (prisma.plan.findFirst as any).mockResolvedValue({ maxProducts: null, customersSyncEnabled: false });
     (prisma.syncJob.create as any).mockResolvedValue({ id: 'job-1' });
     (prisma.syncJob.update as any).mockResolvedValue({});
 
@@ -523,7 +523,7 @@ describe('Initial bulk sync processor', () => {
       },
     };
     (prisma.shop.findUnique as any).mockResolvedValue(mockShop);
-    (prisma.plan.findUnique as any).mockResolvedValue({ maxProducts: null, customersSyncEnabled: false });
+    (prisma.plan.findFirst as any).mockResolvedValue({ maxProducts: null, customersSyncEnabled: false });
     (prisma.syncJob.create as any).mockResolvedValue({ id: 'job-1' });
     (prisma.syncJob.update as any).mockResolvedValue({});
 
@@ -570,7 +570,7 @@ describe('Initial bulk sync processor', () => {
       },
     };
     (prisma.shop.findUnique as any).mockResolvedValue(mockShop);
-    (prisma.plan.findUnique as any).mockResolvedValue({ maxProducts: null, customersSyncEnabled: false });
+    (prisma.plan.findFirst as any).mockResolvedValue({ maxProducts: null, customersSyncEnabled: false });
     (prisma.syncJob.create as any).mockResolvedValue({ id: 'job-1' });
     (prisma.syncJob.update as any).mockResolvedValue({});
 
@@ -618,7 +618,7 @@ describe('Initial bulk sync processor', () => {
       },
     };
     (prisma.shop.findUnique as any).mockResolvedValue(mockShop);
-    (prisma.plan.findUnique as any).mockResolvedValue({ maxProducts: 1, customersSyncEnabled: false });
+    (prisma.plan.findFirst as any).mockResolvedValue({ maxProducts: 1, customersSyncEnabled: false });
     (prisma.syncJob.create as any).mockResolvedValue({ id: 'job-1' });
     (prisma.syncJob.update as any).mockResolvedValue({});
 
@@ -664,7 +664,7 @@ describe('Initial bulk sync processor', () => {
       },
     };
     vi.mocked(prisma.shop.findUnique).mockResolvedValue(mockShop as any);
-    vi.mocked(prisma.plan.findUnique).mockResolvedValue({ maxProducts: null, customersSyncEnabled: false } as any);
+    vi.mocked(prisma.plan.findFirst).mockResolvedValue({ maxProducts: null, customersSyncEnabled: false } as any);
     vi.mocked(prisma.syncJob.create).mockResolvedValue({ id: 'job-1' } as any);
     vi.mocked(prisma.syncJob.update).mockResolvedValue({} as any);
     vi.mocked(prisma.shop.update).mockResolvedValue({} as any);
@@ -709,7 +709,7 @@ describe('Initial bulk sync processor', () => {
       },
     };
     vi.mocked(prisma.shop.findUnique).mockResolvedValue(mockShop as any);
-    vi.mocked(prisma.plan.findUnique).mockResolvedValue({ maxProducts: null, customersSyncEnabled: true } as any);
+    vi.mocked(prisma.plan.findFirst).mockResolvedValue({ maxProducts: null, customersSyncEnabled: true } as any);
     vi.mocked(prisma.syncJob.create).mockResolvedValue({ id: 'job-1' } as any);
     vi.mocked(prisma.syncJob.update).mockResolvedValue({} as any);
     vi.mocked(prisma.shop.update).mockResolvedValue({} as any);
@@ -772,7 +772,7 @@ describe('Initial bulk sync processor', () => {
       },
     };
     vi.mocked(prisma.shop.findUnique).mockResolvedValue(mockShop as any);
-    vi.mocked(prisma.plan.findUnique).mockResolvedValue({ maxProducts: null, customersSyncEnabled: true } as any);
+    vi.mocked(prisma.plan.findFirst).mockResolvedValue({ maxProducts: null, customersSyncEnabled: true } as any);
     vi.mocked(prisma.syncJob.create).mockResolvedValue({ id: 'job-1' } as any);
     vi.mocked(prisma.syncJob.update).mockResolvedValue({} as any);
     vi.mocked(prisma.shop.update).mockResolvedValue({} as any);
@@ -839,7 +839,7 @@ describe('Initial bulk sync processor', () => {
       },
     };
     vi.mocked(prisma.shop.findUnique).mockResolvedValue(mockShop as any);
-    vi.mocked(prisma.plan.findUnique).mockResolvedValue({ maxProducts: null, customersSyncEnabled: false } as any);
+    vi.mocked(prisma.plan.findFirst).mockResolvedValue({ maxProducts: null, customersSyncEnabled: false } as any);
     vi.mocked(prisma.syncJob.create).mockResolvedValue({ id: 'job-1' } as any);
     vi.mocked(prisma.syncJob.update).mockResolvedValue({} as any);
     vi.mocked(prisma.shop.update).mockResolvedValue({} as any);
@@ -934,7 +934,7 @@ describe('Initial bulk sync processor', () => {
       },
     };
     vi.mocked(prisma.shop.findUnique).mockResolvedValue(mockShop as any);
-    vi.mocked(prisma.plan.findUnique).mockResolvedValue({ maxProducts: null, customersSyncEnabled: true } as any);
+    vi.mocked(prisma.plan.findFirst).mockResolvedValue({ maxProducts: null, customersSyncEnabled: true } as any);
     vi.mocked(prisma.syncJob.create).mockResolvedValue({ id: 'job-1' } as any);
     vi.mocked(prisma.syncJob.update).mockResolvedValue({} as any);
     vi.mocked(prisma.shop.update).mockResolvedValue({} as any);
@@ -1008,7 +1008,7 @@ describe('Initial bulk sync processor', () => {
       },
     };
     vi.mocked(prisma.shop.findUnique).mockResolvedValue(mockShop as any);
-    vi.mocked(prisma.plan.findUnique).mockResolvedValue({ maxProducts: null, customersSyncEnabled: false } as any);
+    vi.mocked(prisma.plan.findFirst).mockResolvedValue({ maxProducts: null, customersSyncEnabled: false } as any);
     vi.mocked(prisma.syncJob.create).mockResolvedValue({ id: 'job-1' } as any);
     vi.mocked(prisma.syncJob.update).mockResolvedValue({} as any);
 
@@ -1059,7 +1059,7 @@ describe('Initial bulk sync processor', () => {
       },
     };
     vi.mocked(prisma.shop.findUnique).mockResolvedValue(mockShop as any);
-    vi.mocked(prisma.plan.findUnique).mockResolvedValue({ maxProducts: null, customersSyncEnabled: false } as any);
+    vi.mocked(prisma.plan.findFirst).mockResolvedValue({ maxProducts: null, customersSyncEnabled: false } as any);
     vi.mocked(prisma.syncJob.create).mockResolvedValue({ id: 'job-1' } as any);
     vi.mocked(prisma.syncJob.update).mockResolvedValue({} as any);
     vi.mocked(prisma.shop.update).mockResolvedValue({} as any);

@@ -3,6 +3,7 @@ import { decrypt } from '~/utils/crypto.server';
 import { getValidAccessToken } from '~/lib/supabase-oauth.server';
 import { runQuery } from '~/lib/supabase-management.server';
 import { validateSupabaseUrl } from '~/utils/supabase-url.server';
+import { findPlanByName } from '~/lib/billing/find-plan.server';
 import {
   LATEST_SCHEMA_VERSION,
   buildSchemaUpdateSQL,
@@ -52,7 +53,7 @@ export async function applyMerchantSchemaUpdate(
 
   // Le tabelle da allineare dipendono dal piano: i clienti si toccano solo se
   // il piano li prevede, altrimenti la loro tabella non esiste nemmeno.
-  const plan = await prisma.plan.findUnique({ where: { planName: shop.currentPlan } });
+  const plan = await findPlanByName(shop.currentPlan);
   const sql = buildSchemaUpdateSQL(config.schemaVersion, plan?.customersSyncEnabled ?? false);
   if (!sql) return { status: 'up_to_date', version: config.schemaVersion };
 

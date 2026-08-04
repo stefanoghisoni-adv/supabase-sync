@@ -8,6 +8,7 @@ import { json } from '@remix-run/node';
 import { authenticate } from '~/shopify.server';
 import { prisma } from '~/db.server';
 import { ShopifyAPIClient } from '~/lib/shopify-api.server';
+import { findPlanByName } from '~/lib/billing/find-plan.server';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const { session } = await authenticate.admin(request);
@@ -19,9 +20,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     throw new Response('Shop not found', { status: 404 });
   }
 
-  const plan = await prisma.plan.findUnique({
-    where: { planName: shop.currentPlan },
-  });
+  const plan = await findPlanByName(shop.currentPlan);
   const customersEnabled = plan?.customersSyncEnabled ?? false;
 
   const client = new ShopifyAPIClient(shop.shopDomain, shop.accessToken);

@@ -4,6 +4,8 @@ import { verifyWebhook } from '~/lib/webhooks/verify.server';
 import { prisma } from '~/db.server';
 import { applyPlanToShop } from '~/lib/billing/apply-plan.server';
 import { parseGidId } from '~/lib/billing/subscription.server';
+import { findPlanByName } from '~/lib/billing/find-plan.server';
+import { samePlanName } from '~/lib/billing/plan-name';
 import { subscriptionOutcome } from '~/lib/billing/subscription-status';
 
 /**
@@ -80,9 +82,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
     if (outcome === 'active') {
       // Abbonamento attivo: allinea il piano se il nome e' nel listino.
-      const plan = await prisma.plan.findUnique({
-        where: { planName: subscription.name },
-      });
+      const plan = await findPlanByName(subscription.name);
 
       if (!plan) {
         // Nome non nel listino: non e' un abbonamento gestito da questa app.
@@ -96,7 +96,10 @@ export async function action({ request }: ActionFunctionArgs) {
       // piu' volte, e riapplicare il piano farebbe ripartire da capo il periodo
       // di prova (trialEndsAt viene ricalcolato da adesso), regalando giorni
       // gratis a ogni consegna ripetuta.
-      if (shop.currentPlan === plan.planName && shop.activeChargeId === subscriptionIdStr) {
+      if (
+        samePlanName(shop.currentPlan, plan.planName) &&
+        shop.activeChargeId === subscriptionIdStr
+      ) {
         console.log(
           `[app_subscriptions/update] ${shopDomain} e' gia' su ${plan.planName}, niente da fare`,
         );

@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const findUniqueShop = vi.fn();
 const findUniqueSyncJob = vi.fn();
-const findUniquePlan = vi.fn();
+const findPlanMock = vi.fn();
 
 vi.mock('~/shopify.server', () => ({
   authenticate: { admin: async () => ({ session: { shop: 'test-shop.myshopify.com' } }) },
@@ -12,7 +12,7 @@ vi.mock('~/db.server', () => ({
   prisma: {
     shop: { findUnique: (...a: unknown[]) => findUniqueShop(...a) },
     syncJob: { findUnique: (...a: unknown[]) => findUniqueSyncJob(...a) },
-    plan: { findUnique: (...a: unknown[]) => findUniquePlan(...a) },
+    plan: { findFirst: (...a: unknown[]) => findPlanMock(...a) },
   },
 }));
 
@@ -29,7 +29,7 @@ describe('/api/sync-job/:id/details', () => {
       shopDomain: 'test-shop.myshopify.com',
       currentPlan: 'pro',
     });
-    findUniquePlan.mockResolvedValue({ customersSyncEnabled: true });
+    findPlanMock.mockResolvedValue({ customersSyncEnabled: true });
   });
 
   it('404 se lo shop non esiste', async () => {
@@ -206,7 +206,7 @@ describe('/api/sync-job/:id/details', () => {
   });
 
   it('customersEnabled false quando il piano non ha la sync clienti', async () => {
-    findUniquePlan.mockResolvedValue({ customersSyncEnabled: false });
+    findPlanMock.mockResolvedValue({ customersSyncEnabled: false });
     findUniqueSyncJob.mockResolvedValue({
       id: 'job-1',
       shopId: 'shop-1',

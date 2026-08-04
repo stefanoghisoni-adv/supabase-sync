@@ -13,6 +13,7 @@ import {
 import { buildMerchantSchemaSQL } from '~/lib/supabase-schema';
 import { isAuthorized } from '~/utils/authorization.server';
 import { issueReadProxyToken } from '~/lib/read-proxy/token.server';
+import { findPlanByName } from '~/lib/billing/find-plan.server';
 import {
   detectCreatedTables,
   tableCreationJobType,
@@ -32,9 +33,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
   // Tabelle da garantire in base al piano: products sempre, customers solo se
   // la sincronizzazione clienti è inclusa.
-  const plan = await prisma.plan.findUnique({
-    where: { planName: shop.currentPlan },
-  });
+  const plan = await findPlanByName(shop.currentPlan);
   const includeCustomers = plan?.customersSyncEnabled ?? false;
   if (!isAuthorized(shop.authorization)) {
     return json(

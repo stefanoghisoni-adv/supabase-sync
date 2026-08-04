@@ -10,6 +10,7 @@ import {
 import { recordEligibilitySnapshotIfMissing } from '~/lib/stats/eligibility-snapshot.server';
 import { hasPlanChanged } from '~/components/Dashboard/plan-upgrade';
 import { isAuthorized } from '~/utils/authorization.server';
+import { findPlanByName } from '~/lib/billing/find-plan.server';
 
 /**
  * Cron-triggered sync endpoint (replaces the long-running BullMQ worker on the
@@ -88,9 +89,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     }
 
     try {
-      const plan = await prisma.plan.findUnique({
-        where: { planName: shop.currentPlan },
-      });
+      const plan = await findPlanByName(shop.currentPlan);
       if (!plan) continue;
 
       // Il piano e' cambiato dopo l'ultima sync completa: allineamento automatico

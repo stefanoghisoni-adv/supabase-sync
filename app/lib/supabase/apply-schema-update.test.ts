@@ -1,13 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const shopFindUnique = vi.fn();
-const planFindUnique = vi.fn();
+const findPlanMock = vi.fn();
 const configUpdate = vi.fn();
 
 vi.mock('~/db.server', () => ({
   prisma: {
     shop: { findUnique: (...a: unknown[]) => shopFindUnique(...a) },
-    plan: { findUnique: (...a: unknown[]) => planFindUnique(...a) },
+    plan: { findFirst: (...a: unknown[]) => findPlanMock(...a) },
     supabaseConfig: { update: (...a: unknown[]) => configUpdate(...a) },
   },
 }));
@@ -43,7 +43,7 @@ describe('applyMerchantSchemaUpdate', () => {
     vi.clearAllMocks();
     vi.stubGlobal('fetch', vi.fn());
     clearSchemaUpdateAttempts();
-    planFindUnique.mockResolvedValue({ customersSyncEnabled: true });
+    findPlanMock.mockResolvedValue({ customersSyncEnabled: true });
     configUpdate.mockResolvedValue({});
   });
 
@@ -111,7 +111,7 @@ describe('applyMerchantSchemaUpdate', () => {
 
   it('il piano senza clienti non fa toccare la loro tabella', async () => {
     shopFindUnique.mockResolvedValue(shopRow());
-    planFindUnique.mockResolvedValue({ customersSyncEnabled: false });
+    findPlanMock.mockResolvedValue({ customersSyncEnabled: false });
     vi.mocked(getValidAccessToken).mockResolvedValue('token');
 
     await applyMerchantSchemaUpdate('shop-1');
@@ -125,7 +125,7 @@ describe('triggerMerchantSchemaUpdate', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     clearSchemaUpdateAttempts();
-    planFindUnique.mockResolvedValue({ customersSyncEnabled: true });
+    findPlanMock.mockResolvedValue({ customersSyncEnabled: true });
     configUpdate.mockResolvedValue({});
     shopFindUnique.mockResolvedValue(shopRow());
     vi.mocked(getValidAccessToken).mockResolvedValue('token');

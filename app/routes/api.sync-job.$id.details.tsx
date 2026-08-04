@@ -7,6 +7,7 @@ import type { LoaderFunctionArgs } from '@remix-run/node';
 import { json } from '@remix-run/node';
 import { authenticate } from '~/shopify.server';
 import { prisma } from '~/db.server';
+import { findPlanByName } from '~/lib/billing/find-plan.server';
 
 export interface SyncDetailRow {
   id: string;
@@ -79,9 +80,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     });
   }
 
-  const plan = await prisma.plan.findUnique({
-    where: { planName: shop.currentPlan },
-  });
+  const plan = await findPlanByName(shop.currentPlan);
 
   const customersEnabled = plan?.customersSyncEnabled ?? false;
 

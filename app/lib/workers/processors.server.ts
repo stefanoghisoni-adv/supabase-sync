@@ -23,6 +23,7 @@ import { isCustomerOptedIn } from '../stats/customer-consent-stats';
 import { ensureCustomersTable } from '../supabase/ensure-customers-table.server';
 import { ensureProductsTable } from '../supabase/ensure-products-table.server';
 import { applyMerchantSchemaUpdate } from '../supabase/apply-schema-update.server';
+import { findPlanByName } from '../billing/find-plan.server';
 
 // Solo la parte del Job BullMQ che i processor usano davvero. Tipandola cosi'
 // il bulk sync puo' girare anche senza coda (allineamento automatico dal cron),
@@ -432,9 +433,7 @@ export async function processPeriodicSyncCheck(shopId: string): Promise<void> {
 
   // Piano del negozio: tetto prodotti (maxProducts, null = illimitato) e
   // abilitazione sync clienti. Riusato più sotto per la sync dei clienti.
-  const plan = await prisma.plan.findUnique({
-    where: { planName: shop.currentPlan },
-  });
+  const plan = await findPlanByName(shop.currentPlan);
   const maxProducts = plan?.maxProducts ?? null;
 
   // Get last periodic sync timestamp
@@ -710,9 +709,7 @@ export async function processInitialBulkSync(
 
   // Piano del negozio: definisce il tetto di prodotti sincronizzabili
   // (maxProducts) e se la sync dei clienti è inclusa. null = illimitato.
-  const plan = await prisma.plan.findUnique({
-    where: { planName: shop.currentPlan },
-  });
+  const plan = await findPlanByName(shop.currentPlan);
   const maxProducts = plan?.maxProducts ?? null;
 
   let totalProducts = 0;

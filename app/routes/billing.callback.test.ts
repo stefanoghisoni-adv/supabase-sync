@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const findUniqueShop = vi.fn();
 const updateShop = vi.fn();
-const findUniquePlan = vi.fn();
+const findPlanMock = vi.fn();
 const updateManyCharges = vi.fn();
 
 const getSubscription = vi.fn();
@@ -23,7 +23,7 @@ vi.mock('~/db.server', () => ({
       findUnique: (...a: unknown[]) => findUniqueShop(...a),
       update: (...a: unknown[]) => updateShop(...a),
     },
-    plan: { findUnique: (...a: unknown[]) => findUniquePlan(...a) },
+    plan: { findFirst: (...a: unknown[]) => findPlanMock(...a) },
     billingCharge: { updateMany: (...a: unknown[]) => updateManyCharges(...a) },
   },
 }));
@@ -78,7 +78,7 @@ describe('/billing/callback', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     findUniqueShop.mockResolvedValue({ ...SHOP });
-    findUniquePlan.mockResolvedValue({ planName: 'Pro', priceMonthly: 29, trialDays: 7 });
+    findPlanMock.mockResolvedValue({ planName: 'Pro', priceMonthly: 29, trialDays: 7 });
     getActiveSubscriptions.mockResolvedValue([]);
   });
 
@@ -125,7 +125,7 @@ describe('/billing/callback', () => {
 
   it('abbonamento attivo con un nome fuori dal listino: nessuna attivazione', async () => {
     getSubscription.mockResolvedValue(subscription({ name: 'Piano Altrui' }));
-    findUniquePlan.mockResolvedValue(null);
+    findPlanMock.mockResolvedValue(null);
 
     const res = await call();
 

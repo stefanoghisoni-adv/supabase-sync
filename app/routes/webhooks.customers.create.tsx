@@ -6,6 +6,7 @@ import { createSupabaseClient } from '~/lib/supabase.server';
 import { prisma } from '~/db.server';
 import { isCustomerOptedIn } from '~/lib/stats/customer-consent-stats';
 import type { ShopifyCustomer } from '~/types/shopify';
+import { findPlanByName } from '~/lib/billing/find-plan.server';
 
 export async function action({ request }: ActionFunctionArgs) {
   // Verify HMAC signature
@@ -40,9 +41,7 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     // Customer sync is gated by plan entitlement.
-    const plan = await prisma.plan.findUnique({
-      where: { planName: shop.currentPlan },
-    });
+    const plan = await findPlanByName(shop.currentPlan);
 
     if (!plan?.customersSyncEnabled) {
       console.log(`Customer sync not enabled for plan ${shop.currentPlan}`);

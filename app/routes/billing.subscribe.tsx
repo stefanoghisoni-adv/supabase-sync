@@ -11,6 +11,9 @@ import {
 } from '~/lib/billing/subscription.server';
 import { appSubscriptionGid, applyPlanToShop } from '~/lib/billing/apply-plan.server';
 import { embeddedContextParams } from '~/lib/billing/embedded-return.server';
+import { findPlanByName } from '~/lib/billing/find-plan.server';
+import { forcedTestCharge } from '~/lib/billing/test-charge';
+import { samePlanName } from '~/lib/billing/plan-name';
 
 // Avvio del cambio di piano. Qui NON si attiva niente: l'abbonamento nasce in
 // attesa di conferma e diventa effettivo solo in /billing/callback, dopo che
@@ -31,11 +34,6 @@ export type SubscribeResponse =
 // Nessun errore mostrato al merchant racconta cosa e' andato storto dietro le
 // quinte: non gli serve e non deve finire in uno screenshot al supporto.
 const GENERIC_ERROR = 'Non è stato possibile avviare il cambio di piano. Riprova.';
-
-/** Confronto fra nomi di piano tollerante a maiuscole e spazi. */
-function planId(name: string | null | undefined): string {
-  return (name ?? '').trim().toLowerCase();
-}
 
 /** Solo un id numerico puo' essere ricomposto in un gid: il resto si ignora. */
 function numericChargeId(value: string | null | undefined): string | null {
@@ -80,14 +78,14 @@ export async function action({ request }: ActionFunctionArgs) {
     return json<SubscribeResponse>({ error: 'Scegli un piano per continuare.' }, { status: 400 });
   }
 
-  const plan = await prisma.plan.findUnique({ where: { planName: requestedName } });
+  const plan = await findPlanByName(requestedName);
   if (!plan || !canAccessPlanTab(plan.planName)) {
     return json<SubscribeResponse>(
       { error: 'Il piano scelto non è disponibile.' },
       { status: 400 },
     );
   }
-  if (planId(plan.planName) === planId(shop.currentPlan)) {
+  if (samePlanName(plan.planName, shop.currentPlan)) {
     return json<SubscribeResponse>({ error: 'Stai già usando questo piano.' }, { status: 400 });
   }
 
@@ -118,7 +116,13 @@ export async function action({ request }: ActionFunctionArgs) {
     // Sui negozi di sviluppo Shopify rifiuta gli addebiti reali: l'abbonamento
     // va creato di prova, altrimenti la mutation fallisce e il merchant resta
     // fermo sulla tab senza capire perche'.
-    const test = await isDevelopmentStore(admin);
+    //
+    // SHOPIFY_BILLING_TEST=true forza l'addebito di prova anche su un negozio
+    // normale: serve a provare l'attivazione dei piani end-to-end senza pagare.
+    // Se e' acceso non c'e' bisogno di chiedere niente a Shopify.
+    const test =
+      forcedTestCharge(process.env.SHOPIFY_BILLING_TEST) ||
+      (await isDevelopmentStore(admin));
 
     const requestUrl = new URL(request.url);
     const params = embeddedContextParams({

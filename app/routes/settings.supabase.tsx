@@ -25,6 +25,7 @@ import {
 import { AccountCard } from '~/components/Dashboard/AccountCard';
 import { DatabaseCard } from '~/components/Dashboard/DatabaseCard';
 import { firstPlanWithCustomersSync } from '~/components/Dashboard/account-format';
+import { samePlanName } from '~/lib/billing/plan-name';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const { session } = await authenticate.admin(request);
@@ -37,7 +38,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   // Tutti i piani: da qui esce sia quello in uso (i clienti sono inclusi?) sia
   // quello da proporre a chi non li ha.
   const plans = await prisma.plan.findMany();
-  const plan = plans.find((p) => p.planName === (shop?.currentPlan ?? '')) ?? null;
+  const plan = plans.find((p) => samePlanName(p.planName, shop?.currentPlan)) ?? null;
 
   const connected = !!shop?.supabaseConfig?.connectionVerifiedAt;
   // Una sincronizzazione "attiva" ha bisogno di tre cose insieme: il progetto

@@ -13,7 +13,7 @@ vi.mock('~/lib/supabase.server', () => ({ createSupabaseClient: vi.fn() }));
 vi.mock('~/db.server', () => ({
   prisma: {
     shop: { findUnique: vi.fn() },
-    plan: { findUnique: vi.fn() },
+    plan: { findFirst: vi.fn() },
     syncJob: { create: vi.fn() },
   },
 }));
@@ -45,7 +45,7 @@ describe('webhook customers/create — consenso', () => {
         tableNameCustomers: 'customers',
       },
     });
-    (prisma.plan.findUnique as any).mockResolvedValue({
+    (prisma.plan.findFirst as any).mockResolvedValue({
       planName: 'pro',
       customersSyncEnabled: true,
     });

@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const findUnique = vi.fn();
-const planFindUnique = vi.fn();
+const findPlanMock = vi.fn();
 vi.mock('~/db.server', () => ({
   prisma: {
     shop: { findUnique: (...a: unknown[]) => findUnique(...a) },
-    plan: { findUnique: (...a: unknown[]) => planFindUnique(...a) },
+    plan: { findFirst: (...a: unknown[]) => findPlanMock(...a) },
   },
 }));
 vi.mock('~/utils/crypto.server', () => ({ decrypt: (v: string) => v.replace(/^enc\(|\)$/g, '') }));
@@ -27,7 +27,7 @@ const shopRow = (over: Record<string, unknown> = {}) => ({
 describe('resolveShopReadContext', () => {
   beforeEach(() => {
     findUnique.mockReset();
-    planFindUnique.mockReset();
+    findPlanMock.mockReset();
     clearReadContextCache();
   });
 
@@ -45,7 +45,7 @@ describe('resolveShopReadContext', () => {
 
   it('ok → ctx con service_role decifrata e customersEnabled dal piano', async () => {
     findUnique.mockResolvedValueOnce(shopRow());
-    planFindUnique.mockResolvedValueOnce({ customersSyncEnabled: true });
+    findPlanMock.mockResolvedValueOnce({ customersSyncEnabled: true });
     const r = await resolveShopReadContext('spx_x');
     expect(r).toEqual({
       kind: 'ok',
@@ -75,7 +75,7 @@ describe('resolveShopReadContext', () => {
     [null, false],
   ])('trackingAuthorization %j → canReadData %s', async (value, expected) => {
     findUnique.mockResolvedValueOnce(shopRow({ trackingAuthorization: value }));
-    planFindUnique.mockResolvedValueOnce({ customersSyncEnabled: false });
+    findPlanMock.mockResolvedValueOnce({ customersSyncEnabled: false });
     const r = await resolveShopReadContext(`spx_${String(value)}`);
     expect(r.kind).toBe('ok');
     expect((r as { ctx: { canReadData: boolean } }).ctx.canReadData).toBe(expected);
@@ -88,7 +88,7 @@ describe('resolveShopReadContext', () => {
     findUnique.mockResolvedValueOnce(
       shopRow({ authorization: 'DISABLED', trackingAuthorization: 'ENABLED' }),
     );
-    planFindUnique.mockResolvedValueOnce({ customersSyncEnabled: false });
+    findPlanMock.mockResolvedValueOnce({ customersSyncEnabled: false });
     const r = await resolveShopReadContext('spx_app_off');
     expect((r as { ctx: { canReadData: boolean } }).ctx.canReadData).toBe(true);
   });
@@ -97,14 +97,14 @@ describe('resolveShopReadContext', () => {
     findUnique.mockResolvedValueOnce(
       shopRow({ authorization: 'ENABLED', trackingAuthorization: 'DISABLED' }),
     );
-    planFindUnique.mockResolvedValueOnce({ customersSyncEnabled: false });
+    findPlanMock.mockResolvedValueOnce({ customersSyncEnabled: false });
     const r = await resolveShopReadContext('spx_track_off');
     expect((r as { ctx: { canReadData: boolean } }).ctx.canReadData).toBe(false);
   });
 
   it('usa la cache entro il TTL (una sola query per token)', async () => {
     findUnique.mockResolvedValue(shopRow());
-    planFindUnique.mockResolvedValue({ customersSyncEnabled: false });
+    findPlanMock.mockResolvedValue({ customersSyncEnabled: false });
     await resolveShopReadContext('spx_same');
     await resolveShopReadContext('spx_same');
     expect(findUnique).toHaveBeenCalledTimes(1);

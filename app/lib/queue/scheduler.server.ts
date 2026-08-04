@@ -1,5 +1,6 @@
 import { getSyncQueue } from './queues.server';
 import { prisma } from '~/db.server';
+import { findPlanByName } from '~/lib/billing/find-plan.server';
 
 /**
  * Schedules repeating periodic-sync-check jobs for every active shop.
@@ -29,9 +30,7 @@ export async function schedulePeriodicSyncs() {
   for (const shop of shops) {
     if (!shop.supabaseConfig) continue;
 
-    const plan = await prisma.plan.findUnique({
-      where: { planName: shop.currentPlan },
-    });
+    const plan = await findPlanByName(shop.currentPlan);
 
     if (!plan) continue;
 

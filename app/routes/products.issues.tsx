@@ -40,6 +40,7 @@ import {
   type ProblemVariant,
 } from '~/lib/stats/product-readiness';
 import { PlanLimitBanner } from '~/components/Dashboard/PlanLimitBanner';
+import { findPlanByName } from '~/lib/billing/find-plan.server';
 import { filterProblemVariants, pageCount, pageSlice } from '~/lib/stats/problem-filter';
 import {
   costFieldDisabled,
@@ -89,10 +90,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   // Quota del piano: serve all'avviso di limite in esaurimento, lo stesso della
   // dashboard. I prodotti sono gia' in memoria, quindi il conteggio non costa
   // una seconda passata su Shopify.
-  const plan = await prisma.plan.findUnique({
-    where: { planName: shop.currentPlan },
-    select: { maxProducts: true },
-  });
+  const plan = await findPlanByName(shop.currentPlan);
 
   return json({
     rows,

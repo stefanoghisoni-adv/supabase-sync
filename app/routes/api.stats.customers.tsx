@@ -10,6 +10,7 @@ import {
   setCustomerStatsCache,
 } from '~/lib/cache/stats-cache.server';
 import type { ShopifyCustomer } from '~/types/shopify';
+import { findPlanByName } from '~/lib/billing/find-plan.server';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const { session } = await authenticate.admin(request);
@@ -20,7 +21,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }
 
   // Il piano non include i clienti: nessuna chiamata a Shopify, la card e' bloccata.
-  const plan = await prisma.plan.findUnique({ where: { planName: shop.currentPlan } });
+  const plan = await findPlanByName(shop.currentPlan);
   if (!plan?.customersSyncEnabled) {
     return json({ enabled: false, totalCustomers: 0, optIn: 0, optOut: 0, cached: false });
   }

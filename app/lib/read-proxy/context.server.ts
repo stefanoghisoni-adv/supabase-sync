@@ -6,6 +6,7 @@ import {
   type AuthorizationState,
 } from '~/utils/authorization.server';
 import { hashReadProxyToken } from './token.server';
+import { findPlanByName } from '~/lib/billing/find-plan.server';
 
 export interface ShopReadContext {
   shopId: string;
@@ -89,7 +90,7 @@ async function loadReadContext(hash: string): Promise<ReadContextResult> {
     return { kind: 'not_configured' };
   }
 
-  const plan = await prisma.plan.findUnique({ where: { planName: shop.currentPlan } });
+  const plan = await findPlanByName(shop.currentPlan);
 
   return {
     kind: 'ok',

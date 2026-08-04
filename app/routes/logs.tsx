@@ -6,6 +6,7 @@ import { SettingsIcon } from '@shopify/polaris-icons';
 import { authenticate } from '~/shopify.server';
 import { prisma } from '~/db.server';
 import { SyncLog } from '~/components/Dashboard/SyncLog';
+import { findPlanByName } from '~/lib/billing/find-plan.server';
 
 // Quanti eventi mostrare: la tabella resta una lista unica senza paginazione,
 // quindi teniamo il tetto a 20 righe per non allungarla a dismisura.
@@ -23,7 +24,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }
 
   const [plan, jobs] = await Promise.all([
-    prisma.plan.findUnique({ where: { planName: shop.currentPlan } }),
+    findPlanByName(shop.currentPlan),
     prisma.syncJob.findMany({
       where: { shopId: shop.id },
       orderBy: { startedAt: 'desc' },

@@ -11,6 +11,7 @@ import {
 } from '~/lib/billing/subscription.server';
 import { appSubscriptionGid, applyPlanToShop } from '~/lib/billing/apply-plan.server';
 import { embeddedContextParams } from '~/lib/billing/embedded-return.server';
+import { findPlanByName } from '~/lib/billing/find-plan.server';
 
 // Ritorno da Shopify dopo che il merchant ha approvato (o rifiutato) l'addebito.
 //
@@ -103,7 +104,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     // listino non e' uno dei nostri e non deve cambiare niente.
     const plan =
       subscription?.status === 'ACTIVE'
-        ? await prisma.plan.findUnique({ where: { planName: subscription.name } })
+        ? await findPlanByName(subscription.name)
         : null;
 
     if (!subscription || subscription.status !== 'ACTIVE' || !plan) {

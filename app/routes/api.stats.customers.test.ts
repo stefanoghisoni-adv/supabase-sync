@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const findUniqueShop = vi.fn();
-const findUniquePlan = vi.fn();
+const findPlanMock = vi.fn();
 const getCustomers = vi.fn();
 const getCustomerStatsCache = vi.fn();
 const setCustomerStatsCache = vi.fn();
@@ -13,7 +13,7 @@ vi.mock('~/shopify.server', () => ({
 vi.mock('~/db.server', () => ({
   prisma: {
     shop: { findUnique: (...a: unknown[]) => findUniqueShop(...a) },
-    plan: { findUnique: (...a: unknown[]) => findUniquePlan(...a) },
+    plan: { findFirst: (...a: unknown[]) => findPlanMock(...a) },
   },
 }));
 vi.mock('~/lib/shopify-api.server', () => ({
@@ -38,14 +38,14 @@ describe('/api/stats/customers', () => {
   });
 
   it('piano senza clienti → enabled false e nessuna chiamata a Shopify', async () => {
-    findUniquePlan.mockResolvedValue({ customersSyncEnabled: false });
+    findPlanMock.mockResolvedValue({ customersSyncEnabled: false });
     const res = await call();
     expect(await res.json()).toMatchObject({ enabled: false, optIn: 0, optOut: 0 });
     expect(getCustomers).not.toHaveBeenCalled();
   });
 
   it('usa la cache quando presente', async () => {
-    findUniquePlan.mockResolvedValue({ customersSyncEnabled: true });
+    findPlanMock.mockResolvedValue({ customersSyncEnabled: true });
     getCustomerStatsCache.mockResolvedValue({ totalCustomers: 10, optIn: 6, optOut: 4, computedAt: 'x' });
     const res = await call();
     expect(await res.json()).toMatchObject({ enabled: true, totalCustomers: 10, optIn: 6, optOut: 4, cached: true });
@@ -53,7 +53,7 @@ describe('/api/stats/customers', () => {
   });
 
   it('senza cache pagina Shopify e somma i conteggi', async () => {
-    findUniquePlan.mockResolvedValue({ customersSyncEnabled: true });
+    findPlanMock.mockResolvedValue({ customersSyncEnabled: true });
     getCustomerStatsCache.mockResolvedValue(null);
     getCustomers
       .mockResolvedValueOnce({
