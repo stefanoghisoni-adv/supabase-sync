@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useFetcher, useRevalidator } from '@remix-run/react';
-import { BlockStack, Button, Banner, InlineStack, Text } from '@shopify/polaris';
+import { BlockStack, Button, Banner, InlineStack, Spinner, Text } from '@shopify/polaris';
 
 export type SupabaseConnectStatus = 'idle' | 'in_progress' | 'failed';
 
@@ -183,8 +183,9 @@ export function SupabaseAccountConnect({
   }, [urlFetcher]);
 
   // Con quale account si e' entrati: si chiede solo a collegamento fatto, e
-  // dopo che la pagina e' gia' comparsa. Finche' non arriva, la frase resta
-  // quella corta.
+  // dopo che la pagina e' gia' comparsa. Nell'attesa si dice che si sta
+  // caricando: una frase piu' corta che dopo un istante cambia da sola sotto gli
+  // occhi si legge come un ripensamento dell'app.
   useEffect(() => {
     if (!connected) return;
     if (accountFetcher.state === 'idle' && !accountFetcher.data) {
@@ -193,6 +194,10 @@ export function SupabaseAccountConnect({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [connected]);
   const accountEmail = accountFetcher.data?.email ?? null;
+  // Sulla presenza della risposta e non su `state`: fra il render e la partenza
+  // della richiesta il fetcher e' fermo, e guardando lo stato quell'istante
+  // mostrerebbe di nuovo la frase breve.
+  const emailPending = !accountFetcher.data;
 
   const status: SupabaseConnectStatus = connectFailed
     ? 'failed'
@@ -204,9 +209,21 @@ export function SupabaseAccountConnect({
   }, [status, onStatusChange]);
 
   if (connected) {
+    if (emailPending) {
+      return (
+        <InlineStack gap="200" blockAlign="center">
+          <Spinner size="small" accessibilityLabel="Caricamento dell'email in corso" />
+          <Text as="p" tone="subdued">
+            Carico l&apos;email connessa all&apos;account
+          </Text>
+        </InlineStack>
+      );
+    }
     return (
       <Text as="p" tone="subdued">
-        {accountEmail ? `Accesso effettuato con ${accountEmail}.` : 'Accesso effettuato.'}
+        {/* Senza email la risposta e' arrivata lo stesso: si dice quel che si sa,
+            non si resta a girare su un dato che non tornera'. */}
+        {accountEmail ? `Account connesso con ${accountEmail}.` : 'Account connesso.'}
       </Text>
     );
   }
