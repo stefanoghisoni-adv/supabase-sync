@@ -128,16 +128,15 @@ export async function action({ request }: ActionFunctionArgs) {
       );
     }
 
-    // Abilita la sincronizzazione al collegamento: senza syncEnabled i
-    // processor rifiutano il job. Le successive sync automatiche seguono
-    // l'intervallo impostato in Impostazioni.
+    // connectionVerifiedAt e' quello che accende la sincronizzazione: da qui in
+    // poi il negozio entra nelle sync automatiche e i webhook non lo scartano
+    // piu'. Non c'e' nessun interruttore da alzare oltre a questo.
     // Lo schema appena creato e' quello corrente: il progetto nasce allineato e
     // non deve ricevere l'aggiornamento che serve ai collegamenti piu' vecchi.
     await prisma.supabaseConfig.update({
       where: { shopId: shop.id },
       data: {
         connectionVerifiedAt: new Date(),
-        syncEnabled: true,
         schemaVersion: LATEST_SCHEMA_VERSION,
       },
     });

@@ -8,6 +8,7 @@ import { ShopifyAPIClient } from '~/lib/shopify-api.server';
 import { enrichVariantCosts } from '~/lib/stats/inventory-cost.server';
 import { filterEligibleProductRows } from '~/lib/eligibility/product-eligibility';
 import type { ShopifyProduct } from '~/types/shopify';
+import { syncIsActive } from '~/lib/sync/sync-active';
 
 export async function action({ request }: ActionFunctionArgs) {
   // Verify HMAC signature
@@ -43,8 +44,8 @@ export async function action({ request }: ActionFunctionArgs) {
       return json({ ok: true }, { status: 200 }); // Acknowledge anyway
     }
 
-    if (!shop.supabaseConfig.syncEnabled) {
-      console.log(`Sync disabled for shop ${shopDomain}`);
+    if (!syncIsActive(shop.supabaseConfig)) {
+      console.log(`Sync not active for shop ${shopDomain}`);
       return json({ ok: true }, { status: 200 });
     }
 

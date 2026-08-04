@@ -11,6 +11,7 @@ import { recordEligibilitySnapshotIfMissing } from '~/lib/stats/eligibility-snap
 import { hasPlanChanged } from '~/components/Dashboard/plan-upgrade';
 import { isAuthorized } from '~/utils/authorization.server';
 import { findPlanByName } from '~/lib/billing/find-plan.server';
+import { SYNC_ACTIVE_CONFIG_FILTER } from '~/lib/sync/sync-active';
 
 /**
  * Cron-triggered sync endpoint (replaces the long-running BullMQ worker on the
@@ -73,7 +74,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const shops = await prisma.shop.findMany({
     where: {
       uninstalledAt: null,
-      supabaseConfig: { syncEnabled: true },
+      supabaseConfig: SYNC_ACTIVE_CONFIG_FILTER,
     },
     include: { supabaseConfig: true },
   });

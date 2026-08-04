@@ -1,6 +1,7 @@
 import { getSyncQueue } from './queues.server';
 import { prisma } from '~/db.server';
 import { findPlanByName } from '~/lib/billing/find-plan.server';
+import { SYNC_ACTIVE_CONFIG_FILTER } from '~/lib/sync/sync-active';
 
 /**
  * Schedules repeating periodic-sync-check jobs for every active shop.
@@ -18,9 +19,7 @@ export async function schedulePeriodicSyncs() {
   const shops = await prisma.shop.findMany({
     where: {
       uninstalledAt: null,
-      supabaseConfig: {
-        syncEnabled: true,
-      },
+      supabaseConfig: SYNC_ACTIVE_CONFIG_FILTER,
     },
     include: {
       supabaseConfig: true,

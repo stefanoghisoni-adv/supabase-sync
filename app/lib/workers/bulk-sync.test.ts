@@ -81,7 +81,7 @@ describe('Initial bulk sync processor', () => {
       shopDomain: 'test-shop.myshopify.com',
       accessToken: 'encrypted-token',
       supabaseConfig: {
-        syncEnabled: true,
+        connectionVerifiedAt: new Date(),
         tableNameProducts: 'products',
         supabaseUrl: 'https://test.supabase.co',
         supabasePublicKey: 'encrypted-key',
@@ -228,7 +228,7 @@ describe('Initial bulk sync processor', () => {
       shopDomain: 'test-shop.myshopify.com',
       accessToken: 'encrypted-token',
       supabaseConfig: {
-        syncEnabled: true,
+        connectionVerifiedAt: new Date(),
         tableNameProducts: 'products',
         supabaseUrl: 'https://test.supabase.co',
         supabasePublicKey: 'encrypted-key',
@@ -292,7 +292,7 @@ describe('Initial bulk sync processor', () => {
       shopDomain: 'test-shop.myshopify.com',
       accessToken: 'encrypted-token',
       supabaseConfig: {
-        syncEnabled: true,
+        connectionVerifiedAt: new Date(),
         tableNameProducts: 'products',
         supabaseUrl: 'https://test.supabase.co',
         supabasePublicKey: 'encrypted-key',
@@ -322,7 +322,7 @@ describe('Initial bulk sync processor', () => {
       accessToken: 'encrypted-token',
       currentPlan: 'free',
       supabaseConfig: {
-        syncEnabled: true,
+        connectionVerifiedAt: new Date(),
         tableNameProducts: 'products',
         supabaseUrl: 'https://test.supabase.co',
         supabasePublicKey: 'encrypted-key',
@@ -410,7 +410,7 @@ describe('Initial bulk sync processor', () => {
       authorization: 'ENABLED',
       currentPlan: 'free',
       supabaseConfig: {
-        syncEnabled: true,
+        connectionVerifiedAt: new Date(),
         tableNameProducts: 'products',
         tableNameCustomers: 'customers',
         supabaseUrl: 'https://test.supabase.co',
@@ -471,7 +471,7 @@ describe('Initial bulk sync processor', () => {
       authorization: 'ENABLED',
       currentPlan: 'free',
       supabaseConfig: {
-        syncEnabled: true,
+        connectionVerifiedAt: new Date(),
         tableNameProducts: 'products',
         tableNameCustomers: 'customers',
         supabaseUrl: 'https://test.supabase.co',
@@ -514,7 +514,7 @@ describe('Initial bulk sync processor', () => {
       authorization: 'ENABLED',
       currentPlan: 'free',
       supabaseConfig: {
-        syncEnabled: true,
+        connectionVerifiedAt: new Date(),
         tableNameProducts: 'products',
         tableNameCustomers: 'customers',
         supabaseUrl: 'https://test.supabase.co',
@@ -561,7 +561,7 @@ describe('Initial bulk sync processor', () => {
       authorization: 'ENABLED',
       currentPlan: 'free',
       supabaseConfig: {
-        syncEnabled: true,
+        connectionVerifiedAt: new Date(),
         tableNameProducts: 'products',
         tableNameCustomers: 'customers',
         supabaseUrl: 'https://test.supabase.co',
@@ -609,7 +609,7 @@ describe('Initial bulk sync processor', () => {
       authorization: 'ENABLED',
       currentPlan: 'free',
       supabaseConfig: {
-        syncEnabled: true,
+        connectionVerifiedAt: new Date(),
         tableNameProducts: 'products',
         tableNameCustomers: 'customers',
         supabaseUrl: 'https://test.supabase.co',
@@ -655,7 +655,7 @@ describe('Initial bulk sync processor', () => {
       authorization: 'ENABLED',
       currentPlan: 'pro',
       supabaseConfig: {
-        syncEnabled: true,
+        connectionVerifiedAt: new Date(),
         tableNameProducts: 'products',
         tableNameCustomers: 'customers',
         supabaseUrl: 'https://test.supabase.co',
@@ -700,7 +700,7 @@ describe('Initial bulk sync processor', () => {
       authorization: 'ENABLED',
       currentPlan: 'pro',
       supabaseConfig: {
-        syncEnabled: true,
+        connectionVerifiedAt: new Date(),
         tableNameProducts: 'products',
         tableNameCustomers: 'customers',
         supabaseUrl: 'https://test.supabase.co',
@@ -763,7 +763,7 @@ describe('Initial bulk sync processor', () => {
       authorization: 'ENABLED',
       currentPlan: 'pro',
       supabaseConfig: {
-        syncEnabled: true,
+        connectionVerifiedAt: new Date(),
         tableNameProducts: 'products',
         tableNameCustomers: 'customers',
         supabaseUrl: 'https://test.supabase.co',
@@ -830,7 +830,7 @@ describe('Initial bulk sync processor', () => {
       authorization: 'ENABLED',
       currentPlan: 'pro',
       supabaseConfig: {
-        syncEnabled: true,
+        connectionVerifiedAt: new Date(),
         tableNameProducts: 'products',
         tableNameCustomers: 'customers',
         supabaseUrl: 'https://test.supabase.co',
@@ -925,7 +925,7 @@ describe('Initial bulk sync processor', () => {
       authorization: 'ENABLED',
       currentPlan: 'pro',
       supabaseConfig: {
-        syncEnabled: true,
+        connectionVerifiedAt: new Date(),
         tableNameProducts: 'products',
         tableNameCustomers: 'customers',
         supabaseUrl: 'https://test.supabase.co',
@@ -999,7 +999,7 @@ describe('Initial bulk sync processor', () => {
       authorization: 'ENABLED',
       currentPlan: 'pro',
       supabaseConfig: {
-        syncEnabled: true,
+        connectionVerifiedAt: new Date(),
         tableNameProducts: 'products',
         tableNameCustomers: 'customers',
         supabaseUrl: 'https://test.supabase.co',
@@ -1050,7 +1050,7 @@ describe('Initial bulk sync processor', () => {
       authorization: 'ENABLED',
       currentPlan: 'pro',
       supabaseConfig: {
-        syncEnabled: true,
+        connectionVerifiedAt: new Date(),
         tableNameProducts: 'products',
         tableNameCustomers: 'customers',
         supabaseUrl: 'https://test.supabase.co',

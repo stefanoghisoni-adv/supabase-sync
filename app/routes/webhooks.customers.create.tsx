@@ -7,6 +7,7 @@ import { prisma } from '~/db.server';
 import { isCustomerOptedIn } from '~/lib/stats/customer-consent-stats';
 import type { ShopifyCustomer } from '~/types/shopify';
 import { findPlanByName } from '~/lib/billing/find-plan.server';
+import { syncIsActive } from '~/lib/sync/sync-active';
 
 export async function action({ request }: ActionFunctionArgs) {
   // Verify HMAC signature
@@ -35,7 +36,7 @@ export async function action({ request }: ActionFunctionArgs) {
       include: { supabaseConfig: true },
     });
 
-    if (!shop || !shop.supabaseConfig || !shop.supabaseConfig.syncEnabled) {
+    if (!shop || !shop.supabaseConfig || !syncIsActive(shop.supabaseConfig)) {
       console.log(`Shop ${shopDomain} not configured for sync`);
       return json({ ok: true }, { status: 200 });
     }

@@ -41,7 +41,7 @@ describe('webhook customers/create — consenso', () => {
       shopDomain: 'test-shop.myshopify.com',
       currentPlan: 'pro',
       supabaseConfig: {
-        syncEnabled: true,
+        connectionVerifiedAt: new Date(),
         tableNameCustomers: 'customers',
       },
     });

@@ -38,7 +38,7 @@ describe('webhook products/create — idoneità', () => {
       id: 'shop-1',
       shopDomain: 'test-shop.myshopify.com',
       accessToken: 'enc',
-      supabaseConfig: { syncEnabled: true, tableNameProducts: 'products' },
+      supabaseConfig: { connectionVerifiedAt: new Date(), tableNameProducts: 'products' },
     });
     (prisma.syncJob.create as any).mockResolvedValue({});
     const upserted: any[] = [];
@@ -65,7 +65,7 @@ describe('webhook products/create — idoneità', () => {
       id: 'shop-1',
       shopDomain: 'test-shop.myshopify.com',
       accessToken: 'enc',
-      supabaseConfig: { syncEnabled: true, tableNameProducts: 'products' },
+      supabaseConfig: { connectionVerifiedAt: new Date(), tableNameProducts: 'products' },
     });
     (prisma.syncJob.create as any).mockResolvedValue({});
     let deletedAllForProduct: number | null = null;

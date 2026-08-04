@@ -1,11 +1,10 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from '@remix-run/node';
 import { json } from '@remix-run/node';
-import { useLoaderData, useActionData, Form, useSubmit, useNavigation } from '@remix-run/react';
+import { useLoaderData, useActionData, useSubmit, useNavigation } from '@remix-run/react';
 import {
   Page,
   Layout,
   Card,
-  Checkbox,
   Button,
   Banner,
   BlockStack,
@@ -26,6 +25,7 @@ import { AccountCard } from '~/components/Dashboard/AccountCard';
 import { DatabaseCard } from '~/components/Dashboard/DatabaseCard';
 import { firstPlanWithCustomersSync } from '~/components/Dashboard/account-format';
 import { samePlanName } from '~/lib/billing/plan-name';
+import { syncIsActive } from '~/lib/sync/sync-active';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const { session } = await authenticate.admin(request);
@@ -41,13 +41,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const plan = plans.find((p) => samePlanName(p.planName, shop?.currentPlan)) ?? null;
 
   const connected = !!shop?.supabaseConfig?.connectionVerifiedAt;
-  // Una sincronizzazione "attiva" ha bisogno di tre cose insieme: il progetto
-  // collegato, l'interruttore acceso e il negozio autorizzato (a trial scaduto
-  // e' tutto sospeso, per quanto l'interruttore resti su acceso).
-  const syncRunning =
-    connected &&
-    !!shop?.supabaseConfig?.syncEnabled &&
-    shop?.authorization === 'ENABLED';
+  // La sincronizzazione e' automatica e sempre attiva: non c'e' niente da
+  // accendere. Restano le due condizioni che non dipendono dal merchant — il
+  // progetto collegato e il negozio autorizzato (a trial scaduto e' tutto
+  // sospeso).
+  const syncRunning = syncIsActive(shop?.supabaseConfig) && shop?.authorization === 'ENABLED';
   const customersIncluded = plan?.customersSyncEnabled ?? false;
 
   // Informazioni di account: sempre presenti, anche senza collegamento — proprio
@@ -89,7 +87,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
     config: {
       readToken,
       proxyBaseUrl,
-      syncEnabled: config.syncEnabled,
       syncIntervalHours: config.syncIntervalHours,
     },
   });
@@ -112,7 +109,9 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const formData = await request.formData();
 
-  // Il form della sincronizzazione non invia `intent`, quindi non finisce qui.
+  // Rigenerare la chiave di lettura e' l'unica cosa che questa pagina scrive:
+  // la sincronizzazione e' automatica e non ha impostazioni, e le chiavi del
+  // progetto restano quelle salvate durante il collegamento.
   if (formData.get('intent') === 'regenerate-read-token') {
     await issueReadProxyToken(shop.id);
     return json({
@@ -121,16 +120,7 @@ export async function action({ request }: ActionFunctionArgs) {
     });
   }
 
-  const syncEnabled = formData.get('syncEnabled') === 'on';
-
-  // Aggiorniamo SOLO le preferenze di sync: le chiavi restano quelle salvate
-  // durante il collegamento OAuth e non vengono mai sovrascritte da qui.
-  await prisma.supabaseConfig.update({
-    where: { shopId: shop.id },
-    data: { syncEnabled },
-  });
-
-  return json({ success: 'Impostazioni salvate.' });
+  return json({ error: 'Richiesta non riconosciuta.' }, { status: 400 });
 }
 
 export default function SupabaseSettings() {
@@ -142,7 +132,6 @@ export default function SupabaseSettings() {
   const errorMessage =
     actionData && 'error' in actionData ? actionData.error : undefined;
 
-  const [syncEnabled, setSyncEnabled] = useState(config?.syncEnabled ?? false);
   const [showRegenerate, setShowRegenerate] = useState(false);
   const submit = useSubmit();
   const navigation = useNavigation();
@@ -227,27 +216,6 @@ export default function SupabaseSettings() {
                       </Button>
                     </InlineStack>
                   </BlockStack>
-                </Card>
-
-                <Card>
-                  <Form method="post">
-                    <BlockStack gap="400">
-                      <Text as="h2" variant="headingMd">
-                        Sincronizzazione
-                      </Text>
-                      <Checkbox
-                        label="Sincronizzazione automatica attiva"
-                        checked={syncEnabled}
-                        onChange={setSyncEnabled}
-                        name="syncEnabled"
-                      />
-                      <InlineStack align="end">
-                        <Button variant="primary" submit>
-                          Salva impostazioni
-                        </Button>
-                      </InlineStack>
-                    </BlockStack>
-                  </Form>
                 </Card>
 
                 <Modal

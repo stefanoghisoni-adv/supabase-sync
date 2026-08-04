@@ -24,6 +24,7 @@ import { ensureCustomersTable } from '../supabase/ensure-customers-table.server'
 import { ensureProductsTable } from '../supabase/ensure-products-table.server';
 import { applyMerchantSchemaUpdate } from '../supabase/apply-schema-update.server';
 import { findPlanByName } from '../billing/find-plan.server';
+import { syncIsActive } from '~/lib/sync/sync-active';
 
 // Solo la parte del Job BullMQ che i processor usano davvero. Tipandola cosi'
 // il bulk sync puo' girare anche senza coda (allineamento automatico dal cron),
@@ -417,7 +418,7 @@ export async function processPeriodicSyncCheck(shopId: string): Promise<void> {
     include: { supabaseConfig: true },
   });
 
-  if (!shop || !shop.supabaseConfig || !shop.supabaseConfig.syncEnabled) {
+  if (!shop || !shop.supabaseConfig || !syncIsActive(shop.supabaseConfig)) {
     console.log(`Shop ${shopId} not configured for periodic sync`);
     return;
   }
@@ -687,7 +688,7 @@ export async function processInitialBulkSync(
     include: { supabaseConfig: true },
   });
 
-  if (!shop || !shop.supabaseConfig || !shop.supabaseConfig.syncEnabled) {
+  if (!shop || !shop.supabaseConfig || !syncIsActive(shop.supabaseConfig)) {
     throw new Error(`Shop ${shopId} not configured for sync`);
   }
   // Gate autorizzazione (vale per manuale e automatico): blocca se non ENABLED.

@@ -109,7 +109,9 @@ model SupabaseConfig {
   supabaseProjectRef     String?  @map("supabase_project_ref")
   tableNameProducts      String   @default("products") @map("table_name_products")
   tableNameCustomers     String   @default("customers") @map("table_name_customers")
-  syncEnabled            Boolean  @default(false) @map("sync_enabled")
+  // Nessun campo per "sincronizzazione attiva": e' automatica e sempre attiva
+  // finche' il progetto e' collegato (vedi lib/sync/sync-active). La colonna
+  // sync_enabled resta nel database, non la legge piu' nessuno.
   syncIntervalHours      Int      @default(24) @map("sync_interval_hours")
   connectionVerifiedAt   DateTime? @map("connection_verified_at")
   // Versione dello schema applicata al database del merchant. Quando l'app ne

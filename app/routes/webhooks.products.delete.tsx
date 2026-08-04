@@ -3,6 +3,7 @@ import { json } from '@remix-run/node';
 import { verifyWebhook } from '~/lib/webhooks/verify.server';
 import { createSupabaseClient } from '~/lib/supabase.server';
 import { prisma } from '~/db.server';
+import { syncIsActive } from '~/lib/sync/sync-active';
 
 export async function action({ request }: ActionFunctionArgs) {
   const body = await request.text();
@@ -31,7 +32,7 @@ export async function action({ request }: ActionFunctionArgs) {
       include: { supabaseConfig: true },
     });
 
-    if (!shop?.supabaseConfig?.syncEnabled) {
+    if (!shop?.supabaseConfig || !syncIsActive(shop.supabaseConfig)) {
       return json({ ok: true }, { status: 200 });
     }
 
