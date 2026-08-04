@@ -8,7 +8,7 @@ import {
   BlockStack,
   InlineGrid,
   Box,
-  Link,
+  Button,
 } from '@shopify/polaris';
 import { authenticate } from '~/shopify.server';
 import { prisma } from '~/db.server';
@@ -126,9 +126,18 @@ export default function SupabaseSettings() {
             {!config ? (
               <Banner tone="info">
                 {/* "Dashboard" e' il posto dove si collega: tanto vale
-                    portarcelo, invece di dirgli di cercarlo. */}
+                    portarcelo, invece di dirgli di cercarlo.
+
+                    Button e non Link: Polaris rende monocromatici i Link dentro
+                    un Banner (Link legge BannerContext e si spegne, senza una
+                    prop per chiedere il contrario). Il Button variant="plain" e'
+                    lo stesso comando di "Aggiorna a Pro", quindi il blu e' lo
+                    stesso per costruzione e non per una regola copiata. */}
                 Nessun progetto Supabase collegato. Vai nella{' '}
-                <Link url="/">Dashboard</Link> per collegare il tuo database.
+                <Button variant="plain" url="/">
+                  Dashboard
+                </Button>{' '}
+                per collegare il tuo database.
               </Banner>
             ) : (
               <>
