@@ -33,6 +33,7 @@ import { canAccessPlanTab } from './components/Billing/plan-access';
 const FORCE_LIGHT_CRITICAL = `
 :root,html,body{color-scheme:light !important}
 html,body{background:#f1f1f1 !important}
+:root:not(.p-theme-light-high-contrast-experimental),
 [class*="p-theme-dark"]{
   color-scheme:light !important;
   --p-color-bg:#f1f1f1 !important;
