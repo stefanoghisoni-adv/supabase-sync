@@ -1,26 +1,17 @@
-import type { ActionFunctionArgs, LoaderFunctionArgs } from '@remix-run/node';
+import type { LoaderFunctionArgs } from '@remix-run/node';
 import { json } from '@remix-run/node';
-import { useLoaderData, useActionData, useSubmit, useNavigation } from '@remix-run/react';
+import { useLoaderData } from '@remix-run/react';
 import {
   Page,
   Layout,
-  Card,
-  Button,
   Banner,
   BlockStack,
-  InlineStack,
   InlineGrid,
   Box,
-  Modal,
-  Text,
 } from '@shopify/polaris';
-import { useState } from 'react';
 import { authenticate } from '~/shopify.server';
 import { prisma } from '~/db.server';
-import {
-  getReadProxyTokenForDisplay,
-  issueReadProxyToken,
-} from '~/lib/read-proxy/token.server';
+import { getReadProxyTokenForDisplay } from '~/lib/read-proxy/token.server';
 import { AccountCard } from '~/components/Dashboard/AccountCard';
 import { DatabaseCard } from '~/components/Dashboard/DatabaseCard';
 import { firstPlanWithCustomersSync } from '~/components/Dashboard/account-format';
@@ -92,66 +83,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
   });
 }
 
-export async function action({ request }: ActionFunctionArgs) {
-  const { session } = await authenticate.admin(request);
-
-  const shop = await prisma.shop.findUnique({
-    where: { shopDomain: session.shop },
-    include: { supabaseConfig: true },
-  });
-
-  if (!shop?.supabaseConfig) {
-    return json(
-      { error: 'Nessun progetto Supabase collegato. Collega Supabase dalla Dashboard.' },
-      { status: 400 },
-    );
-  }
-
-  const formData = await request.formData();
-
-  // Rigenerare la chiave di lettura e' l'unica cosa che questa pagina scrive:
-  // la sincronizzazione e' automatica e non ha impostazioni, e le chiavi del
-  // progetto restano quelle salvate durante il collegamento.
-  if (formData.get('intent') === 'regenerate-read-token') {
-    await issueReadProxyToken(shop.id);
-    return json({
-      success:
-        'Chiave di lettura rigenerata. Aggiorna la configurazione nel tuo tool di tracciamento: la chiave precedente smetterà di funzionare entro ~30 secondi.',
-    });
-  }
-
-  return json({ error: 'Richiesta non riconosciuta.' }, { status: 400 });
-}
-
+// Nessuna action: questa pagina non scrive niente. La sincronizzazione e'
+// automatica e non ha impostazioni, la chiave di lettura viene emessa una volta
+// al collegamento del progetto e le chiavi del progetto non si toccano da qui.
 export default function SupabaseSettings() {
   const { account, config } = useLoaderData<typeof loader>();
-  const actionData = useActionData<typeof action>();
-
-  const successMessage =
-    actionData && 'success' in actionData ? actionData.success : undefined;
-  const errorMessage =
-    actionData && 'error' in actionData ? actionData.error : undefined;
-
-  const [showRegenerate, setShowRegenerate] = useState(false);
-  const submit = useSubmit();
-  const navigation = useNavigation();
-  const regenerating =
-    navigation.state !== 'idle' &&
-    navigation.formData?.get('intent') === 'regenerate-read-token';
-
-  const regenerate = () => {
-    submit({ intent: 'regenerate-read-token' }, { method: 'post' });
-    setShowRegenerate(false);
-  };
 
   return (
     <Page title="Impostazioni Supabase" backAction={{ url: '/' }}>
       <Layout>
         <Layout.Section>
           <BlockStack gap="400">
-            {successMessage && <Banner tone="success">{successMessage}</Banner>}
-            {errorMessage && <Banner tone="critical">{errorMessage}</Banner>}
-
             {/* Account e Database affiancati: sono due letture dello stesso
                 colpo d'occhio (cosa prevede il piano, cosa risponde il progetto).
                 A Database va la parte larga: indirizzo e chiave sono lunghi e
@@ -185,8 +127,8 @@ export default function SupabaseSettings() {
               <>
                 {!config.readToken && (
                   <Banner tone="warning">
-                    Chiave di lettura non ancora generata. Usa &laquo;Rigenera
-                    chiave di lettura&raquo; per crearne una.
+                    Chiave di lettura non disponibile: il tracciamento non riesce
+                    a leggere i dati. Scrivici e la rimettiamo a posto.
                   </Banner>
                 )}
                 {!config.proxyBaseUrl && (
@@ -196,58 +138,6 @@ export default function SupabaseSettings() {
                     impostare il tracciamento.
                   </Banner>
                 )}
-
-                <Card>
-                  <BlockStack gap="400">
-                    <Text as="h2" variant="headingMd">
-                      Chiave di lettura
-                    </Text>
-                    <Text as="p" tone="subdued">
-                      Rigenerandola, la chiave attuale smette di funzionare: va
-                      sostituita nel tuo tool di tracciamento.
-                    </Text>
-                    <InlineStack align="start">
-                      <Button
-                        tone="critical"
-                        loading={regenerating}
-                        onClick={() => setShowRegenerate(true)}
-                      >
-                        Rigenera chiave di lettura
-                      </Button>
-                    </InlineStack>
-                  </BlockStack>
-                </Card>
-
-                <Modal
-                  open={showRegenerate}
-                  onClose={() => setShowRegenerate(false)}
-                  title="Rigenerare la chiave di lettura?"
-                  primaryAction={{
-                    content: 'Rigenera',
-                    destructive: true,
-                    onAction: regenerate,
-                    loading: regenerating,
-                  }}
-                  secondaryActions={[
-                    {
-                      content: 'Annulla',
-                      onAction: () => setShowRegenerate(false),
-                      disabled: regenerating,
-                    },
-                  ]}
-                >
-                  <Modal.Section>
-                    {/* "entro ~30 secondi" e non "subito": il proxy tiene in
-                        cache lo stato per token con TTL 30s, quindi la chiave
-                        vecchia può restare valida fino allo scadere. */}
-                    <Text as="p">
-                      La chiave attuale smetterà di funzionare{' '}
-                      <strong>entro ~30 secondi</strong>. Il tracciamento resterà
-                      senza dati finché non incolli la nuova chiave nel tuo tool di
-                      tracciamento.
-                    </Text>
-                  </Modal.Section>
-                </Modal>
               </>
             )}
           </BlockStack>
