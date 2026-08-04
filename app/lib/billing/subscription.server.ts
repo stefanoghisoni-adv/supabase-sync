@@ -183,10 +183,17 @@ interface RawSubscription {
 async function readGraphQLData<T>(response: Response, operation: string): Promise<T> {
   const body = (await response.json()) as {
     data?: T;
-    errors?: { message?: string }[];
+    // Di norma un array. Su token scaduto o revocato Shopify risponde con una
+    // stringa ("[API] Invalid API key or access token"), che ha comunque un
+    // `.length`: trattarla come array sostituiva il motivo vero con un
+    // TypeError, e nei log arrivava quello.
+    errors?: { message?: string }[] | string;
   };
 
-  if (body.errors?.length) {
+  if (typeof body.errors === 'string' && body.errors) {
+    throw new Error(`${operation}: ${body.errors}`);
+  }
+  if (Array.isArray(body.errors) && body.errors.length) {
     const detail = body.errors.map((e) => e.message ?? 'errore sconosciuto').join('; ');
     throw new Error(`${operation}: ${detail}`);
   }

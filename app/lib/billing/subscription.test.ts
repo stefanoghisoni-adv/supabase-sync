@@ -209,6 +209,26 @@ describe('createAppSubscription', () => {
       }),
     ).rejects.toThrow(/Access denied/);
   });
+
+  it('errors come stringa (token non valido) → messaggio leggibile, non un crash', async () => {
+    // Su token scaduto o revocato Shopify non risponde con un array ma con
+    // "errors": "[API] Invalid API key or access token". Trattarlo come array
+    // trasformava la diagnosi in un TypeError, e nei log finiva quello invece
+    // del motivo vero.
+    const admin = adminWith({
+      errors: '[API] Invalid API key or access token',
+    } as never);
+
+    await expect(
+      createAppSubscription(admin, {
+        planName: 'Pro',
+        priceMonthly: 29,
+        trialDays: null,
+        returnUrl: 'https://app.example.com/billing/callback',
+        test: false,
+      }),
+    ).rejects.toThrow(/Invalid API key or access token/);
+  });
 });
 
 describe('getActiveSubscriptions', () => {
