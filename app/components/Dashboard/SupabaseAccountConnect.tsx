@@ -31,6 +31,7 @@ export function SupabaseAccountConnect({
   const revalidator = useRevalidator();
   const urlFetcher = useFetcher<{ url?: string; error?: string }>();
   const accountFetcher = useFetcher<{ email: string | null }>();
+  const statusFetcher = useFetcher<{ linked: boolean }>();
 
   const [connecting, setConnecting] = useState(false);
   const [oauthError, setOauthError] = useState<string | null>(null);
@@ -78,31 +79,104 @@ export function SupabaseAccountConnect({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [urlFetcher.data]);
 
-  // Finestra chiusa senza esito: nessun messaggio arriva, quindi il tentativo e'
-  // fallito. (A collegamento riuscito `connecting` e' gia' false.)
+  // Finestra chiusa senza esito. Non basta a dire che e' andata male: il
+  // messaggio puo' non essere mai arrivato (finestra chiusa a mano, oppure
+  // Supabase che ha portato il merchant a crearsi account o organizzazione
+  // altrove). Prima si chiede al server, e solo se non risulta niente si
+  // dichiara fallito — lo fa l'effetto qui sotto, alla risposta.
   useEffect(() => {
     if (!popupRef) return;
     const timer = setInterval(() => {
       if (popupRef.closed) {
         clearInterval(timer);
-        setConnecting((isConnecting) => {
-          if (isConnecting) setConnectFailed(true);
-          return false;
-        });
         setPopupRef(null);
+        statusFetcher.load('/api/supabase/link-status');
       }
     }, 500);
     return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [popupRef]);
+
+  // Finche' il collegamento e' in corso si chiede al server, a intervalli, se
+  // l'autorizzazione e' arrivata. La finestra di Supabase e' di un altro sito:
+  // non possiamo guardarci dentro, e se il merchant ci passa dei minuti a
+  // crearsi l'account il messaggio di ritorno non arriva mai. Cosi' il passo si
+  // sblocca da se' appena l'accesso c'e' davvero, senza costringerlo a
+  // ricominciare.
+  useEffect(() => {
+    if (!connecting || connected) return;
+    const timer = setInterval(() => {
+      // Fermo quando la scheda non e' in primo piano: li' non c'e' nessuno che
+      // guarda il badge, e al ritorno si controlla comunque (effetto sotto).
+      if (document.visibilityState !== 'visible') return;
+      // Una richiesta alla volta: se la precedente e' ancora in volo si aspetta.
+      if (statusFetcher.state === 'idle') {
+        statusFetcher.load('/api/supabase/link-status');
+      }
+    }, 3000);
+    return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connecting, connected, statusFetcher.state]);
+
+  // Il merchant torna sulla scheda di Shopify: e' il momento piu' probabile in
+  // cui l'autorizzazione e' appena stata data. Si controlla subito, senza
+  // aspettare il giro dell'intervallo.
+  useEffect(() => {
+    if (!connecting || connected) return;
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && statusFetcher.state === 'idle') {
+        statusFetcher.load('/api/supabase/link-status');
+      }
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', onVisible);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', onVisible);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connecting, connected, statusFetcher.state]);
+
+  // Esito della verifica sul server.
+  useEffect(() => {
+    if (statusFetcher.state !== 'idle' || !statusFetcher.data) return;
+
+    if (statusFetcher.data.linked) {
+      setConnecting(false);
+      setPopupRef(null);
+      setOauthError(null);
+      setConnectFailed(false);
+      popupRef?.close();
+      // Lo stato del passo lo dice il server: ricaricandolo il primo passo
+      // risulta concluso e il secondo si sblocca da se'.
+      revalidator.revalidate();
+      return;
+    }
+
+    // Non collegato E finestra chiusa: il tentativo e' finito senza esito.
+    // Se la finestra e' ancora aperta non si conclude niente, si continua ad
+    // aspettare.
+    if (!popupRef) {
+      setConnecting((isConnecting) => {
+        if (isConnecting) setConnectFailed(true);
+        return false;
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusFetcher.state, statusFetcher.data]);
 
   const startConnect = useCallback(() => {
     setOauthError(null);
     setConnectFailed(false);
+    // Finestra con un nome: se e' gia' aperta la si riusa invece di aprirne una
+    // seconda. E' quello che serve a "Riapri la pagina di autorizzazione", che
+    // riporta li' chi nel frattempo e' finito a creare account o organizzazione.
     const popup = window.open('', 'supabase-oauth', 'width=600,height=760');
     if (!popup) {
       setOauthError('Consenti i popup per collegare Supabase.');
       return;
     }
+    popup.focus();
     setPopupRef(popup);
     setConnecting(true);
     urlFetcher.submit(null, { method: 'post', action: '/api/supabase/oauth-url' });
@@ -146,6 +220,28 @@ export function SupabaseAccountConnect({
       </Text>
 
       {oauthError && <Banner tone="critical">{oauthError}</Banner>}
+
+      {/* Il caso che lascia tutti fermi: chi arriva senza account, o senza
+          un'organizzazione, viene portato da Supabase a crearla e la richiesta
+          di autorizzazione resta indietro. Il passo si sblocca comunque da solo
+          appena l'autorizzazione arriva, ma qui gli si dice dove cercarla. */}
+      {connecting && (
+        <Banner tone="info" title="Completa l'accesso nella finestra di Supabase">
+          <BlockStack gap="200">
+            <Text as="p">
+              Se Supabase ti chiede prima di creare l&apos;account o
+              l&apos;organizzazione, finisci quel passaggio: la richiesta di
+              autorizzazione resta indietro e va riaperta. Questa pagina si
+              aggiorna da sola appena l&apos;accesso è fatto.
+            </Text>
+            <InlineStack>
+              <Button onClick={startConnect}>
+                Riapri la pagina di autorizzazione
+              </Button>
+            </InlineStack>
+          </BlockStack>
+        </Banner>
+      )}
 
       <InlineStack>
         <Button
