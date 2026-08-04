@@ -13,8 +13,39 @@
 -- precedente non veniva chiuso, perche' il codice si aspetta un id di sole
 -- cifre e un uuid non lo e'.
 --
+-- Sulla colonna c'era anche una foreign key verso billing_charges(id), residuo
+-- di un disegno diverso: quella avrebbe richiesto l'id della NOSTRA riga di
+-- addebito, mentre tutto il codice ci mette e ci rilegge l'id di Shopify (per
+-- ricomporre il gid dell'abbonamento e per cancellarlo al cambio di piano).
+-- Nessuna riga la usava — active_charge_id e' null ovunque — e finche' resta in
+-- piedi impedisce di cambiare il tipo. Va tolta: il legame con billing_charges
+-- passa gia' da shopify_charge_id, che e' l'id di Shopify su entrambe le tabelle.
+--
 -- Idempotente: si puo' rieseguire senza effetti.
 
+-- 1. Via la foreign key. Cercata per colonna e non per nome: se in un altro
+--    database si chiamasse diversamente, il nome fisso non la troverebbe e la
+--    ALTER qui sotto fallirebbe di nuovo.
+DO $$
+DECLARE
+  vincolo record;
+BEGIN
+  FOR vincolo IN
+    SELECT c.conname
+    FROM pg_constraint c
+    JOIN pg_attribute a
+      ON a.attrelid = c.conrelid
+     AND a.attnum = ANY (c.conkey)
+    WHERE c.conrelid = '"shops"'::regclass
+      AND c.contype = 'f'
+      AND a.attname = 'active_charge_id'
+  LOOP
+    EXECUTE format('ALTER TABLE "shops" DROP CONSTRAINT %I', vincolo.conname);
+  END LOOP;
+END
+$$;
+
+-- 2. Il tipo giusto.
 DO $$
 BEGIN
   IF EXISTS (
