@@ -8,6 +8,7 @@ import {
   BlockStack,
   InlineGrid,
   Box,
+  Link,
 } from '@shopify/polaris';
 import { authenticate } from '~/shopify.server';
 import { prisma } from '~/db.server';
@@ -124,8 +125,10 @@ export default function SupabaseSettings() {
 
             {!config ? (
               <Banner tone="info">
-                Nessun progetto Supabase collegato. Vai nella Dashboard per collegare
-                Supabase.
+                {/* "Dashboard" e' il posto dove si collega: tanto vale
+                    portarcelo, invece di dirgli di cercarlo. */}
+                Nessun progetto Supabase collegato. Vai nella{' '}
+                <Link url="/">Dashboard</Link> per collegare il tuo database.
               </Banner>
             ) : (
               <>
