@@ -8,6 +8,7 @@ import {
   syncStatusBadge,
   formatDateTime,
   syncErrorMessage,
+  hasSyncDetail,
 } from './sync-log-format';
 import { SyncJobDetailsModal } from './SyncJobDetailsModal';
 
@@ -27,37 +28,48 @@ export function SyncLog({ jobs, customersEnabled, timeZone }: SyncLogProps) {
   const rows = jobs.map((job) => {
     const creation = tableCreationMessage(job.jobType);
     const status = syncStatusBadge(job.status);
+    const failure =
+      job.status === 'failed' && job.errors
+        ? syncErrorMessage((job.errors as { message?: string }).message)
+        : null;
 
-    // Per la creazione tabelle il badge porta il messaggio completo; per le sync
-    // porta lo stato, con l'eventuale errore sotto.
-    const stateCell = creation ? (
-      <Badge tone="success">{creation}</Badge>
+    // Il badge porta solo lo stato: cosa e' successo si legge nella colonna
+    // accanto, non stipato nella stessa cella.
+    const stateCell = <Badge tone={status.tone}>{status.label}</Badge>;
+
+    // Descrizione: l'errore quando la corsa e' fallita, l'esito della creazione
+    // tabelle quando il job e' quello. Una sync riuscita non ha niente da
+    // aggiungere allo stato, e la cella resta vuota.
+    const descriptionCell = failure ? (
+      <Text as="span" tone="critical">
+        {failure}
+      </Text>
+    ) : creation ? (
+      <Text as="span">{creation}</Text>
     ) : (
-      // inlineAlign="start": senza, il BlockStack allarga il badge a tutta la
-      // cella (i figli di un flex column si estendono per default), mentre deve
-      // essere largo quanto il suo testo.
-      <BlockStack gap="100" inlineAlign="start">
-        <Badge tone={status.tone}>{status.label}</Badge>
-        {job.status === 'failed' && job.errors ? (
-          <Text as="span" variant="bodySm" tone="critical">
-            {syncErrorMessage((job.errors as { message?: string }).message)}
-          </Text>
-        ) : null}
-      </BlockStack>
-    );
-
-    // Terza colonna: vuota per le creazioni tabella, altrimenti pulsante "Vedi
-    // dettagli" che apre il modal.
-    const detailsCell = creation ? (
       ''
-    ) : (
-      <Button variant="plain" onClick={() => setDetailsJobId(job.id)}>
-        Vedi dettagli
-      </Button>
     );
+
+    // "Vedi dettagli" solo dove c'e' davvero del dettaglio da vedere: un modal
+    // vuoto farebbe pensare che i dati siano andati persi. Le creazioni tabella
+    // non ne hanno mai, e nemmeno le sincronizzazioni che non hanno cambiato
+    // niente (comprese tutte quelle precedenti a questa funzione).
+    const detailsCell =
+      !creation && hasSyncDetail(job) ? (
+        <Button variant="plain" onClick={() => setDetailsJobId(job.id)}>
+          Vedi dettagli
+        </Button>
+      ) : (
+        ''
+      );
 
     // Solo data e ora: quanto e' durata la corsa non dice nulla al merchant.
-    return [stateCell, formatDateTime(job.startedAt, timeZone), detailsCell];
+    return [
+      stateCell,
+      descriptionCell,
+      formatDateTime(job.startedAt, timeZone),
+      detailsCell,
+    ];
   });
 
   return (
@@ -73,8 +85,8 @@ export function SyncLog({ jobs, customersEnabled, timeZone }: SyncLogProps) {
             </Text>
           ) : (
             <DataTable
-              columnContentTypes={['text', 'text', 'text']}
-              headings={['Stato', 'Data/ora', 'Dettagli']}
+              columnContentTypes={['text', 'text', 'text', 'text']}
+              headings={['Stato', 'Descrizione', 'Data e ora', 'Dettagli']}
               rows={rows}
             />
           )}

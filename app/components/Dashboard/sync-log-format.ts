@@ -38,6 +38,34 @@ export function syncErrorMessage(raw: string | null | undefined): string {
   return text;
 }
 
+/** I contatori di un job, gli unici campi che servono per sapere se c'e' dettaglio. */
+export interface SyncJobCounters {
+  productsAdded: number;
+  productsRemoved: number;
+  customersAdded: number;
+  customersUpdated: number;
+  customersSuspended: number;
+}
+
+/**
+ * Se questa sincronizzazione ha davvero cambiato qualcosa.
+ *
+ * Serve a decidere se offrire "Vedi dettagli": una corsa che non ha aggiunto,
+ * rimosso, aggiornato o sospeso niente non ha nulla da mostrare, e aprire un
+ * modal vuoto fa credere al merchant che l'app abbia perso i dati. Vale anche
+ * per tutte le sincronizzazioni precedenti all'introduzione del dettaglio: i
+ * loro contatori sono a zero perche' nessuno li ha mai scritti.
+ */
+export function hasSyncDetail(job: SyncJobCounters): boolean {
+  return (
+    job.productsAdded > 0 ||
+    job.productsRemoved > 0 ||
+    job.customersAdded > 0 ||
+    job.customersUpdated > 0 ||
+    job.customersSuspended > 0
+  );
+}
+
 export interface StatusBadge {
   tone: 'success' | 'critical' | 'info';
   label: string;

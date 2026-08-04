@@ -4,7 +4,30 @@ import {
   syncStatusBadge,
   formatDateTime,
   syncErrorMessage,
+  hasSyncDetail,
 } from './sync-log-format';
+
+describe('hasSyncDetail', () => {
+  const nessunCambio = {
+    productsAdded: 0,
+    productsRemoved: 0,
+    customersAdded: 0,
+    customersUpdated: 0,
+    customersSuspended: 0,
+  };
+
+  it('nessun cambiamento → niente da mostrare', () => {
+    expect(hasSyncDetail(nessunCambio)).toBe(false);
+  });
+
+  it('basta un contatore sopra lo zero', () => {
+    expect(hasSyncDetail({ ...nessunCambio, productsAdded: 1 })).toBe(true);
+    expect(hasSyncDetail({ ...nessunCambio, productsRemoved: 1 })).toBe(true);
+    expect(hasSyncDetail({ ...nessunCambio, customersAdded: 1 })).toBe(true);
+    expect(hasSyncDetail({ ...nessunCambio, customersUpdated: 1 })).toBe(true);
+    expect(hasSyncDetail({ ...nessunCambio, customersSuspended: 1 })).toBe(true);
+  });
+});
 
 describe('tableCreationMessage', () => {
   it('mappa i tre eventi di creazione', () => {
