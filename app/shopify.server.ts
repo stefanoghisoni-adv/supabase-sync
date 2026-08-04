@@ -37,7 +37,7 @@ const shopify = shopifyApp({
       try {
         await prisma.shop.upsert({
           where: { shopDomain: session.shop },
-          create: shopCreateData(session),
+          create: await shopCreateData(session),
           update: {
             accessToken: encrypt(session.accessToken ?? ''),
             scopes: session.scope ?? '',

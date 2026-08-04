@@ -10,18 +10,18 @@ vi.mock('~/lib/billing/apply-plan.server', () => ({
 // renderebbe impossibile distinguerle.
 vi.mock('~/lib/billing/find-plan.server', () => ({
   findPlanByName: vi.fn(),
+  findFreePlan: vi.fn(),
 }));
 vi.mock('~/db.server', () => ({
   prisma: {
     shop: { findUnique: vi.fn() },
-    plan: { findFirst: vi.fn() },
     billingCharge: { updateMany: vi.fn() },
   },
 }));
 
 import { action } from './webhooks.app-subscriptions.update';
 import { applyPlanToShop } from '~/lib/billing/apply-plan.server';
-import { findPlanByName } from '~/lib/billing/find-plan.server';
+import { findFreePlan, findPlanByName } from '~/lib/billing/find-plan.server';
 import { prisma } from '~/db.server';
 
 function req(
@@ -192,7 +192,7 @@ describe('webhook app_subscriptions/update', () => {
 
     expect(res.status).toBe(200);
     expect(applyPlanToShop).not.toHaveBeenCalled();
-    expect(prisma.plan.findFirst).not.toHaveBeenCalled();
+    expect(findFreePlan).not.toHaveBeenCalled();
   });
 
   it('CANCELLED dell\'abbonamento attivo → riporta al piano gratuito', async () => {
@@ -200,7 +200,7 @@ describe('webhook app_subscriptions/update', () => {
       id: 'shop-1',
       activeChargeId: '123', // questo abbonamento e' quello attivo
     });
-    (prisma.plan.findFirst as any).mockResolvedValue({
+    (findFreePlan as any).mockResolvedValue({
       planName: 'free',
       priceMonthly: 0,
     });
@@ -217,10 +217,7 @@ describe('webhook app_subscriptions/update', () => {
     const res = await action({ request: req(payload) } as any);
 
     expect(res.status).toBe(200);
-    expect(prisma.plan.findFirst).toHaveBeenCalledWith({
-      where: { priceMonthly: 0 },
-      orderBy: { createdAt: 'asc' },
-    });
+    expect(findFreePlan).toHaveBeenCalled();
     expect(applyPlanToShop).toHaveBeenCalledWith({
       shopId: 'shop-1',
       planName: 'free',
@@ -238,7 +235,7 @@ describe('webhook app_subscriptions/update', () => {
       id: 'shop-1',
       activeChargeId: '456',
     });
-    (prisma.plan.findFirst as any).mockResolvedValue({
+    (findFreePlan as any).mockResolvedValue({
       planName: 'free',
       priceMonthly: 0,
     });
@@ -268,7 +265,7 @@ describe('webhook app_subscriptions/update', () => {
       id: 'shop-1',
       activeChargeId: '789',
     });
-    (prisma.plan.findFirst as any).mockResolvedValue({
+    (findFreePlan as any).mockResolvedValue({
       planName: 'free',
       priceMonthly: 0,
     });
@@ -293,7 +290,7 @@ describe('webhook app_subscriptions/update', () => {
       id: 'shop-1',
       activeChargeId: '321',
     });
-    (prisma.plan.findFirst as any).mockResolvedValue({
+    (findFreePlan as any).mockResolvedValue({
       planName: 'free',
       priceMonthly: 0,
     });
@@ -318,7 +315,7 @@ describe('webhook app_subscriptions/update', () => {
       id: 'shop-1',
       activeChargeId: '555',
     });
-    (prisma.plan.findFirst as any).mockResolvedValue(null);
+    (findFreePlan as any).mockResolvedValue(null);
 
     const payload = {
       app_subscription: {

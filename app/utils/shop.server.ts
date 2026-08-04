@@ -1,5 +1,6 @@
 import { prisma } from '~/db.server';
 import { encrypt } from '~/utils/crypto.server';
+import { freePlanName } from '~/lib/billing/find-plan.server';
 
 // Sottoinsieme minimo della sessione Shopify che ci serve per materializzare
 // il record shop. Evita l'accoppiamento diretto col tipo Session di Shopify.
@@ -11,12 +12,17 @@ interface ShopSession {
 
 // Dati di creazione di un nuovo shop a partire dalla sessione Shopify.
 // Condiviso tra l'hook afterAuth e il self-heal dei loader.
-export function shopCreateData(session: ShopSession) {
+//
+// Il piano iniziale si legge dal listino invece di scriverlo qui: e' lo stesso
+// nome che sta in plans.plan_name, quindi rinominare un piano non lascia piu'
+// indietro i negozi nuovi. Sul database owner c'e' anche una foreign key che
+// rifiuta un nome fuori dal listino.
+export async function shopCreateData(session: ShopSession) {
   return {
     shopDomain: session.shop,
     accessToken: encrypt(session.accessToken ?? ''),
     scopes: session.scope ?? '',
-    currentPlan: 'free',
+    currentPlan: await freePlanName(),
     isInTrial: true,
     trialEndsAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
     installedAt: new Date(),
@@ -42,7 +48,7 @@ export async function getOrCreateShop(session: ShopSession) {
   // la SELECT e questa riga, la corsa si risolve senza violare l'unique.
   return prisma.shop.upsert({
     where: { shopDomain: session.shop },
-    create: shopCreateData(session),
+    create: await shopCreateData(session),
     update: {},
     include: { supabaseConfig: true },
   });

@@ -29,3 +29,35 @@ export async function findPlanByName(
     where: { planName: { equals: trimmed, mode: 'insensitive' } },
   });
 }
+
+// Nome da usare se il listino non ha nessun piano gratuito. E' l'ultima
+// spiaggia: serve solo a non far fallire un'installazione, e se e' sbagliato la
+// foreign key su shops.current_plan lo rifiuta subito invece di lasciar passare
+// un negozio con un piano che non esiste.
+const FALLBACK_FREE_PLAN_NAME = 'Free';
+
+/**
+ * Il piano gratuito del listino: quello a prezzo zero, il piu' vecchio se ce
+ * n'e' piu' d'uno. Null se non ne esiste nessuno.
+ *
+ * E' il piano su cui atterra chi installa l'app e quello a cui si torna quando
+ * un abbonamento finisce. Va cercato, non scritto a mano: il nome nel listino
+ * puo' cambiare, e un nome inventato qui darebbe un negozio senza piano valido.
+ */
+export async function findFreePlan(): Promise<Plan | null> {
+  return prisma.plan.findFirst({
+    where: { priceMonthly: 0 },
+    orderBy: { createdAt: 'asc' },
+  });
+}
+
+/** Il nome esatto del piano gratuito, per chi deve solo scriverlo su uno shop. */
+export async function freePlanName(): Promise<string> {
+  const plan = await findFreePlan();
+  if (plan) return plan.planName;
+
+  console.error(
+    `[plans] nessun piano gratuito nel listino: uso "${FALLBACK_FREE_PLAN_NAME}"`,
+  );
+  return FALLBACK_FREE_PLAN_NAME;
+}

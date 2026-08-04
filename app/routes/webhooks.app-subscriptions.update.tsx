@@ -4,7 +4,7 @@ import { verifyWebhook } from '~/lib/webhooks/verify.server';
 import { prisma } from '~/db.server';
 import { applyPlanToShop } from '~/lib/billing/apply-plan.server';
 import { parseGidId } from '~/lib/billing/subscription.server';
-import { findPlanByName } from '~/lib/billing/find-plan.server';
+import { findFreePlan, findPlanByName } from '~/lib/billing/find-plan.server';
 import { samePlanName } from '~/lib/billing/plan-name';
 import { subscriptionOutcome } from '~/lib/billing/subscription-status';
 
@@ -142,10 +142,7 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     // E' l'abbonamento attivo che e' terminato: riporta al piano gratuito.
-    const freePlan = await prisma.plan.findFirst({
-      where: { priceMonthly: 0 },
-      orderBy: { createdAt: 'asc' },
-    });
+    const freePlan = await findFreePlan();
 
     if (!freePlan) {
       // Nessun piano gratuito nel listino: non inventare un nome, logga e basta.

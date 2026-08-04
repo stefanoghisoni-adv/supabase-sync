@@ -35,7 +35,10 @@ model Shop {
   shopDomain        String             @unique @map("shop_domain")
   accessToken       String             @map("access_token")
   scopes            String
-  currentPlan       String             @default("free") @map("current_plan")
+  // Nessun default: il piano iniziale si legge dal listino (freePlanName), cosi'
+  // rinominare un piano non lascia indietro i negozi nuovi. Sul database c'e'
+  // una foreign key verso plans.plan_name che rifiuta i nomi fuori listino.
+  currentPlan       String             @map("current_plan")
   activeChargeId    String?            @map("active_charge_id")
   trialEndsAt       DateTime?          @map("trial_ends_at")
   isInTrial         Boolean            @default(true) @map("is_in_trial")
