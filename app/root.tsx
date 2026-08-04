@@ -24,6 +24,7 @@ import { Page, Banner, Text, BlockStack } from '@shopify/polaris';
 import { authenticate } from './shopify.server';
 import { prisma } from './db.server';
 import { canAccessPlanTab } from './components/Billing/plan-access';
+import { adminAppUrl, reloadWholePage } from './utils/admin-page';
 
 // Rete di sicurezza del tema chiaro, in linea nel documento e DOPO i fogli di
 // stile: force-light.css fa il lavoro completo, ma e' un file esterno, e se per
@@ -68,13 +69,20 @@ export async function loader({ request }: LoaderFunctionArgs) {
       where: { shopDomain: session.shop },
       select: { currentPlan: true },
     });
-    return json({ apiKey, canSeePlanTab: canAccessPlanTab(shop?.currentPlan) });
+    return json({
+      apiKey,
+      canSeePlanTab: canAccessPlanTab(shop?.currentPlan),
+      // Serve alla pagina d'errore per ricaricare la pagina dell'admin. Si
+      // ricava dalla sessione e non dai parametri della URL, che una
+      // navigazione interna si porta via.
+      adminAppUrl: adminAppUrl(session.shop, apiKey),
+    });
   } catch (error) {
     // I redirect di OAuth/App Bridge sono Response lanciate: devono passare
     // intatte. Un guasto diverso (es. DB irraggiungibile) non deve far fallire
     // l'intera app per una voce di menu: la rotta /plan si difende comunque da se'.
     if (error instanceof Response) throw error;
-    return json({ apiKey, canSeePlanTab: true });
+    return json({ apiKey, canSeePlanTab: true, adminAppUrl: null });
   }
 }
 
@@ -129,6 +137,7 @@ export function ErrorBoundary() {
   // la voce (chi non deve entrarci trova comunque la rotta bloccata) che toglierla
   // a chi invece vuole fare upgrade.
   const canSeePlanTab = rootData?.canSeePlanTab ?? true;
+  const adminUrl = rootData?.adminAppUrl ?? null;
 
   let title = 'Si è verificato un errore';
   let detail = 'Errore sconosciuto';
@@ -149,7 +158,8 @@ export function ErrorBoundary() {
       transient = true;
       title = 'Connessione assente';
       detail =
-        'Non è stato possibile raggiungere il server: controlla la connessione e riprova.';
+        'Il controllo della connessione non è andato a buon fine: verifica la ' +
+        'rete e aggiorna la pagina.';
     }
   }
 
@@ -178,14 +188,19 @@ export function ErrorBoundary() {
           </NavMenu>
           <Page title="Supabase Tracking Sync">
             <BlockStack gap="400">
-              {/* Warning (non critical) per i blip di rete: il pulsante ricarica
-                  l'app senza costringere l'utente a uscire e rientrare. */}
+              {/* Warning (non critical) per i blip di rete. Il pulsante ricarica
+                  la pagina dell'admin, non il solo iframe dell'app: ricaricare
+                  l'iframe ripete la richiesta della sua URL corrente, che dopo
+                  una navigazione interna puo' non essere una pagina dell'app. */}
               <Banner
                 tone={transient ? 'warning' : 'critical'}
                 title={title}
                 action={
                   transient
-                    ? { content: 'Riprova', onAction: () => window.location.reload() }
+                    ? {
+                        content: 'Aggiorna pagina',
+                        onAction: () => reloadWholePage(adminUrl, window),
+                      }
                     : undefined
                 }
               >
