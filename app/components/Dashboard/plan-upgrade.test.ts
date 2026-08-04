@@ -256,6 +256,46 @@ describe('planChangeBanner', () => {
     expect(b.messages).toHaveLength(1);
   });
 
+  it('upgrade che rimette i clienti, tabella gia\' li\' → success e la sync riprende', () => {
+    // Il caso di chi era sceso a un piano senza clienti e poi risale: non c'e'
+    // niente da creare, ma la notizia che ha comprato e' proprio che i clienti
+    // tornano ad aggiornarsi. Senza, il banner parlerebbe solo di prodotti.
+    const b = planChangeBanner({
+      ...changed,
+      currentMax: 400,
+      previousMax: 50,
+      ...withCustomers,
+      previousCustomersEnabled: false,
+    })!;
+    expect(b.tone).toBe('success');
+    expect(b.title).toBe('Piano aggiornato');
+    expect(text(b)).toContain('sincronizzazione dei clienti riprende');
+  });
+
+  it('clienti gia\' inclusi anche prima → non si annuncia nessuna ripresa', () => {
+    const b = planChangeBanner({
+      ...changed,
+      currentMax: 400,
+      previousMax: 100,
+      ...withCustomers,
+      previousCustomersEnabled: true,
+    })!;
+    expect(text(b)).not.toContain('riprende');
+  });
+
+  it('piano precedente sconosciuto → non si annuncia nessuna ripresa', () => {
+    // Allineamento gia' avvenuto o primo utilizzo: non sappiamo da dove si
+    // viene, quindi non promettiamo niente.
+    const b = planChangeBanner({
+      ...changed,
+      currentMax: 400,
+      previousMax: null,
+      ...withCustomers,
+      previousCustomersEnabled: null,
+    })!;
+    expect(text(b)).not.toContain('riprende');
+  });
+
   it('sync clienti sospesa: l\'avviso arriva anche senza un cambio di piano rilevato', () => {
     // E' il caso del downgrade dopo una sync mai riuscita sul piano precedente:
     // il confronto fra piani non segnalerebbe nulla, ma la tabella clienti c'e'

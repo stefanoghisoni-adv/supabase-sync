@@ -135,6 +135,13 @@ export function planChangeBanner(opts: {
   /** La tabella dei clienti risulta gia' creata nel progetto del merchant. */
   customersTableCreated: boolean;
   /**
+   * I clienti erano inclusi nel piano precedente. Null quando il piano
+   * precedente non si conosce (primo utilizzo, oppure allineamento gia'
+   * avvenuto): in quel caso non si annuncia nessuna ripresa, perche' non si sa
+   * da dove si viene.
+   */
+  previousCustomersEnabled?: boolean | null;
+  /**
    * Primo piano che rimetterebbe i clienti nella sincronizzazione (nome
    * tecnico). Null se non c'e' nulla da proporre: in quel caso la frase
    * sull'upgrade non compare.
@@ -147,6 +154,15 @@ export function planChangeBanner(opts: {
   const customersGained = opts.customersEnabled && !opts.customersTableCreated;
   // Clienti non piu' inclusi ma tabella gia' popolata: sync sospesa, dati fermi.
   const customersLost = !opts.customersEnabled && opts.customersTableCreated;
+  // Clienti tornati nel piano con la tabella gia' li': non c'e' niente da
+  // creare, ma la sincronizzazione riparte — ed e' proprio la notizia che il
+  // merchant si aspetta dopo aver pagato l'upgrade. Senza questo caso il banner
+  // parlerebbe solo del tetto prodotti, come se i clienti non fossero cambiati.
+  const customersResumed =
+    opts.planChanged &&
+    opts.customersEnabled &&
+    opts.customersTableCreated &&
+    opts.previousCustomersEnabled === false;
 
   if (!opts.planChanged && !customersGained && !customersLost) return null;
 
@@ -196,6 +212,13 @@ export function planChangeBanner(opts: {
       'La tabella dei clienti che hanno acconsentito al marketing viene creata e ' +
         'popolata subito, senza che tu debba fare nulla: da qui in avanti si ' +
         'aggiorna da sola insieme alla sincronizzazione periodica dei prodotti.',
+    );
+  }
+
+  if (customersResumed) {
+    messages.push(
+      'La sincronizzazione dei clienti riprende: i dati già raccolti tornano ad ' +
+        'aggiornarsi da soli insieme ai prodotti, senza che tu debba fare nulla.',
     );
   }
 

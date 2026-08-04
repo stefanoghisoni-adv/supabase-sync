@@ -39,7 +39,7 @@ import {
   syncCtaState,
 } from '~/components/Dashboard/plan-upgrade';
 import { firstPlanWithCustomersSync } from '~/components/Dashboard/account-format';
-import { samePlanName } from '~/lib/billing/plan-name';
+import { normalizePlanName, samePlanName } from '~/lib/billing/plan-name';
 import { authorizationBanners } from '~/components/Dashboard/authorization-banners';
 import { SchemaUpdateBanner } from '~/components/Dashboard/SchemaUpdateBanner';
 import { needsSchemaUpdate } from '~/lib/supabase/merchant-migrations';
@@ -212,6 +212,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
       planChanged,
       currentMaxProducts: plan?.maxProducts ?? null,
       previousMaxProducts: previousPlan?.maxProducts ?? null,
+      // Serve a distinguere "clienti sbloccati adesso" da "clienti che c'erano
+      // gia'": la sola presenza della tabella non lo dice, perche' resta li'
+      // anche dopo un downgrade.
+      previousCustomersEnabled: previousPlan?.customersSyncEnabled ?? null,
       // Piano che rimetterebbe i clienti nella sincronizzazione: serve al banner
       // del cambio di piano quando li ha appena persi.
       customersUpgradePlan: customersEnabled
@@ -314,7 +318,7 @@ interface ProductHistoryResponse {
 }
 
 export default function Dashboard() {
-  const { shop, plan, supabaseConnected, supabaseAccountConnected, customersEnabled, authorization, syncState, planChanged, currentMaxProducts, previousMaxProducts, customersTableCreated, customersUpgradePlan, trackingAuthorization, schemaUpdatePending } =
+  const { shop, plan, supabaseConnected, supabaseAccountConnected, customersEnabled, authorization, syncState, planChanged, currentMaxProducts, previousMaxProducts, previousCustomersEnabled, customersTableCreated, customersUpgradePlan, trackingAuthorization, schemaUpdatePending } =
     useLoaderData<typeof loader>();
   const blocked = authorization !== 'ENABLED';
   const navigate = useNavigate();
@@ -457,6 +461,7 @@ export default function Dashboard() {
     customersEnabled,
     customersTableCreated,
     customersUpgradePlan,
+    previousCustomersEnabled,
   });
   const hasPlanBanner = planBanner !== null;
 
@@ -473,39 +478,58 @@ export default function Dashboard() {
   const DISMISSED_KEY = 'planChangeBannerDismissed';
   const FLOOR_MS = 120_000;
 
+  // Sia il banner conservato sia la chiusura sono legati al piano a cui si
+  // riferiscono. Senza, il primo banner della sessione resterebbe l'unico: chi
+  // scende a un piano senza clienti e poi risale a uno che li include
+  // continuerebbe a leggere "la sincronizzazione dei clienti si interrompe",
+  // cioe' l'esatto contrario di quello che ha appena comprato. Per lo stesso
+  // motivo la X chiusa una volta non deve zittire anche i cambi successivi.
+  const bannerPlanId = normalizePlanName(shop.currentPlan);
+
   // Il contenuto viene congelato insieme all'istante di comparsa: dopo
   // l'allineamento il loader non conosce piu' il piano precedente, quindi il
   // messaggio va conservato com'era quando il cambio e' stato rilevato.
   const [banner, setBanner] = useState<
-    { at: number; value: NonNullable<typeof planBanner> } | null
+    { at: number; plan: string; value: NonNullable<typeof planBanner> } | null
   >(null);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [, forceTick] = useState(0);
 
   useEffect(() => {
-    if (sessionStorage.getItem(DISMISSED_KEY)) {
+    if (sessionStorage.getItem(DISMISSED_KEY) === bannerPlanId) {
       setBannerDismissed(true);
+      setBanner(null);
       return;
     }
+    // Chiusura riferita a un piano precedente: non vale piu'.
+    setBannerDismissed(false);
+
     const stored = sessionStorage.getItem(BANNER_KEY);
     if (stored) {
       try {
-        setBanner(JSON.parse(stored));
-        return;
+        const parsed = JSON.parse(stored);
+        if (parsed?.plan === bannerPlanId) {
+          setBanner(parsed);
+          return;
+        }
       } catch {
-        sessionStorage.removeItem(BANNER_KEY);
+        // Contenuto illeggibile: si riparte da capo.
       }
+      sessionStorage.removeItem(BANNER_KEY);
     }
+
     if (planBanner) {
-      const fresh = { at: Date.now(), value: planBanner };
+      const fresh = { at: Date.now(), plan: bannerPlanId, value: planBanner };
       sessionStorage.setItem(BANNER_KEY, JSON.stringify(fresh));
       setBanner(fresh);
+    } else {
+      setBanner(null);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasPlanBanner]);
+  }, [hasPlanBanner, bannerPlanId]);
 
   const dismissBanner = () => {
-    sessionStorage.setItem(DISMISSED_KEY, '1');
+    sessionStorage.setItem(DISMISSED_KEY, bannerPlanId);
     setBannerDismissed(true);
   };
 
