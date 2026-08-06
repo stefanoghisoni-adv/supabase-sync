@@ -1,6 +1,6 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from '@remix-run/node';
 import { json } from '@remix-run/node';
-import { useLoaderData, useFetcher, useRevalidator, useNavigate } from '@remix-run/react';
+import { useLoaderData, useFetcher, useRevalidator } from '@remix-run/react';
 import { useEffect, useState } from 'react';
 import {
   Page,
@@ -321,7 +321,6 @@ export default function Dashboard() {
   const { shop, plan, supabaseConnected, supabaseAccountConnected, customersEnabled, authorization, syncState, planChanged, currentMaxProducts, previousMaxProducts, previousCustomersEnabled, customersTableCreated, customersUpgradePlan, trackingAuthorization, schemaUpdatePending } =
     useLoaderData<typeof loader>();
   const blocked = authorization !== 'ENABLED';
-  const navigate = useNavigate();
 
   // Pulsanti-link (Impostazioni, Vedi logs): mentre Remix carica la rotta di
   // destinazione mostriamo lo spinner e disabilitiamo il pulsante, così un clic
@@ -814,7 +813,6 @@ export default function Dashboard() {
             problemCount={readiness?.problemCount ?? 0}
             planLimit={currentMaxProducts}
             loading={readinessLoading}
-            onViewIssues={() => navigate('/products/issues')}
           />
           <CustomersCard
             enabled={customersEnabled}

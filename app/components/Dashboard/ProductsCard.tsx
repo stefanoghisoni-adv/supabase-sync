@@ -2,6 +2,9 @@ import { Card, BlockStack, Text, Button } from '@shopify/polaris';
 import { MetricRow } from './MetricRow';
 import { problemRowPresentation } from './product-rows';
 import { productQuotaLabel } from './product-quota';
+import { useNavLoading } from './nav-loading';
+
+const ISSUES_PATH = '/products/issues';
 
 export interface ProductsCardProps {
   readyCount: number;
@@ -9,7 +12,6 @@ export interface ProductsCardProps {
   /** Tetto di prodotti del piano; null = nessun tetto (si scrive ∞). */
   planLimit?: number | null;
   loading: boolean;
-  onViewIssues: () => void;
 }
 
 export function ProductsCard({
@@ -17,8 +19,12 @@ export function ProductsCard({
   problemCount,
   planLimit,
   loading,
-  onViewIssues,
 }: ProductsCardProps) {
+  // La pagina dei prodotti non idonei interroga Shopify pagina per pagina, quindi
+  // l'attesa si sente. Senza un segnale il merchant clicca una seconda volta,
+  // convinto che il primo clic non sia arrivato.
+  const issues = useNavLoading(ISSUES_PATH);
+
   // Il totale e' la somma per costruzione: idonei + non idonei.
   const total = readyCount + problemCount;
   const { tone, showLink } = problemRowPresentation(problemCount);
@@ -35,7 +41,13 @@ export function ProductsCard({
           label="Non idonei"
           action={
             showLink && !loading ? (
-              <Button variant="plain" onClick={onViewIssues}>
+              <Button
+                variant="plain"
+                url={ISSUES_PATH}
+                onClick={issues.start}
+                disabled={issues.loading}
+                loading={issues.loading}
+              >
                 Vedi prodotti
               </Button>
             ) : undefined
