@@ -450,7 +450,9 @@ export function SupabaseProjectConnect({
       )}
 
       {projectsLoaded && projects && projects.length > 0 && (
-        <Box maxWidth="50%">
+        // 65% e non meta': i nomi dei progetti Supabase sono lunghi e a meta'
+        // riga finivano troncati proprio dove il merchant deve distinguerli.
+        <Box maxWidth="65%">
           <Combobox
             activator={
               <Combobox.TextField
