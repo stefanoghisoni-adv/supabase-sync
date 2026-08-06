@@ -12,6 +12,7 @@ import { hasPlanChanged } from '~/components/Dashboard/plan-upgrade';
 import { isAuthorized } from '~/utils/authorization.server';
 import { findPlanByName } from '~/lib/billing/find-plan.server';
 import { SYNC_ACTIVE_CONFIG_FILTER } from '~/lib/sync/sync-active';
+import { pruneAccessLog } from '~/lib/read-proxy/access-log.server';
 
 /**
  * Cron-triggered sync endpoint (replaces the long-running BullMQ worker on the
@@ -40,8 +41,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
     periodicChecks: 0,
     planCatchUps: 0,
     snapshots: 0,
+    accessLogPruned: 0,
     errors: [] as string[],
   };
+
+  // Potatura del registro accessi. Prima di tutto il resto e fuori dai cicli:
+  // e' una sola query, non dipende da nessun negozio, e messa qui gira anche
+  // quando la parte di sync si interrompe a meta'.
+  results.accessLogPruned = await pruneAccessLog();
 
   // 1. Drain jobs enqueued from the UI (manual-sync, initial-bulk-sync, periodic-sync-check)
   const syncQueue = await getSyncQueue();

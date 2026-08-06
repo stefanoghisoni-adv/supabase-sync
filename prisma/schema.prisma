@@ -83,6 +83,7 @@ model Shop {
   customFields      CustomField[]
   fieldMappings     FieldMapping[]
   eligibilitySnapshots ProductEligibilitySnapshot[]
+  customerDataAccessLogs CustomerDataAccessLog[]
 
   @@index([shopDomain])
   @@map("shops")
@@ -272,4 +273,38 @@ model SyncJobEvent {
 
   @@index([syncJobId])
   @@map("sync_job_events")
+}
+
+// Registro degli accessi ai dati personali dei clienti.
+//
+// Ogni lettura della tabella customers attraverso il proxy lascia una riga qui:
+// quale negozio, com'e' andata, quando. Serve a rispondere alla domanda "chi ha
+// letto dati personali e quando", che Shopify pone fra i requisiti per i dati
+// protetti dei clienti.
+//
+// Cosa NON ci finisce, ed e' la parte importante: nessun dato letto e nessuna
+// query. Una search PostgREST puo' contenere un indirizzo email
+// (?email_address=eq.…), quindi salvarla vorrebbe dire copiarsi addosso proprio
+// il dato che il registro esiste per proteggere.
+//
+// I prodotti non passano di qui: non sono dati personali, e le vetrine li
+// leggono a ogni pagina.
+model CustomerDataAccessLog {
+  id     String  @id @default(uuid())
+  // Nullo quando il token non e' riconducibile a nessun negozio: il tentativo
+  // va registrato lo stesso, ed e' anzi quello piu' interessante.
+  shopId String? @map("shop_id")
+  // Esito leggibile: 'allowed', 'denied_no_token', 'denied_invalid_token',
+  // 'denied_not_configured', 'denied_suspended', 'denied_table',
+  // 'denied_consent', 'upstream_error'.
+  outcome   String
+  // Lo status HTTP restituito al chiamante.
+  status    Int
+  createdAt DateTime @default(now()) @map("created_at")
+
+  shop Shop? @relation(fields: [shopId], references: [id], onDelete: SetNull)
+
+  @@index([shopId, createdAt(sort: Desc)])
+  @@index([createdAt])
+  @@map("customer_data_access_logs")
 }

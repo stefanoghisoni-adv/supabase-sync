@@ -17,6 +17,18 @@ vi.mock('~/lib/read-proxy/forward.server', async () => {
   };
 });
 
+// Il registro accessi si sostituisce: senza, il loader aprirebbe una
+// connessione al database vero per ogni test sui clienti.
+interface LoggedAccess {
+  shopId: string | null;
+  outcome: string;
+  status: number;
+}
+const logCustomerDataAccess = vi.fn(async (_entry: LoggedAccess) => {});
+vi.mock('~/lib/read-proxy/access-log.server', () => ({
+  logCustomerDataAccess: (entry: LoggedAccess) => logCustomerDataAccess(entry),
+}));
+
 import { loader } from './rest.v1.$table';
 
 const call = (headers: Record<string, string>, table = 'products', url = 'https://app/rest/v1/products?sku=eq.X') =>
@@ -39,6 +51,7 @@ describe('proxy loader', () => {
   beforeEach(() => {
     resolveShopReadContext.mockReset();
     forwardRead.mockReset();
+    logCustomerDataAccess.mockClear();
   });
 
   it('token mancante → 401', async () => {
@@ -197,5 +210,82 @@ describe('proxy loader', () => {
     expect(forwardRead).toHaveBeenCalledTimes(1);
     const forwardedSearch = forwardRead.mock.calls[0][2] as string;
     expect(forwardedSearch).not.toContain('accepts_marketing');
+  });
+});
+
+describe('registro degli accessi ai dati personali', () => {
+  beforeEach(() => {
+    resolveShopReadContext.mockReset();
+    forwardRead.mockReset();
+    logCustomerDataAccess.mockClear();
+  });
+
+  const entry = (): LoggedAccess => logCustomerDataAccess.mock.calls[0][0];
+
+  it('una lettura clienti riuscita viene registrata come consentita', async () => {
+    resolveShopReadContext.mockResolvedValueOnce(okCtx({ customersEnabled: true }));
+    forwardRead.mockResolvedValueOnce({ status: 200, body: '[]', contentType: 'application/json' });
+
+    await call({ authorization: 'Bearer spx_x' }, 'customers', 'https://app/rest/v1/customers');
+
+    expect(logCustomerDataAccess).toHaveBeenCalledTimes(1);
+    expect(entry()).toEqual({ shopId: 's1', outcome: 'allowed', status: 200 });
+  });
+
+  it('i prodotti non si registrano: non sono dati personali', async () => {
+    resolveShopReadContext.mockResolvedValueOnce(okCtx());
+    forwardRead.mockResolvedValueOnce({ status: 200, body: '[]', contentType: 'application/json' });
+
+    await call({ authorization: 'Bearer spx_x' }, 'products');
+
+    expect(logCustomerDataAccess).not.toHaveBeenCalled();
+  });
+
+  it('token assente su clienti → registrato, senza negozio', async () => {
+    await call({}, 'customers', 'https://app/rest/v1/customers');
+
+    expect(entry()).toEqual({ shopId: null, outcome: 'denied_no_token', status: 401 });
+  });
+
+  it('negozio sospeso → registrato con il negozio che ha provato', async () => {
+    resolveShopReadContext.mockResolvedValueOnce(okCtx({ canReadData: false, customersEnabled: true }));
+
+    await call({ authorization: 'Bearer spx_x' }, 'customers', 'https://app/rest/v1/customers');
+
+    expect(entry()).toEqual({ shopId: 's1', outcome: 'denied_suspended', status: 403 });
+  });
+
+  it('clienti non inclusi nel piano → registrato come tabella negata', async () => {
+    resolveShopReadContext.mockResolvedValueOnce(okCtx({ customersEnabled: false }));
+
+    await call({ authorization: 'Bearer spx_x' }, 'customers', 'https://app/rest/v1/customers');
+
+    expect(entry()).toEqual({ shopId: 's1', outcome: 'denied_table', status: 403 });
+  });
+
+  it('cliente senza consenso → registrato come consenso negato', async () => {
+    resolveShopReadContext.mockResolvedValueOnce(okCtx({ customersEnabled: true }));
+    forwardRead.mockResolvedValueOnce({
+      status: 200,
+      body: JSON.stringify([{ accepts_marketing: false }]),
+      contentType: 'application/json',
+    });
+
+    await call(
+      { authorization: 'Bearer spx_x' },
+      'customers',
+      'https://app/rest/v1/customers?email_address=eq.foo@bar.com',
+    );
+
+    expect(entry()).toEqual({ shopId: 's1', outcome: 'denied_consent', status: 403 });
+  });
+
+  it('errore del database del merchant → registrato come errore a monte', async () => {
+    resolveShopReadContext.mockResolvedValueOnce(okCtx({ customersEnabled: true }));
+    forwardRead.mockResolvedValueOnce({ status: 500, body: '{}', contentType: 'application/json' });
+
+    await call({ authorization: 'Bearer spx_x' }, 'customers', 'https://app/rest/v1/customers');
+
+    expect(entry()).toEqual({ shopId: 's1', outcome: 'upstream_error', status: 500 });
   });
 });
