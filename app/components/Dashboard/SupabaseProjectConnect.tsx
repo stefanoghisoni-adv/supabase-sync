@@ -78,12 +78,10 @@ export function SupabaseProjectConnect({
   const createFetcher = useFetcher<{
     ok?: boolean;
     ref?: string;
-    password?: string;
     error?: string;
     code?: string;
     billingUrl?: string | null;
   }>();
-  const regenFetcher = useFetcher<{ ok?: boolean; password?: string; error?: string }>();
 
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState('');
@@ -123,7 +121,6 @@ export function SupabaseProjectConnect({
   // statica: meglio un default utilizzabile di uno spinner infinito.
   const [regionsTimedOut, setRegionsTimedOut] = useState(false);
 
-  const [genPassword, setGenPassword] = useState('');
   const [creatingRef, setCreatingRef] = useState<string | null>(null);
   const [provisioning, setProvisioning] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -246,10 +243,9 @@ export function SupabaseProjectConnect({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectsLoaded]);
 
-  // Quando la creazione ritorna il ref, mostra la password e avvia il polling.
+  // Quando la creazione ritorna il ref si avvia il polling.
   useEffect(() => {
     if (createFetcher.data?.ok && createFetcher.data.ref) {
-      setGenPassword(createFetcher.data.password ?? '');
       setCreatingRef(createFetcher.data.ref);
       setProvisioning(true);
       setCreateError(null);
@@ -258,14 +254,6 @@ export function SupabaseProjectConnect({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [createFetcher.data]);
-
-  // Aggiorna la password mostrata dopo un "Rigenera".
-  useEffect(() => {
-    if (regenFetcher.data?.ok && regenFetcher.data.password) {
-      setGenPassword(regenFetcher.data.password);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [regenFetcher.data]);
 
   // Polling dello stato del progetto finché è pronto, poi select-project.
   useEffect(() => {
@@ -315,10 +303,6 @@ export function SupabaseProjectConnect({
       { method: 'post', action: '/api/supabase/create-project', encType: 'application/json' },
     );
   }, [createFetcher, newName, region]);
-
-  const regenerate = useCallback(() => {
-    regenFetcher.submit(null, { method: 'post', action: '/api/supabase/regenerate-password' });
-  }, [regenFetcher]);
 
   // STATO: database collegato
   if (connected) {
@@ -589,29 +573,6 @@ export function SupabaseProjectConnect({
                 </Popover.Pane>
               </Popover>
             </Labelled>
-            {genPassword && (
-              <BlockStack gap="100">
-                <Text as="p" tone="subdued">
-                  Password del database (salvata in modo sicuro, copiala ora):
-                </Text>
-                <InlineStack gap="200" blockAlign="center">
-                  <code>{genPassword}</code>
-                  <Button onClick={() => navigator.clipboard?.writeText(genPassword)}>
-                    Copia
-                  </Button>
-                  <Button
-                    onClick={regenerate}
-                    loading={regenFetcher.state !== 'idle'}
-                    disabled={!creatingRef || provisioning}
-                  >
-                    Rigenera password
-                  </Button>
-                </InlineStack>
-                {regenFetcher.data?.error && (
-                  <Banner tone="warning">{regenFetcher.data.error}</Banner>
-                )}
-              </BlockStack>
-            )}
             {createError && <Banner tone="critical">{createError}</Banner>}
             {provisioning ? (
               <InlineStack gap="200" blockAlign="center">
