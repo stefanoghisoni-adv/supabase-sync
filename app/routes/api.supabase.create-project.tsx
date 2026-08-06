@@ -71,10 +71,15 @@ export async function action({ request }: ActionFunctionArgs) {
       dbPass,
     });
 
-    // Il progetto è ormai creato su Supabase. Il salvataggio di ref/password è
+    // Il progetto è ormai creato su Supabase. Il salvataggio del ref è
     // "best effort": se fallisce (es. colonne di migrazione mancanti nel DB
     // metadata) NON buttiamo via il lavoro — il polling prosegue e select-project
-    // completerà comunque il collegamento (non usa queste colonne).
+    // completerà comunque il collegamento (non usa questa colonna).
+    //
+    // La password NON viene conservata: serve solo a Supabase per creare il
+    // progetto, l'app non la rilegge mai, e un segreto custodito senza motivo
+    // e' solo una superficie d'attacco in piu'. Chi ne ha bisogno la rigenera
+    // dal proprio pannello Supabase.
     try {
       await prisma.supabaseConfig.upsert({
         where: { shopId: shop.id },
@@ -84,11 +89,9 @@ export async function action({ request }: ActionFunctionArgs) {
           supabasePublicKey: '',
           supabaseServiceRoleKey: '',
           supabaseProjectRef: ref,
-          supabaseDbPassword: encrypt(dbPass),
         },
         update: {
           supabaseProjectRef: ref,
-          supabaseDbPassword: encrypt(dbPass),
         },
       });
     } catch (saveErr) {
@@ -98,7 +101,7 @@ export async function action({ request }: ActionFunctionArgs) {
       );
     }
 
-    return json({ ok: true, ref, password: dbPass });
+    return json({ ok: true, ref });
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'errore sconosciuto';
     console.error('[api.supabase.create-project]', msg, e instanceof SupabaseApiError ? e.body : '');

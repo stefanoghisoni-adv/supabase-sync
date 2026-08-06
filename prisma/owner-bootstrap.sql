@@ -79,7 +79,6 @@ CREATE TABLE "supabase_configs" (
     "supabase_url" TEXT NOT NULL,
     "supabase_public_key" TEXT NOT NULL,
     "supabase_service_role_key" TEXT NOT NULL,
-    "supabase_db_password" TEXT,
     "supabase_project_ref" TEXT,
     "table_name_products" TEXT NOT NULL DEFAULT 'products',
     "table_name_customers" TEXT NOT NULL DEFAULT 'customers',
