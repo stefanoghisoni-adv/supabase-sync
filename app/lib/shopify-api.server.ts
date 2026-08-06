@@ -1,5 +1,145 @@
 import { unauthenticated } from '~/shopify.server';
 
+// Client Admin API in GraphQL.
+//
+// La superficie pubblica e' deliberatamente quella di prima, quando sotto c'era
+// la REST: stesse firme, stesse forme di ritorno (snake_case, id numerici). Non
+// e' pigrizia: quei nomi sono le colonne delle tabelle Supabase dei merchant, e
+// gli strumenti di tracciamento le leggono per nome. Il confine fra le due
+// convenzioni sta qui dentro, in un file solo, invece di essere sparso nei nove
+// consumatori.
+
+/** `gid://shopify/Product/123` → `123`. */
+function gidToId(gid: string | null | undefined): number | null {
+  if (!gid) return null;
+  const last = gid.split('/').pop();
+  const n = Number(last);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** Gli enum GraphQL sono maiuscoli, la REST li dava minuscoli. */
+function lower(v: string | null | undefined): string | null {
+  return v ? v.toLowerCase() : null;
+}
+
+// La REST esprimeva il peso con sigle, GraphQL con il nome dell'unita'. La
+// colonna `weight_unit` del merchant contiene le sigle: si traduce.
+const WEIGHT_UNITS: Record<string, string> = {
+  GRAMS: 'g',
+  KILOGRAMS: 'kg',
+  OUNCES: 'oz',
+  POUNDS: 'lb',
+};
+
+interface GqlVariant {
+  id: string;
+  title: string | null;
+  sku: string | null;
+  barcode: string | null;
+  price: string;
+  compareAtPrice: string | null;
+  position: number | null;
+  inventoryQuantity: number | null;
+  inventoryPolicy: string | null;
+  taxable: boolean | null;
+  selectedOptions?: { name: string; value: string }[];
+  image?: { id: string } | null;
+  inventoryItem?: {
+    id: string;
+    tracked: boolean | null;
+    requiresShipping: boolean | null;
+    unitCost: { amount: string } | null;
+    measurement?: { weight: { value: number; unit: string } | null } | null;
+  } | null;
+}
+
+interface GqlProduct {
+  id: string;
+  title: string;
+  descriptionHtml?: string | null;
+  vendor?: string | null;
+  productType?: string | null;
+  handle?: string | null;
+  status?: string | null;
+  tags?: string[];
+  publishedAt?: string | null;
+  createdAt?: string | null;
+  images?: { nodes: { id: string; url: string }[] };
+  variants?: { nodes: GqlVariant[] };
+}
+
+function mapVariant(v: GqlVariant, productId: number) {
+  const inv = v.inventoryItem;
+  const weight = inv?.measurement?.weight ?? null;
+  // `selectedOptions` e' un elenco ordinato: la REST lo dava gia' appiattito in
+  // tre campi posizionali, ed e' cosi' che il transformer se lo aspetta.
+  const opts = v.selectedOptions ?? [];
+
+  return {
+    id: gidToId(v.id) as number,
+    product_id: productId,
+    title: v.title,
+    sku: v.sku,
+    barcode: v.barcode,
+    price: v.price,
+    compare_at_price: v.compareAtPrice,
+    position: v.position,
+    inventory_quantity: v.inventoryQuantity,
+    // La REST non aveva un booleano: diceva "shopify" o null, e il transformer
+    // deduce il tracciamento da `inventory_management != null`. Manteniamo la
+    // stessa convenzione per non toccare il transformer.
+    inventory_management: inv?.tracked ? 'shopify' : null,
+    inventory_policy: lower(v.inventoryPolicy),
+    weight: weight?.value ?? null,
+    weight_unit: weight ? (WEIGHT_UNITS[weight.unit] ?? weight.unit.toLowerCase()) : null,
+    requires_shipping: inv?.requiresShipping ?? null,
+    taxable: v.taxable,
+    option1: opts[0]?.value ?? null,
+    option2: opts[1]?.value ?? null,
+    option3: opts[2]?.value ?? null,
+    image_id: gidToId(v.image?.id),
+    inventory_item_id: gidToId(inv?.id),
+    // Il costo arriva gia' qui, mentre la REST costringeva a una seconda
+    // chiamata su inventory_items. `enrichVariantCosts` continua a girare e
+    // riscrive lo stesso valore: nessuna differenza nel risultato.
+    cost: inv?.unitCost?.amount ?? null,
+  };
+}
+
+function mapProduct(p: GqlProduct) {
+  const id = gidToId(p.id) as number;
+  return {
+    id,
+    title: p.title,
+    body_html: p.descriptionHtml ?? null,
+    vendor: p.vendor ?? null,
+    product_type: p.productType ?? null,
+    handle: p.handle ?? null,
+    status: lower(p.status),
+    // La REST dava una stringa separata da virgole, e il transformer fa split.
+    tags: (p.tags ?? []).join(', '),
+    published_at: p.publishedAt ?? null,
+    // Non e' un campo decorativo: `sortByCreatedAtAsc` ordina i prodotti con
+    // questo, e l'ordine decide quali entrano sotto il tetto del piano. Se
+    // mancasse, il taglio cadrebbe su prodotti diversi a ogni sincronizzazione.
+    created_at: p.createdAt ?? null,
+    images: (p.images?.nodes ?? []).map((img) => ({ id: gidToId(img.id), src: img.url })),
+    variants: (p.variants?.nodes ?? []).map((v) => mapVariant(v, id)),
+  };
+}
+
+const VARIANT_FIELDS = `
+  id title sku barcode price compareAtPrice position
+  inventoryQuantity inventoryPolicy taxable
+  selectedOptions { name value }
+  image { id }
+  inventoryItem {
+    id tracked requiresShipping
+    unitCost { amount }
+    measurement { weight { value unit } }
+  }
+`;
+
 export class ShopifyAPIClient {
   private shopDomain: string;
   private accessToken: string;
@@ -26,39 +166,15 @@ export class ShopifyAPIClient {
     return new ShopifyAPIClient(shopDomain, session.accessToken ?? '');
   }
 
-  private async makeRequest(
-    endpoint: string,
-    params?: Record<string, string | number | boolean | undefined>,
-    options?: { method?: string; body?: unknown },
-  ) {
-    const url = new URL(`https://${this.shopDomain}/admin/api/${this.apiVersion}/${endpoint}`);
-
-    if (params) {
-      Object.keys(params).forEach(key => {
-        if (params[key] !== undefined) {
-          url.searchParams.append(key, String(params[key]));
-        }
-      });
-    }
-
-    const response = await fetch(url.toString(), {
-      method: options?.method ?? 'GET',
+  private async graphql<T>(query: string, variables?: Record<string, unknown>): Promise<T> {
+    const response = await fetch(`https://${this.shopDomain}/admin/api/${this.apiVersion}/graphql.json`, {
+      method: 'POST',
       headers: {
         'X-Shopify-Access-Token': this.accessToken,
         'Content-Type': 'application/json',
       },
-      body: options?.body !== undefined ? JSON.stringify(options.body) : undefined,
+      body: JSON.stringify({ query, variables }),
     });
-
-    // Check rate limit
-    const rateLimitHeader = response.headers.get('X-Shopify-Shop-Api-Call-Limit');
-    if (rateLimitHeader) {
-      const [current, max] = rateLimitHeader.split('/').map(Number);
-      if (current >= max * this.RATE_LIMIT_THRESHOLD) {
-        console.warn(`Approaching rate limit: ${current}/${max}`);
-        await this.sleep(this.THROTTLE_DELAY_MS); // Throttle
-      }
-    }
 
     if (!response.ok) {
       // Il corpo va letto: Shopify ci scrive il motivo vero, e senza di esso un
@@ -71,20 +187,33 @@ export class ShopifyAPIClient {
       );
     }
 
-    const data = await response.json();
+    const body = (await response.json()) as {
+      data?: T;
+      errors?: unknown;
+      extensions?: { cost?: { throttleStatus?: { maximumAvailable: number; currentlyAvailable: number } } };
+    };
 
-    // Extract next page info from Link header
-    const linkHeader = response.headers.get('link');
-    let nextPageInfo: string | null = null;
+    // Qui sta la trappola di GraphQL: una query fallita risponde comunque 200,
+    // con il motivo dentro `errors`. Senza questo controllo un errore
+    // passerebbe per successo e scriverebbe righe vuote nel database del
+    // merchant — un guasto silenzioso, il peggior tipo.
+    if (body.errors) {
+      throw new Error(`Shopify API error: ${JSON.stringify(body.errors).slice(0, 300)}`);
+    }
 
-    if (linkHeader) {
-      const nextLinkMatch = linkHeader.match(/<[^>]*[?&]page_info=([^&>]+)[^>]*>;\s*rel="next"/);
-      if (nextLinkMatch) {
-        nextPageInfo = nextLinkMatch[1];
+    // Il limite non si conta piu' in richieste ma in punti: il serbatoio si
+    // svuota in proporzione a quanto chiede la query e si ricarica da solo.
+    // Stessa soglia di prima (90% consumato), letta dove ora vive il dato.
+    const t = body.extensions?.cost?.throttleStatus;
+    if (t && t.maximumAvailable > 0) {
+      const used = t.maximumAvailable - t.currentlyAvailable;
+      if (used >= t.maximumAvailable * this.RATE_LIMIT_THRESHOLD) {
+        console.warn(`Approaching rate limit: ${used}/${t.maximumAvailable} punti`);
+        await this.sleep(this.THROTTLE_DELAY_MS);
       }
     }
 
-    return { data, nextPageInfo };
+    return body.data as T;
   }
 
   private sleep(ms: number): Promise<void> {
@@ -97,68 +226,127 @@ export class ShopifyAPIClient {
     updatedAtMin?: string;
     fields?: string;
   } = {}) {
-    const params: Record<string, string | number | boolean | undefined> = {
-      limit: options.limit || 250,
-    };
+    // `fields` serviva a ridurre il payload REST. In GraphQL i campi si
+    // dichiarano sempre, quindi lo usiamo per decidere se chiedere anche i dati
+    // di livello prodotto: chi passa "id,variants" vuole solo le varianti (e' il
+    // caso della readiness, che guarda i costi) e non ha bisogno del resto.
+    const wanted = options.fields ? new Set(options.fields.split(',').map(f => f.trim())) : null;
+    const wants = (f: string) => !wanted || wanted.has(f);
 
-    // Shopify cursor pagination: page_info may only be combined with limit/fields.
-    // The original filters (updated_at_min) are already encoded in the cursor, so
-    // they must be dropped on subsequent pages or Shopify returns 400.
-    if (options.pageInfo) {
-      params.page_info = options.pageInfo;
-    } else if (options.updatedAtMin) {
-      params.updated_at_min = options.updatedAtMin;
-    }
+    const productFields = [
+      'id',
+      wants('title') ? 'title' : '',
+      wants('body_html') ? 'descriptionHtml' : '',
+      wants('vendor') ? 'vendor' : '',
+      wants('product_type') ? 'productType' : '',
+      wants('handle') ? 'handle' : '',
+      wants('status') ? 'status' : '',
+      wants('tags') ? 'tags' : '',
+      wants('published_at') ? 'publishedAt' : '',
+      'createdAt',
+      wants('images') ? 'images(first: 10) { nodes { id url } }' : '',
+      wants('variants') ? `variants(first: 100) { nodes { ${VARIANT_FIELDS} } }` : '',
+    ].filter(Boolean).join('\n');
 
-    // `fields` restringe il payload (compatibile anche con page_info): utile per la
-    // sola readiness, che legge esclusivamente variants.cost e non serve il resto.
-    if (options.fields) {
-      params.fields = options.fields;
-    }
+    const query = `
+      query Products($first: Int!, $after: String, $query: String) {
+        products(first: $first, after: $after, query: $query) {
+          pageInfo { hasNextPage endCursor }
+          nodes { ${productFields} }
+        }
+      }
+    `;
 
-    const { data, nextPageInfo } = await this.makeRequest('products.json', params);
+    const data = await this.graphql<{
+      products: { pageInfo: { hasNextPage: boolean; endCursor: string | null }; nodes: GqlProduct[] };
+    }>(query, {
+      first: options.limit || 250,
+      // Il cursore di GraphQL prende il posto di `page_info`: e' una stringa
+      // opaca in entrambi i casi, e i consumatori si limitano a ripassarcela.
+      after: options.pageInfo ?? null,
+      // Il filtro sull'aggiornamento vale solo alla prima pagina: dalla seconda
+      // in poi e' gia' inciso nel cursore, come lo era nel page_info.
+      query: !options.pageInfo && options.updatedAtMin ? `updated_at:>='${options.updatedAtMin}'` : null,
+    });
 
     return {
-      products: data.products,
-      nextPageInfo,
+      products: data.products.nodes.map(mapProduct),
+      nextPageInfo: data.products.pageInfo.hasNextPage ? data.products.pageInfo.endCursor : null,
     };
   }
 
   async getProductById(productId: number) {
-    const { data } = await this.makeRequest(`products/${productId}.json`);
-    return data.product;
+    const data = await this.graphql<{ product: GqlProduct | null }>(
+      `query Product($id: ID!) {
+        product(id: $id) {
+          id title descriptionHtml vendor productType handle status tags publishedAt createdAt
+          images(first: 10) { nodes { id url } }
+          variants(first: 100) { nodes { ${VARIANT_FIELDS} } }
+        }
+      }`,
+      { id: `gid://shopify/Product/${productId}` },
+    );
+    return data.product ? mapProduct(data.product) : null;
   }
 
   async getProductsCount(): Promise<number> {
-    const { data } = await this.makeRequest('products/count.json');
-    return typeof data.count === 'number' ? data.count : 0;
+    const data = await this.graphql<{ productsCount: { count: number } | null }>(
+      '{ productsCount { count } }',
+    );
+    return typeof data.productsCount?.count === 'number' ? data.productsCount.count : 0;
   }
 
-  // Il cost_per_item vive sull'InventoryItem, non sulla variante: products.json NON
-  // lo restituisce. Va letto (e scritto) tramite l'API inventory_items.
+  // Il cost_per_item vive sull'InventoryItem, non sulla variante. In GraphQL
+  // arriverebbe gia' insieme al prodotto, ma il metodo resta perche' i
+  // consumatori lo usano anche da solo, sui soli id che gli servono.
   async getInventoryItems(
     ids: number[],
   ): Promise<{ id: number; cost: string | null }[]> {
     if (ids.length === 0) return [];
-    const { data } = await this.makeRequest('inventory_items.json', {
-      ids: ids.join(','),
-      limit: 250,
-    });
-    return (data.inventory_items ?? []).map(
-      (it: { id: number; cost: string | null }) => ({ id: it.id, cost: it.cost ?? null }),
+    const data = await this.graphql<{
+      nodes: ({ id: string; unitCost: { amount: string } | null } | null)[];
+    }>(
+      `query InventoryItems($ids: [ID!]!) {
+        nodes(ids: $ids) { ... on InventoryItem { id unitCost { amount } } }
+      }`,
+      { ids: ids.map((id) => `gid://shopify/InventoryItem/${id}`) },
     );
+
+    return (data.nodes ?? [])
+      .filter((n): n is { id: string; unitCost: { amount: string } | null } => n != null)
+      .map((n) => ({ id: gidToId(n.id) as number, cost: n.unitCost?.amount ?? null }));
   }
 
   async updateInventoryItemCost(
     inventoryItemId: number,
     cost: string,
   ): Promise<{ id: number; cost: string | null }> {
-    const { data } = await this.makeRequest(
-      `inventory_items/${inventoryItemId}.json`,
-      undefined,
-      { method: 'PUT', body: { inventory_item: { id: inventoryItemId, cost } } },
+    const data = await this.graphql<{
+      inventoryItemUpdate: {
+        inventoryItem: { id: string; unitCost: { amount: string } | null } | null;
+        userErrors: { field: string[] | null; message: string }[];
+      };
+    }>(
+      `mutation UpdateCost($id: ID!, $input: InventoryItemInput!) {
+        inventoryItemUpdate(id: $id, input: $input) {
+          inventoryItem { id unitCost { amount } }
+          userErrors { field message }
+        }
+      }`,
+      { id: `gid://shopify/InventoryItem/${inventoryItemId}`, input: { cost } },
     );
-    return data.inventory_item;
+
+    // Le mutation hanno un secondo canale d'errore, distinto da `errors`: un
+    // rifiuto applicativo (valore non valido, permesso mancante) arriva qui, con
+    // la mutation formalmente riuscita. Va alzato, o la scrittura risulterebbe
+    // andata a buon fine senza esserlo.
+    const userErrors = data.inventoryItemUpdate?.userErrors ?? [];
+    if (userErrors.length > 0) {
+      throw new Error(`Shopify API error: ${userErrors.map((e) => e.message).join('; ').slice(0, 300)}`);
+    }
+
+    const item = data.inventoryItemUpdate?.inventoryItem;
+    return { id: gidToId(item?.id) as number, cost: item?.unitCost?.amount ?? null };
   }
 
   async getCustomers(options: {
@@ -166,28 +354,82 @@ export class ShopifyAPIClient {
     pageInfo?: string;
     updatedAtMin?: string;
   } = {}) {
-    const params: Record<string, string | number | boolean | undefined> = {
-      limit: options.limit || 250,
-    };
-
-    // Shopify cursor pagination: page_info may only be combined with limit/fields.
-    if (options.pageInfo) {
-      params.page_info = options.pageInfo;
-    } else if (options.updatedAtMin) {
-      params.updated_at_min = options.updatedAtMin;
-    }
-
-    const { data, nextPageInfo } = await this.makeRequest('customers.json', params);
+    const data = await this.graphql<{
+      customers: {
+        pageInfo: { hasNextPage: boolean; endCursor: string | null };
+        nodes: {
+          id: string;
+          email: string | null;
+          phone: string | null;
+          firstName: string | null;
+          lastName: string | null;
+          emailMarketingConsent: { marketingState: string | null; marketingOptInLevel: string | null } | null;
+          amountSpent: { amount: string } | null;
+          numberOfOrders: string | number | null;
+          state: string | null;
+          tags: string[];
+          note: string | null;
+          verifiedEmail: boolean | null;
+          taxExempt: boolean | null;
+          createdAt: string | null;
+          updatedAt: string | null;
+        }[];
+      };
+    }>(
+      `query Customers($first: Int!, $after: String, $query: String) {
+        customers(first: $first, after: $after, query: $query) {
+          pageInfo { hasNextPage endCursor }
+          nodes {
+            id email phone firstName lastName
+            emailMarketingConsent { marketingState marketingOptInLevel }
+            amountSpent { amount }
+            numberOfOrders
+            state tags note verifiedEmail taxExempt createdAt updatedAt
+          }
+        }
+      }`,
+      {
+        first: options.limit || 250,
+        after: options.pageInfo ?? null,
+        query: !options.pageInfo && options.updatedAtMin ? `updated_at:>='${options.updatedAtMin}'` : null,
+      },
+    );
 
     return {
-      customers: data.customers,
-      nextPageInfo,
+      customers: data.customers.nodes.map((c) => ({
+        id: gidToId(c.id),
+        email: c.email,
+        phone: c.phone,
+        first_name: c.firstName,
+        last_name: c.lastName,
+        // Il transformer confronta con 'subscribed' e 'single_opt_in': gli enum
+        // vanno riportati minuscoli o il consenso risulterebbe sempre negato,
+        // e nessun cliente verrebbe mai sincronizzato.
+        email_marketing_consent: c.emailMarketingConsent
+          ? {
+              state: lower(c.emailMarketingConsent.marketingState),
+              opt_in_level: lower(c.emailMarketingConsent.marketingOptInLevel),
+            }
+          : null,
+        total_spent: c.amountSpent?.amount ?? null,
+        orders_count: c.numberOfOrders != null ? Number(c.numberOfOrders) : null,
+        state: lower(c.state),
+        tags: (c.tags ?? []).join(', '),
+        note: c.note,
+        verified_email: c.verifiedEmail,
+        tax_exempt: c.taxExempt,
+        created_at: c.createdAt,
+        updated_at: c.updatedAt,
+      })),
+      nextPageInfo: data.customers.pageInfo.hasNextPage ? data.customers.pageInfo.endCursor : null,
     };
   }
 
   async getCustomersCount(): Promise<number> {
-    const { data } = await this.makeRequest('customers/count.json');
-    return typeof data.count === 'number' ? data.count : 0;
+    const data = await this.graphql<{ customersCount: { count: number } | null }>(
+      '{ customersCount { count } }',
+    );
+    return typeof data.customersCount?.count === 'number' ? data.customersCount.count : 0;
   }
 
   // Metadati del negozio. Serve iana_timezone (es. "Europe/Rome") per formattare
@@ -199,13 +441,13 @@ export class ShopifyAPIClient {
     /** Dominio su cui navigano i clienti: proprio se collegato, myshopify altrimenti. */
     primaryDomain: string | null;
   }> {
-    const { data } = await this.makeRequest('shop.json');
-    const shop = (data as {
-      shop?: { iana_timezone?: string | null; domain?: string | null };
-    }).shop;
+    const data = await this.graphql<{
+      shop: { ianaTimezone: string | null; primaryDomain: { host: string | null } | null };
+    }>('{ shop { ianaTimezone primaryDomain { host } } }');
+
     return {
-      ianaTimezone: shop?.iana_timezone ?? null,
-      primaryDomain: shop?.domain ?? null,
+      ianaTimezone: data.shop?.ianaTimezone ?? null,
+      primaryDomain: data.shop?.primaryDomain?.host ?? null,
     };
   }
 }

@@ -3,234 +3,410 @@ import { ShopifyAPIClient } from './shopify-api.server';
 
 global.fetch = vi.fn();
 
-// Mock the decrypt function
-vi.mock('../utils/crypto.server', () => ({
-  decrypt: (token: string) => token, // In tests, just return the token as-is
-}));
+// Il client si procura il token dalla libreria Shopify: qui non serve, i test
+// costruiscono l'istanza direttamente con un token finto.
+vi.mock('~/shopify.server', () => ({ unauthenticated: { admin: vi.fn() } }));
 
-describe('Shopify API Client', () => {
+/** Risposta GraphQL riuscita. */
+function ok(data: unknown, throttle?: { maximumAvailable: number; currentlyAvailable: number }) {
+  return {
+    ok: true,
+    json: async () => ({ data, extensions: throttle ? { cost: { throttleStatus: throttle } } : undefined }),
+  };
+}
+
+/** Corpo della richiesta effettivamente inviata. */
+function sentBody(call: number = 0) {
+  const mockFetch = global.fetch as any;
+  return JSON.parse(mockFetch.mock.calls[call][1].body);
+}
+
+const client = () => new ShopifyAPIClient('test.myshopify.com', 'token');
+
+describe('Shopify API Client (GraphQL)', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    global.fetch = vi.fn();
   });
 
-  it('should fetch products with pagination', async () => {
-    const mockFetch = global.fetch as any;
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        products: [
-          { id: 1, title: 'Product 1' },
-          { id: 2, title: 'Product 2' },
-        ],
-      }),
-      headers: new Map([
-        ['link', '<https://test.myshopify.com/admin/api/2025-01/products.json?page_info=abc>; rel="next"'],
-      ]),
-    });
+  it('parla con l endpoint graphql in POST', async () => {
+    (global.fetch as any).mockResolvedValueOnce(ok({ productsCount: { count: 0 } }));
+    await client().getProductsCount();
 
-    const client = new ShopifyAPIClient('test.myshopify.com', 'test_token');
-    const result = await client.getProducts({ limit: 250 });
+    const [url, init] = (global.fetch as any).mock.calls[0];
+    expect(url).toBe('https://test.myshopify.com/admin/api/2025-01/graphql.json');
+    expect(init.method).toBe('POST');
+  });
+
+  it('impagina con il cursore e lo restituisce solo se c e una pagina dopo', async () => {
+    (global.fetch as any).mockResolvedValueOnce(
+      ok({
+        products: {
+          pageInfo: { hasNextPage: true, endCursor: 'cursore-abc' },
+          nodes: [
+            { id: 'gid://shopify/Product/1', title: 'Uno' },
+            { id: 'gid://shopify/Product/2', title: 'Due' },
+          ],
+        },
+      }),
+    );
+
+    const result = await client().getProducts({ limit: 250 });
 
     expect(result.products).toHaveLength(2);
-    expect(result.nextPageInfo).toBe('abc');
+    expect(result.nextPageInfo).toBe('cursore-abc');
   });
 
-  it('should NOT combine page_info with updated_at_min (Shopify cursor constraint)', async () => {
-    const mockFetch = global.fetch as any;
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ products: [] }),
-      headers: new Map(),
-    });
+  it('senza pagina successiva il cursore e null, cosi il ciclo di sync si ferma', async () => {
+    (global.fetch as any).mockResolvedValueOnce(
+      ok({ products: { pageInfo: { hasNextPage: false, endCursor: 'ignorato' }, nodes: [] } }),
+    );
 
-    const client = new ShopifyAPIClient('test.myshopify.com', 'token');
-    await client.getProducts({
-      limit: 250,
-      pageInfo: 'cursor123',
-      updatedAtMin: '2026-07-10T00:00:00Z',
-    });
-
-    const calledUrl = new URL(mockFetch.mock.calls[0][0]);
-    expect(calledUrl.searchParams.get('page_info')).toBe('cursor123');
-    expect(calledUrl.searchParams.get('updated_at_min')).toBeNull();
+    expect((await client().getProducts({})).nextPageInfo).toBeNull();
   });
 
-  it('should send updated_at_min on the first page (no cursor)', async () => {
-    const mockFetch = global.fetch as any;
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ products: [] }),
-      headers: new Map(),
-    });
+  it('il filtro updated_at vale solo alla prima pagina: dopo e gia nel cursore', async () => {
+    (global.fetch as any).mockResolvedValueOnce(
+      ok({ products: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [] } }),
+    );
 
-    const client = new ShopifyAPIClient('test.myshopify.com', 'token');
-    await client.getProducts({
-      limit: 250,
-      updatedAtMin: '2026-07-10T00:00:00Z',
-    });
+    await client().getProducts({ pageInfo: 'cursore123', updatedAtMin: '2026-07-10T00:00:00Z' });
 
-    const calledUrl = new URL(mockFetch.mock.calls[0][0]);
-    expect(calledUrl.searchParams.get('updated_at_min')).toBe('2026-07-10T00:00:00Z');
-    expect(calledUrl.searchParams.get('page_info')).toBeNull();
+    expect(sentBody().variables.after).toBe('cursore123');
+    expect(sentBody().variables.query).toBeNull();
   });
 
-  it('should respect rate limits', async () => {
-    const mockFetch = global.fetch as any;
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ products: [] }),
-      headers: new Map([
-        ['X-Shopify-Shop-Api-Call-Limit', '38/40'],
-      ]),
-    });
+  it('alla prima pagina il filtro updated_at viene inviato', async () => {
+    (global.fetch as any).mockResolvedValueOnce(
+      ok({ products: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [] } }),
+    );
 
-    const client = new ShopifyAPIClient('test.myshopify.com', 'token');
-    await client.getProducts({ limit: 10 });
+    await client().getProducts({ updatedAtMin: '2026-07-10T00:00:00Z' });
 
-    // Should log rate limit warning
-    expect(mockFetch).toHaveBeenCalled();
+    expect(sentBody().variables.query).toBe("updated_at:>='2026-07-10T00:00:00Z'");
+    expect(sentBody().variables.after).toBeNull();
   });
 
-  it('should return the products count from products/count.json', async () => {
-    const mockFetch = global.fetch as any;
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ count: 4820 }),
-      headers: new Map(),
-    });
+  it('con fields ristretti chiede meno campi di prodotto, ma sempre createdAt', async () => {
+    (global.fetch as any).mockResolvedValueOnce(
+      ok({ products: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [] } }),
+    );
 
-    const client = new ShopifyAPIClient('test.myshopify.com', 'token');
-    const count = await client.getProductsCount();
+    await client().getProducts({ fields: 'id,variants' });
 
-    const calledUrl = new URL(mockFetch.mock.calls[0][0]);
-    expect(calledUrl.pathname).toContain('products/count.json');
-    expect(count).toBe(4820);
+    const q = sentBody().query;
+    expect(q).toContain('variants');
+    expect(q).not.toContain('vendor');
+    // createdAt non e' negoziabile: da lui dipende l'ordine di sincronizzazione,
+    // e quindi quali prodotti entrano sotto il tetto del piano.
+    expect(q).toContain('createdAt');
   });
 
-  it('should restrict the payload via the fields param when provided', async () => {
-    const mockFetch = global.fetch as any;
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ products: [] }),
-      headers: new Map(),
-    });
+  // ─── Traduzione GraphQL → forme attese dai consumatori ───
 
-    const client = new ShopifyAPIClient('test.myshopify.com', 'token');
-    await client.getProducts({ limit: 250, fields: 'id,variants' });
+  it('traduce un prodotto completo nella forma che i transformer si aspettano', async () => {
+    (global.fetch as any).mockResolvedValueOnce(
+      ok({
+        products: {
+          pageInfo: { hasNextPage: false, endCursor: null },
+          nodes: [
+            {
+              id: 'gid://shopify/Product/7502978383957',
+              title: 'Snowboard',
+              descriptionHtml: '<p>desc</p>',
+              vendor: 'Acme',
+              productType: 'board',
+              handle: 'snowboard',
+              status: 'ACTIVE',
+              tags: ['VIP', 'nuovo'],
+              publishedAt: '2026-08-06T14:11:08Z',
+              createdAt: '2026-01-02T10:00:00Z',
+              images: { nodes: [{ id: 'gid://shopify/ProductImage/99', url: 'https://cdn/img.png' }] },
+              variants: {
+                nodes: [
+                  {
+                    id: 'gid://shopify/ProductVariant/42831343124565',
+                    title: 'Rosso / L',
+                    sku: 'SNB-1',
+                    barcode: null,
+                    price: '199.00',
+                    compareAtPrice: '249.00',
+                    position: 1,
+                    inventoryQuantity: 7,
+                    inventoryPolicy: 'DENY',
+                    taxable: true,
+                    selectedOptions: [
+                      { name: 'Colore', value: 'Rosso' },
+                      { name: 'Taglia', value: 'L' },
+                    ],
+                    image: { id: 'gid://shopify/ProductImage/99' },
+                    inventoryItem: {
+                      id: 'gid://shopify/InventoryItem/44980905934933',
+                      tracked: true,
+                      requiresShipping: true,
+                      unitCost: { amount: '80.00' },
+                      measurement: { weight: { value: 2.5, unit: 'KILOGRAMS' } },
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      }),
+    );
 
-    const calledUrl = new URL(mockFetch.mock.calls[0][0]);
-    expect(calledUrl.searchParams.get('fields')).toBe('id,variants');
+    const { products } = await client().getProducts({});
+    const p = products[0];
+
+    // Gli id sono numerici: le tabelle dei merchant hanno colonne BIGINT, e i
+    // GID le renderebbero illeggibili al tracciamento.
+    expect(p.id).toBe(7502978383957);
+    expect(p.body_html).toBe('<p>desc</p>');
+    expect(p.product_type).toBe('board');
+    // Gli enum arrivano maiuscoli da GraphQL, minuscoli dalla REST.
+    expect(p.status).toBe('active');
+    // I tag erano una stringa separata da virgole: il transformer fa split.
+    expect(p.tags).toBe('VIP, nuovo');
+    expect(p.created_at).toBe('2026-01-02T10:00:00Z');
+    expect(p.images).toEqual([{ id: 99, src: 'https://cdn/img.png' }]);
+
+    const v = p.variants[0];
+    expect(v.id).toBe(42831343124565);
+    expect(v.product_id).toBe(7502978383957);
+    expect(v.compare_at_price).toBe('249.00');
+    expect(v.inventory_policy).toBe('deny');
+    // selectedOptions e' un elenco: va riappiattito in tre campi posizionali.
+    expect(v.option1).toBe('Rosso');
+    expect(v.option2).toBe('L');
+    expect(v.option3).toBeNull();
+    // Il tracciamento era espresso come "shopify" o null, non come booleano.
+    expect(v.inventory_management).toBe('shopify');
+    // Il peso: GraphQL nomina l'unita' per esteso, la colonna vuole la sigla.
+    expect(v.weight).toBe(2.5);
+    expect(v.weight_unit).toBe('kg');
+    expect(v.requires_shipping).toBe(true);
+    expect(v.inventory_item_id).toBe(44980905934933);
+    // Il costo arriva insieme al prodotto: la REST imponeva una seconda chiamata.
+    expect(v.cost).toBe('80.00');
   });
 
-  it('should keep the fields param together with page_info (cursor allows it)', async () => {
-    const mockFetch = global.fetch as any;
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ products: [] }),
-      headers: new Map(),
-    });
+  it('un prodotto senza costo, immagine e peso non inventa valori', async () => {
+    (global.fetch as any).mockResolvedValueOnce(
+      ok({
+        products: {
+          pageInfo: { hasNextPage: false, endCursor: null },
+          nodes: [
+            {
+              id: 'gid://shopify/Product/1',
+              title: 'Gift Card',
+              tags: [],
+              variants: {
+                nodes: [
+                  {
+                    id: 'gid://shopify/ProductVariant/2',
+                    title: '$10',
+                    sku: null,
+                    barcode: null,
+                    price: '10.00',
+                    compareAtPrice: null,
+                    position: 1,
+                    inventoryQuantity: 0,
+                    inventoryPolicy: 'DENY',
+                    taxable: false,
+                    selectedOptions: [],
+                    image: null,
+                    inventoryItem: {
+                      id: 'gid://shopify/InventoryItem/3',
+                      tracked: false,
+                      requiresShipping: false,
+                      unitCost: null,
+                      measurement: { weight: null },
+                    },
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      }),
+    );
 
-    const client = new ShopifyAPIClient('test.myshopify.com', 'token');
-    await client.getProducts({ limit: 250, pageInfo: 'cursor123', fields: 'id,variants' });
-
-    const calledUrl = new URL(mockFetch.mock.calls[0][0]);
-    expect(calledUrl.searchParams.get('page_info')).toBe('cursor123');
-    expect(calledUrl.searchParams.get('fields')).toBe('id,variants');
+    const v = (await client().getProducts({})).products[0].variants[0];
+    expect(v.cost).toBeNull();
+    expect(v.image_id).toBeNull();
+    expect(v.weight).toBeNull();
+    expect(v.weight_unit).toBeNull();
+    expect(v.inventory_management).toBeNull();
+    expect(v.option1).toBeNull();
   });
 
-  it('should fetch inventory item costs by ids', async () => {
-    const mockFetch = global.fetch as any;
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        inventory_items: [
-          { id: 111, cost: '3.50' },
-          { id: 222, cost: null },
+  it('traduce un cliente, consenso compreso, nella forma attesa dal transformer', async () => {
+    (global.fetch as any).mockResolvedValueOnce(
+      ok({
+        customers: {
+          pageInfo: { hasNextPage: false, endCursor: null },
+          nodes: [
+            {
+              id: 'gid://shopify/Customer/9131595071573',
+              email: 'a@b.it',
+              phone: '+39000',
+              firstName: 'Ada',
+              lastName: 'Rossi',
+              emailMarketingConsent: { marketingState: 'SUBSCRIBED', marketingOptInLevel: 'SINGLE_OPT_IN' },
+              amountSpent: { amount: '120.50' },
+              numberOfOrders: '3',
+              state: 'ENABLED',
+              tags: ['VIP'],
+              note: 'nota',
+              verifiedEmail: true,
+              taxExempt: false,
+              createdAt: '2026-01-01T00:00:00Z',
+              updatedAt: '2026-02-01T00:00:00Z',
+            },
+          ],
+        },
+      }),
+    );
+
+    const c = (await client().getCustomers({})).customers[0];
+
+    expect(c.id).toBe(9131595071573);
+    // Il transformer confronta con 'subscribed': se restasse maiuscolo, nessun
+    // cliente risulterebbe mai consenziente e la sincronizzazione clienti
+    // resterebbe vuota senza errori.
+    expect(c.email_marketing_consent).toEqual({ state: 'subscribed', opt_in_level: 'single_opt_in' });
+    expect(c.total_spent).toBe('120.50');
+    // numberOfOrders arriva come stringa, la colonna e' INTEGER.
+    expect(c.orders_count).toBe(3);
+    expect(c.state).toBe('enabled');
+    expect(c.tags).toBe('VIP');
+  });
+
+  // ─── Conteggi, inventario, negozio ───
+
+  it('restituisce il conteggio dei prodotti', async () => {
+    (global.fetch as any).mockResolvedValueOnce(ok({ productsCount: { count: 4820 } }));
+    expect(await client().getProductsCount()).toBe(4820);
+  });
+
+  it('restituisce il conteggio dei clienti', async () => {
+    (global.fetch as any).mockResolvedValueOnce(ok({ customersCount: { count: 42 } }));
+    expect(await client().getCustomersCount()).toBe(42);
+  });
+
+  it('legge i costi degli inventory item per id, saltando i nodi mancanti', async () => {
+    (global.fetch as any).mockResolvedValueOnce(
+      ok({
+        nodes: [
+          { id: 'gid://shopify/InventoryItem/111', unitCost: { amount: '3.50' } },
+          { id: 'gid://shopify/InventoryItem/222', unitCost: null },
+          null,
         ],
       }),
-      headers: new Map(),
-    });
+    );
 
-    const client = new ShopifyAPIClient('test.myshopify.com', 'token');
-    const items = await client.getInventoryItems([111, 222]);
+    const items = await client().getInventoryItems([111, 222, 333]);
 
-    const calledUrl = new URL(mockFetch.mock.calls[0][0]);
-    expect(calledUrl.pathname).toContain('inventory_items.json');
-    expect(calledUrl.searchParams.get('ids')).toBe('111,222');
+    expect(sentBody().variables.ids).toEqual([
+      'gid://shopify/InventoryItem/111',
+      'gid://shopify/InventoryItem/222',
+      'gid://shopify/InventoryItem/333',
+    ]);
     expect(items).toEqual([
       { id: 111, cost: '3.50' },
       { id: 222, cost: null },
     ]);
   });
 
-  it('should update an inventory item cost via PUT', async () => {
-    const mockFetch = global.fetch as any;
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ inventory_item: { id: 111, cost: '9.99' } }),
-      headers: new Map(),
-    });
-
-    const client = new ShopifyAPIClient('test.myshopify.com', 'token');
-    await client.updateInventoryItemCost(111, '9.99');
-
-    const [url, init] = mockFetch.mock.calls[0];
-    expect(new URL(url).pathname).toContain('inventory_items/111.json');
-    expect(init.method).toBe('PUT');
-    expect(JSON.parse(init.body)).toEqual({
-      inventory_item: { id: 111, cost: '9.99' },
-    });
+  it('senza id non chiama nemmeno Shopify', async () => {
+    expect(await client().getInventoryItems([])).toEqual([]);
+    expect(global.fetch).not.toHaveBeenCalled();
   });
 
-  it('should return the customers count from customers/count.json', async () => {
-    const mockFetch = global.fetch as any;
-    mockFetch.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ count: 42 }),
-      headers: new Map(),
-    });
-
-    const client = new ShopifyAPIClient('test.myshopify.com', 'token');
-    const count = await client.getCustomersCount();
-
-    const calledUrl = new URL(mockFetch.mock.calls[0][0]);
-    expect(calledUrl.pathname).toContain('customers/count.json');
-    expect(count).toBe(42);
-  });
-
-  it('getShopInfo restituisce fuso orario e dominio principale del negozio', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      headers: { get: () => null },
-      // `domain` e' il dominio su cui navigano i clienti, diverso dal
-      // myshopify quando il merchant ne ha collegato uno proprio.
-      json: async () => ({
-        shop: {
-          iana_timezone: 'Europe/Rome',
-          domain: 'negozio.it',
-          myshopify_domain: 'test-shop.myshopify.com',
+  it('aggiorna il costo con la mutation', async () => {
+    (global.fetch as any).mockResolvedValueOnce(
+      ok({
+        inventoryItemUpdate: {
+          inventoryItem: { id: 'gid://shopify/InventoryItem/111', unitCost: { amount: '9.99' } },
+          userErrors: [],
         },
       }),
-    }) as unknown as typeof fetch;
+    );
 
-    const client = new ShopifyAPIClient('test-shop.myshopify.com', 'enc');
-    expect(await client.getShopInfo()).toEqual({
+    const res = await client().updateInventoryItemCost(111, '9.99');
+
+    expect(sentBody().variables).toEqual({
+      id: 'gid://shopify/InventoryItem/111',
+      input: { cost: '9.99' },
+    });
+    expect(res).toEqual({ id: 111, cost: '9.99' });
+  });
+
+  it('getShopInfo restituisce fuso orario e dominio principale', async () => {
+    (global.fetch as any).mockResolvedValueOnce(
+      ok({ shop: { ianaTimezone: 'Europe/Rome', primaryDomain: { host: 'negozio.it' } } }),
+    );
+
+    expect(await client().getShopInfo()).toEqual({
       ianaTimezone: 'Europe/Rome',
       primaryDomain: 'negozio.it',
     });
   });
 
   it('getShopInfo senza quei campi restituisce null', async () => {
-    global.fetch = vi.fn().mockResolvedValue({
-      ok: true,
-      headers: { get: () => null },
-      json: async () => ({ shop: {} }),
-    }) as unknown as typeof fetch;
+    (global.fetch as any).mockResolvedValueOnce(ok({ shop: {} }));
 
-    const client = new ShopifyAPIClient('test-shop.myshopify.com', 'enc');
-    expect(await client.getShopInfo()).toEqual({
-      ianaTimezone: null,
-      primaryDomain: null,
+    expect(await client().getShopInfo()).toEqual({ ianaTimezone: null, primaryDomain: null });
+  });
+
+  // ─── Errori: il punto dove GraphQL si rompe in silenzio ───
+
+  it('un errore GraphQL arriva con HTTP 200 e deve comunque diventare un eccezione', async () => {
+    (global.fetch as any).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ errors: [{ message: 'Field does not exist' }] }),
     });
+
+    // Senza questo controllo la chiamata risulterebbe riuscita con dati vuoti,
+    // e finirebbe per svuotare le righe nel database del merchant.
+    await expect(client().getProductsCount()).rejects.toThrow(/Field does not exist/);
+  });
+
+  it('gli userErrors di una mutation non passano per successo', async () => {
+    (global.fetch as any).mockResolvedValueOnce(
+      ok({
+        inventoryItemUpdate: {
+          inventoryItem: null,
+          userErrors: [{ field: ['input', 'cost'], message: 'Cost is invalid' }],
+        },
+      }),
+    );
+
+    await expect(client().updateInventoryItemCost(111, 'boh')).rejects.toThrow(/Cost is invalid/);
+  });
+
+  it('su errore HTTP il messaggio riporta il corpo, non solo lo stato', async () => {
+    (global.fetch as any).mockResolvedValueOnce({
+      ok: false,
+      status: 403,
+      statusText: 'Forbidden',
+      text: async () => '{"errors":"[API] Non-expiring access tokens are no longer accepted"}',
+    });
+
+    // E' esattamente il messaggio che era stato buttato via, facendo
+    // diagnosticare un divieto sulla REST che non esisteva.
+    await expect(client().getProductsCount()).rejects.toThrow(/Non-expiring access tokens/);
+  });
+
+  it('rallenta quando il serbatoio di punti e quasi esaurito', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    (global.fetch as any).mockResolvedValueOnce(
+      ok({ productsCount: { count: 1 } }, { maximumAvailable: 2000, currentlyAvailable: 100 }),
+    );
+
+    await client().getProductsCount();
+
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('Approaching rate limit'));
+    warn.mockRestore();
   });
 });

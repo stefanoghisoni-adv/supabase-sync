@@ -1,11 +1,11 @@
 export interface ShopifyProduct {
   id: number;
   title: string;
-  body_html: string;
-  vendor: string;
-  product_type: string;
-  handle: string;
-  status: 'active' | 'draft' | 'archived';
+  body_html: string | null;
+  vendor: string | null;
+  product_type: string | null;
+  handle: string | null;
+  status: string | null;
   tags: string;
   published_at: string | null;
   // Data di creazione su Shopify: decide l'ordine con cui i prodotti vengono
@@ -19,23 +19,23 @@ export interface ShopifyProduct {
 export interface ShopifyVariant {
   id: number;
   product_id: number;
-  title: string;
-  sku: string;
+  title: string | null;
+  sku: string | null;
   barcode: string | null;
   price: string;
   compare_at_price: string | null;
   cost: string | null;
-  position: number;
-  inventory_quantity: number;
+  position: number | null;
+  inventory_quantity: number | null;
   // Riferimento all'InventoryItem: il cost_per_item vive lì, non sulla variante.
-  inventory_item_id?: number;
+  inventory_item_id?: number | null;
   // null quando le scorte NON sono monitorate (inventory_management assente).
   inventory_management?: string | null;
   inventory_policy?: string | null;
-  weight: number;
-  weight_unit: string;
-  requires_shipping: boolean;
-  taxable: boolean;
+  weight: number | null;
+  weight_unit: string | null;
+  requires_shipping: boolean | null;
+  taxable: boolean | null;
   image_id: number | null;
   option1: string | null;
   option2: string | null;
@@ -43,8 +43,8 @@ export interface ShopifyVariant {
 }
 
 export interface ShopifyImage {
-  id: number;
-  product_id: number;
+  id: number | null;
+  product_id?: number;
   src: string;
 }
 
@@ -101,8 +101,8 @@ export interface SupabaseProductRow {
   product_description: string | null;
   vendor: string | null;
   product_type: string | null;
-  handle: string;
-  product_status: string;
+  handle: string | null;
+  product_status: string | null;
   tags: string[];
   product_published_at: string | null;
   variant_title: string | null;

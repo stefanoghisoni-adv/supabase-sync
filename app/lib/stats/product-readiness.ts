@@ -59,7 +59,7 @@ export function collectProblemVariants(
         productId: product.id,
         productTitle: product.title,
         variantId: variant.id,
-        variantTitle: variant.title,
+        variantTitle: variant.title ?? '',
         sku: variant.sku ? variant.sku : null,
         price: variant.price ?? null,
         inventoryItemId: variant.inventory_item_id ?? null,
