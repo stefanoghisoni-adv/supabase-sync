@@ -34,8 +34,9 @@ Il worker long-running (`worker.ts`) resta solo per lo sviluppo locale.
 cp .env.example .env    # compila le variabili
 npm install --legacy-peer-deps
 npx prisma generate
-npx prisma db push      # crea lo schema sul DB
-npm run db:seed         # popola i piani (free/pro/business/enterprise)
+# Schema, piani e RLS in un colpo solo: incolla prisma/owner-bootstrap.sql
+# nell'SQL Editor del progetto Supabase. Non usare `prisma db push` da solo —
+# non crea i piani ne' le due foreign key sul nome del piano.
 npm run dev             # shopify app dev
 ```
 
@@ -97,12 +98,13 @@ Dopo aver aggiornato il toml, attiva la configurazione:
 shopify app deploy
 ```
 
-### Step 4 — Migrazioni e seed sul DB di produzione
+### Step 4 — Schema del DB di produzione
 
-```bash
-npx prisma db push      # crea lo schema (nessuna migration history nel repo)
-npm run db:seed         # popola i piani
-```
+Incolla `prisma/owner-bootstrap.sql` nell'SQL Editor del progetto Supabase owner.
+Crea le 11 tabelle, le foreign key, i 5 piani e attiva RLS ovunque.
+
+Non c'e' una migration iniziale nel repo (la piu' vecchia e' una ALTER), quindi
+`prisma migrate deploy` su un database vuoto fallisce: quel file e' la strada.
 
 ### Step 5 — Verifica
 
