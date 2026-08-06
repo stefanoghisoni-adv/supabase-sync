@@ -94,10 +94,12 @@ export default function EligibilityChartCanvas({
   monthStart,
 }: Props) {
   return (
-    // polaris-viz richiede un contenitore con altezza esplicita per disegnare:
-    // nessun componente Polaris la impone, quindi qui lo style inline e' l'unica
-    // eccezione ammessa al vincolo "solo Polaris".
-    <div style={{ height: 260 }}>
+    // polaris-viz richiede un contenitore con altezza esplicita per disegnare.
+    // L'altezza non e' piu' un numero fisso ma quella che il corpo della card
+    // lascia (vedi .chart-card__canvas in dashboard.css): con una misura fissa,
+    // nelle card piu' basse il grafico eccedeva lo spazio e traboccava sopra il
+    // titolo.
+    <div className="chart-card__canvas">
       <PolarisVizProvider>
         <LineChart
           data={series}

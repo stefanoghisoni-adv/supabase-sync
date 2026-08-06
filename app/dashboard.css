@@ -81,18 +81,33 @@
    alta della card, e a centratura esatta il grafico sembra ancora appeso in
    cima. Cosi' scende di una manciata di pixel e la card si legge bilanciata. */
 .chart-card__body {
-  flex: 1;
+  flex: 1 1 auto;
   display: flex;
   flex-direction: column;
-  /* Appoggiato in basso, non centrato: la card e' alta quanto quella accanto e
-     lo spazio che avanza stava tutto sotto la legenda, mentre in cima la tacca
-     piu' alta dell'asse finiva addosso al mese. */
-  justify-content: flex-end;
   /* Senza, il contenuto piu' alto dello spazio disponibile sfonderebbe la card. */
   min-height: 0;
-  padding-block-start: var(--p-space-1600);
+  /* Il grafico non deve MAI disegnare sopra al titolo. Con justify-content:
+     flex-end un contenuto piu' alto dello spazio disponibile trabocca dal lato
+     opposto, cioe' verso l'alto: la tacca piu' alta dell'asse finiva a meta'
+     del mese. Il ritaglio e' la rete di sicurezza; il contenitore qui sotto,
+     alto quanto il corpo, fa si' che non serva quasi mai. */
+  overflow: hidden;
+  /* Il titolo pesa sulla parte alta della card: un po' d'aria stacca il grafico
+     dal sottotitolo. Meno di prima, perche' quello spazio veniva sottratto al
+     grafico ed era una delle ragioni per cui non ci stava. */
+  padding-block-start: var(--p-space-500);
   /* Nessun margine sotto: il grafico arriva fino in fondo allo spazio della
      card, e quel poco che resta sotto la legenda e' il bordo interno della Card
      stessa. */
   padding-block-end: 0;
+}
+
+/* Il contenitore del grafico prende esattamente l'altezza che il corpo gli
+   lascia, invece di averne una propria: cosi' non puo' esistere un'eccedenza da
+   spingere da qualche parte. Il minimo serve alle card molto basse, dove sotto
+   una certa altezza il grafico diventa illeggibile: li' preferiamo il ritaglio.
+   polaris-viz pretende un'altezza esplicita sul contenitore per disegnare. */
+.chart-card__canvas {
+  flex: 1 1 auto;
+  min-height: 220px;
 }
