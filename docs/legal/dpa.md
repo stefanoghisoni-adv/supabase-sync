@@ -124,7 +124,9 @@ in qualsiasi momento dal proprio progetto.
 
 ## 10. Trasferimenti extra UE
 
-Il database dell'applicazione risiede nell'Unione Europea (Parigi, Francia).
+Il database dell'applicazione risiede nell'Unione Europea (Parigi, Francia), e
+nell'Unione Europea avviene anche l'elaborazione: le funzioni dell'applicazione
+sono eseguite nella regione di Parigi.
 
 La coda dei lavori di sincronizzazione risiede negli Stati Uniti (N. Virginia,
 us-east-1). Vi transitano esclusivamente identificatori interni di negozio:
@@ -135,12 +137,6 @@ I fornitori elencati al punto 5 sono società statunitensi: i trasferimenti
 avvengono sulla base delle garanzie previste dai rispettivi accordi
 (clausole contrattuali standard e, ove applicabile, EU-US Data Privacy
 Framework). Il merchant sceglie la regione del proprio database.
-
-> **Da verificare prima della pubblicazione**: la regione in cui Vercel esegue le
-> funzioni non è impostata nel progetto, quindi al momento è quella predefinita
-> della piattaforma, che non è europea. Finché resta così, l'elaborazione avviene
-> fuori dall'UE e questo punto va scritto di conseguenza. Impostando la regione su
-> `cdg1` (Parigi) l'elaborazione resta in Europa e la dichiarazione si semplifica.
 
 ## 11. Audit
 

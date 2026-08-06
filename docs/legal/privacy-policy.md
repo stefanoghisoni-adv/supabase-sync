@@ -67,7 +67,7 @@ servirgli per finalità diverse dal marketing, per le quali risponde lui.
 | Cosa | Dove | Fornitore |
 |---|---|---|
 | Database dell'applicazione | Parigi, Francia (UE) | Supabase |
-| Esecuzione dell'applicazione | [regione delle funzioni Vercel] | Vercel |
+| Esecuzione dell'applicazione | Parigi, Francia (UE) | Vercel |
 | Coda dei lavori di sincronizzazione | N. Virginia, Stati Uniti (us-east-1) | Upstash |
 | Dati di catalogo e clientela | Progetto del merchant, **nella regione che il merchant sceglie** | Supabase, sotto contratto del merchant |
 

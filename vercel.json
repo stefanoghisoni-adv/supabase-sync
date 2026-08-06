@@ -3,6 +3,7 @@
   "devCommand": "npm run dev",
   "installCommand": "npm install --legacy-peer-deps",
   "framework": "remix",
+  "regions": ["cdg1"],
   "crons": [
     {
       "path": "/api/cron/sync",
