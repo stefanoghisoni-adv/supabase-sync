@@ -196,7 +196,7 @@ export function ErrorBoundary() {
             {canSeePlanTab && <Link to="/plan">Piano</Link>}
             <Link to="/settings/supabase">Impostazioni</Link>
           </NavMenu>
-          <Page title="Supabase Tracking Sync">
+          <Page title="CoreWard">
             <BlockStack gap="400">
               {/* Warning (non critical) per i blip di rete. Il pulsante ricarica
                   la pagina dell'admin, non il solo iframe dell'app: ricaricare

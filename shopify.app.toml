@@ -1,15 +1,24 @@
-# Shopify App Configuration
-# Production URL: https://supabase-sync-six.vercel.app
-# Eseguire `shopify app deploy` per attivare le webhook subscriptions.
+# CoreWard — configurazione dell'app Shopify
+#
+# Questo file e' la fonte di verita': `shopify app deploy` sovrascrive i campi
+# del dashboard, non il contrario. Si modifica qui, poi si fa il deploy.
+#
+# URL di produzione: https://supabase-sync-six.vercel.app
+# Passera' a https://api.coreward.app quando il sottodominio sara' configurato:
+# vanno cambiate application_url e redirect_urls, poi un nuovo deploy.
 
-name = "Supabase Tracking Sync"
-client_id = "ab96efeed79987564061e5b93c31f6f8"
-handle = "supabase-tracking-sync"
+client_id = "461a83c84e9ce41a23b5364f1c1140ad"
+name = "CoreWard"
 application_url = "https://supabase-sync-six.vercel.app"
 embedded = true
 
 [access_scopes]
+# write_products risulta non usato: l'unica scrittura verso Shopify e' su
+# inventory_items (costo per articolo). Resta finche' non si decide di toglierlo,
+# perche' ridurre gli scope fa ripassare i merchant dal consenso.
 scopes = "read_products,write_products,read_inventory,write_inventory,read_customers"
+optional_scopes = [ ]
+use_legacy_install_flow = false
 
 [auth]
 redirect_urls = [
@@ -17,6 +26,10 @@ redirect_urls = [
 ]
 
 [webhooks]
+# 2025-01 e non la piu' recente proposta dalla CLI: e' la versione con cui e'
+# scritto il codice (ApiVersion.January25 in app/shopify.server.ts, e
+# SHOPIFY_API_VERSION nelle variabili d'ambiente). Alzarla qui cambierebbe la
+# forma dei payload in arrivo senza che i gestori se ne accorgano.
 api_version = "2025-01"
 
 [[webhooks.subscriptions]]

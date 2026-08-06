@@ -1,7 +1,7 @@
 {
-  "name": "shopify-supabase-sync",
+  "name": "coreward",
   "version": "1.0.0",
-  "description": "Shopify app for syncing products and customers to merchant Supabase databases",
+  "description": "CoreWard - Shopify app for syncing products and customers to merchant Supabase databases",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,7 +10,6 @@
     "postinstall": "prisma generate",
     "start": "remix-serve ./build/server/index.js",
     "typecheck": "tsc",
-    "db:seed": "tsx prisma/seed.ts",
     "test": "vitest",
     "test:ui": "vitest --ui",
     "worker": "tsx watch worker.ts"
