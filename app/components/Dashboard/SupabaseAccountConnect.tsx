@@ -260,6 +260,20 @@ export function SupabaseAccountConnect({
         </Banner>
       )}
 
+      {/* Finestra chiusa e nessun collegamento: quasi sempre significa che il
+          merchant ha creato account e database ed e' uscito, senza accorgersi
+          che restava un ultimo consenso da dare. Dirgli che e' "fallito"
+          sarebbe falso e scoraggiante: gli manca un clic, e il pulsante qui
+          sotto cambia nome per andarlo a prendere da dove si trova ora. */}
+      {connectFailed && (
+        <Banner tone="info" title="Manca solo un passaggio">
+          <Text as="p">
+            Se hai appena creato l&apos;account o il database su Supabase, resta
+            da accettare il collegamento: è un clic, nella finestra di Supabase.
+          </Text>
+        </Banner>
+      )}
+
       <InlineStack>
         <Button
           variant="primary"
@@ -267,7 +281,7 @@ export function SupabaseAccountConnect({
           loading={connecting}
           disabled={disabled || connecting}
         >
-          Collega Supabase
+          {connectFailed ? 'Ho creato il database' : 'Collega Supabase'}
         </Button>
       </InlineStack>
     </BlockStack>
