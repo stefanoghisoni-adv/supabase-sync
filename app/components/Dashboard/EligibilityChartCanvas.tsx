@@ -8,6 +8,7 @@
 // require non avviene mai.
 //
 // Non importare questo file staticamente da nessuna parte.
+import { useEffect, useRef, useState } from 'react';
 import { LineChart, PolarisVizProvider, TooltipContent } from '@shopify/polaris-viz';
 import { FONT_FAMILY } from '@shopify/polaris-viz-core';
 import type { DataSeries } from '@shopify/polaris-viz-core';
@@ -59,11 +60,44 @@ interface Props {
  * card a coprire quella sotto.
  */
 function LimitTickLabel({ y, value }: { y: number; value: number }) {
+  const textRef = useRef<SVGTextElement>(null);
+  // Scostamento orizzontale per incolonnare il numero arancione con i grigi.
+  const [dx, setDx] = useState(0);
+
+  // polaris-viz non allinea i numeri dell'asse a una coordinata dichiarata: li
+  // ancora a sinistra partendo da una larghezza *stimata* del testo, con tabelle
+  // di larghezze per carattere che non esporta. Ricalcolare quella posizione a
+  // mano sarebbe indovinarla, e resterebbe indovinata anche dopo un loro
+  // aggiornamento. La tacca grigia che stiamo coprendo pero' e' ancora li',
+  // nell'SVG: la si misura e ci si incolonna, qualunque sia la regola che l'ha
+  // messa dove sta.
+  useEffect(() => {
+    const el = textRef.current;
+    const svg = el?.ownerSVGElement;
+    if (!el || !svg) return;
+
+    const mine = el.getBoundingClientRect();
+    const twin = Array.from(svg.querySelectorAll('text')).find((node) => {
+      if (node === el || node.textContent?.trim() !== String(value)) return false;
+      // Stesso numero puo' comparire altrove (l'asse dei giorni): vale solo
+      // quello alla stessa altezza, cioe' la tacca che stiamo sostituendo.
+      const box = node.getBoundingClientRect();
+      return Math.abs(box.top - mine.top) < LINE_HEIGHT;
+    });
+    if (!twin) return;
+
+    const shift = twin.getBoundingClientRect().left - mine.left;
+    // Sotto il mezzo pixel non si vede, e assestarsi evita un secondo giro.
+    if (Math.abs(shift) > 0.5) setDx((current) => current + shift);
+  }, [value, y]);
+
   return (
     <g aria-hidden="true">
       {/* Copre il numero grigio sotto, come fa polaris-viz stesso dietro ogni
           etichetta. Largo quanto basta per i numeri che ci passano, non tanto
-          da uscire dal grafico. */}
+          da uscire dal grafico. Non si sposta con il testo: incolonnandoci alla
+          tacca grigia ci muoviamo verso sinistra, e un rettangolo che seguisse
+          lascerebbe scoperta la coda del numero che deve nascondere. */}
       <rect
         x={-90}
         y={y - LINE_HEIGHT / 2}
@@ -72,6 +106,8 @@ function LimitTickLabel({ y, value }: { y: number; value: number }) {
         fill="var(--p-color-bg-surface)"
       />
       <text
+        ref={textRef}
+        transform={`translate(${dx},0)`}
         x={LABEL_RIGHT_EDGE}
         y={y}
         textAnchor="end"
