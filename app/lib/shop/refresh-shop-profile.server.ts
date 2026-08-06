@@ -19,7 +19,8 @@ interface ShopProfile {
  * costa nulla, una scrittura inutile si', e riempirebbe il log di rumore.
  */
 export async function refreshShopProfile(shop: ShopProfile): Promise<void> {
-  const info = await new ShopifyAPIClient(shop.shopDomain, shop.accessToken).getShopInfo();
+  const client = await ShopifyAPIClient.forShop(shop.shopDomain);
+  const info = await client.getShopInfo();
 
   const data: { ianaTimezone?: string; primaryDomain?: string } = {};
 

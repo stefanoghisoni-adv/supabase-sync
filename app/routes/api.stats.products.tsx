@@ -36,7 +36,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     }
   }
 
-  const client = new ShopifyAPIClient(shop.shopDomain, shop.accessToken);
+  const client = await ShopifyAPIClient.forShop(shop.shopDomain);
 
   let totalProducts = 0;
   let readyCount = 0;

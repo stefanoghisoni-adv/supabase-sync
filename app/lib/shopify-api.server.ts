@@ -1,4 +1,4 @@
-import { decrypt } from '../utils/crypto.server';
+import { unauthenticated } from '~/shopify.server';
 
 export class ShopifyAPIClient {
   private shopDomain: string;
@@ -7,10 +7,23 @@ export class ShopifyAPIClient {
   private readonly RATE_LIMIT_THRESHOLD = 0.9;
   private readonly THROTTLE_DELAY_MS = 500;
 
-  constructor(shopDomain: string, encryptedAccessToken: string) {
+  /** Il token va passato in chiaro: chi lo procura e' `forShop`. */
+  constructor(shopDomain: string, accessToken: string) {
     this.shopDomain = shopDomain;
-    this.accessToken = decrypt(encryptedAccessToken);
+    this.accessToken = accessToken;
     this.apiVersion = process.env.SHOPIFY_API_VERSION || '2025-01';
+  }
+
+  // Unico modo corretto di costruire il client. Il token NON si legge piu' dalla
+  // copia cifrata in `shops.access_token`: da quando Shopify impone i token a
+  // scadenza (un'ora), una copia congelata all'installazione e' garantita
+  // scaduta, e l'API risponde 403. `unauthenticated.admin` carica la sessione
+  // corrente e, se manca meno di 5 minuti alla scadenza, la rinnova con il
+  // refresh token prima di restituirla — anche fuori da una richiesta HTTP
+  // autenticata, quindi vale anche per i worker e per il cron.
+  static async forShop(shopDomain: string): Promise<ShopifyAPIClient> {
+    const { session } = await unauthenticated.admin(shopDomain);
+    return new ShopifyAPIClient(shopDomain, session.accessToken ?? '');
   }
 
   private async makeRequest(
@@ -48,7 +61,14 @@ export class ShopifyAPIClient {
     }
 
     if (!response.ok) {
-      throw new Error(`Shopify API error: ${response.status} ${response.statusText}`);
+      // Il corpo va letto: Shopify ci scrive il motivo vero, e senza di esso un
+      // 403 "Forbidden" e' indistinguibile da un altro. E' costato una diagnosi
+      // sbagliata, quando il messaggio "Non-expiring access tokens are no longer
+      // accepted" era li' e lo stavamo buttando via.
+      const detail = await response.text().catch(() => '');
+      throw new Error(
+        `Shopify API error: ${response.status} ${response.statusText}${detail ? ` — ${detail.slice(0, 300)}` : ''}`,
+      );
     }
 
     const data = await response.json();

@@ -52,7 +52,7 @@ export async function action({ request }: ActionFunctionArgs) {
     // Il cost_per_item vive sull'InventoryItem e NON è nel payload del webhook:
     // arricchiamo il costo prima di trasformare, altrimenti ogni update scriverebbe
     // cost_per_item null (variante non idonea → rimossa).
-    const shopifyClient = new ShopifyAPIClient(shop.shopDomain, shop.accessToken);
+    const shopifyClient = await ShopifyAPIClient.forShop(shop.shopDomain);
     await enrichVariantCosts(shopifyClient, [product]);
 
     // Solo righe idonee (con costo).

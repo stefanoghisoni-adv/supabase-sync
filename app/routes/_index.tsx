@@ -31,7 +31,6 @@ import { normalizeAuthorization, isAuthorized } from '~/utils/authorization.serv
 import { resolveSyncState } from '~/components/Dashboard/sync-state';
 import { enqueueManualSync, triggerSyncDrain } from '~/lib/queue/trigger.server';
 import { authenticate } from '~/shopify.server';
-import { ShopifyAPIClient } from '~/lib/shopify-api.server';
 import {
   hasPlanChanged,
   planChangeBanner,

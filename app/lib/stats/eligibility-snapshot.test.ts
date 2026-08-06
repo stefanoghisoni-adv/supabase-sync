@@ -10,6 +10,14 @@ vi.mock('~/db.server', () => ({
   },
 }));
 
+// Il modulo sotto test importa il client Shopify, che a sua volta importa
+// shopify.server per procurarsi un token valido. Senza questo mock il session
+// storage di Prisma si costruirebbe sul prisma finto qui sopra, che non ha la
+// tabella session, e il file non verrebbe nemmeno caricato.
+vi.mock('~/lib/shopify-api.server', () => ({
+  ShopifyAPIClient: { forShop: vi.fn() },
+}));
+
 import { upsertTodayEligibilitySnapshot } from './eligibility-snapshot.server';
 
 describe('upsertTodayEligibilitySnapshot', () => {

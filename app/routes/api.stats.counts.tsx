@@ -23,7 +23,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const plan = await findPlanByName(shop.currentPlan);
   const customersEnabled = plan?.customersSyncEnabled ?? false;
 
-  const client = new ShopifyAPIClient(shop.shopDomain, shop.accessToken);
+  const client = await ShopifyAPIClient.forShop(shop.shopDomain);
 
   const [totalProducts, customerCount] = await Promise.all([
     client.getProductsCount(),

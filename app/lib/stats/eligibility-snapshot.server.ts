@@ -24,7 +24,7 @@ export async function recordEligibilitySnapshotIfMissing(
   });
   if (existing) return 'skipped';
 
-  const client = new ShopifyAPIClient(shop.shopDomain, shop.accessToken);
+  const client = await ShopifyAPIClient.forShop(shop.shopDomain);
 
   let totalEligible = 0;
   let pageInfo: string | undefined;

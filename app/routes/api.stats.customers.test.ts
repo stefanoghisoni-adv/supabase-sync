@@ -19,6 +19,9 @@ vi.mock('~/db.server', () => ({
 vi.mock('~/lib/shopify-api.server', () => ({
   ShopifyAPIClient: class {
     getCustomers = (...a: unknown[]) => getCustomers(...a);
+    static async forShop() {
+      return new this();
+    }
   },
 }));
 vi.mock('~/lib/cache/stats-cache.server', () => ({

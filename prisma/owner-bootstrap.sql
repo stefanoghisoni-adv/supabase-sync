@@ -36,6 +36,10 @@ CREATE TABLE "sessions" (
     "locale" TEXT,
     "collaborator" BOOLEAN DEFAULT false,
     "email_verified" BOOLEAN DEFAULT false,
+    -- Token a scadenza (obbligatori per le app create dopo il 1 aprile 2026):
+    -- l'access token dura un'ora, il refresh token serve a rinnovarlo.
+    "refresh_token" TEXT,
+    "refresh_token_expires" TIMESTAMP(3),
 
     CONSTRAINT "sessions_pkey" PRIMARY KEY ("id")
 );

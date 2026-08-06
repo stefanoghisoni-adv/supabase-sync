@@ -22,6 +22,11 @@ const shopify = shopifyApp({
   distribution: AppDistribution.AppStore,
   future: {
     unstable_newEmbeddedAuthStrategy: true,
+    // Obbligatorio per le app create dopo il 1 aprile 2026: Shopify risponde 403
+    // ("Non-expiring access tokens are no longer accepted") a chi presenta un
+    // token perpetuo. Con il flag attivo la libreria chiede token a scadenza e
+    // li rinnova da sola prima che scadano, usando il refresh token in sessione.
+    expiringOfflineAccessTokens: true,
   },
   hooks: {
     // Runs after a successful install/auth. Upserts the merchant record so the

@@ -61,7 +61,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     throw new Response('Shop not found', { status: 404 });
   }
 
-  const client = new ShopifyAPIClient(shop.shopDomain, shop.accessToken);
+  const client = await ShopifyAPIClient.forShop(shop.shopDomain);
 
   const allProducts: ShopifyProduct[] = [];
   let pageInfo: string | undefined;
@@ -195,7 +195,7 @@ export async function action({ request }: ActionFunctionArgs) {
     updates?: { variantId?: number | string; inventoryItemId?: number | string; cost?: string }[];
   };
 
-  const client = new ShopifyAPIClient(shop.shopDomain, shop.accessToken);
+  const client = await ShopifyAPIClient.forShop(shop.shopDomain);
 
   if (body.intent !== 'recheck') {
     return json({ ok: false, error: 'Richiesta non riconosciuta.' }, { status: 400 });

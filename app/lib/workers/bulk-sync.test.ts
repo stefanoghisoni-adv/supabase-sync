@@ -28,9 +28,16 @@ vi.mock('../../utils/crypto.server', () => ({
   decrypt: (val: string) => `decrypted_${val}`,
 }));
 
-vi.mock('../shopify-api.server', () => ({
-  ShopifyAPIClient: vi.fn(),
-}));
+// `forShop` delega al costruttore mockato: cosi' i mockImplementation gia'
+// scritti nei singoli test continuano a governare cosa restituisce il client.
+vi.mock('../shopify-api.server', () => {
+  const ctor = vi.fn();
+  return {
+    ShopifyAPIClient: Object.assign(ctor, {
+      forShop: vi.fn(async (shop: string) => new (ctor as any)(shop)),
+    }),
+  };
+});
 
 vi.mock('../supabase.server', () => ({
   createSupabaseClient: vi.fn(),

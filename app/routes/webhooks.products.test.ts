@@ -3,7 +3,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 vi.mock('~/lib/webhooks/verify.server', () => ({ verifyWebhook: () => true }));
 vi.mock('~/lib/transformers/product.server', () => ({ transformProduct: vi.fn() }));
 vi.mock('~/lib/supabase.server', () => ({ createSupabaseClient: vi.fn() }));
-vi.mock('~/lib/shopify-api.server', () => ({ ShopifyAPIClient: vi.fn() }));
+vi.mock('~/lib/shopify-api.server', () => {
+  const ctor = vi.fn();
+  return {
+    ShopifyAPIClient: Object.assign(ctor, {
+      forShop: vi.fn(async (shop: string) => new (ctor as any)(shop)),
+    }),
+  };
+});
 vi.mock('~/lib/stats/inventory-cost.server', () => ({
   enrichVariantCosts: vi.fn(async (_c: unknown, p: unknown) => p),
 }));

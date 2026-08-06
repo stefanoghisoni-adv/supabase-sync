@@ -8,7 +8,9 @@ vi.mock('~/db.server', () => ({
 }));
 
 vi.mock('~/lib/shopify-api.server', () => ({
-  ShopifyAPIClient: vi.fn(() => ({ getShopInfo })),
+  ShopifyAPIClient: Object.assign(vi.fn(() => ({ getShopInfo })), {
+    forShop: vi.fn(async () => ({ getShopInfo })),
+  }),
 }));
 
 import {

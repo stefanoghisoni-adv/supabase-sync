@@ -26,6 +26,11 @@ model Session {
   locale        String?
   collaborator  Boolean?  @default(false)
   emailVerified Boolean?  @default(false) @map("email_verified")
+  // Token a scadenza: dal 1 aprile 2026 Shopify rifiuta i token perpetui per le
+  // app nuove. L'access token vive un'ora e viene rinnovato con il refresh token,
+  // che la libreria usa da sola quando mancano meno di 5 minuti alla scadenza.
+  refreshToken        String?   @map("refresh_token")
+  refreshTokenExpires DateTime? @map("refresh_token_expires")
 
   @@map("sessions")
 }

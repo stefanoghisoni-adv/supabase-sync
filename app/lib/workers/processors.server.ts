@@ -429,7 +429,7 @@ export async function processPeriodicSyncCheck(shopId: string): Promise<void> {
     return;
   }
 
-  const shopifyClient = new ShopifyAPIClient(shop.shopDomain, shop.accessToken);
+  const shopifyClient = await ShopifyAPIClient.forShop(shop.shopDomain);
   const supabase = createSupabaseClient(shop.supabaseConfig);
 
   // Piano del negozio: tetto prodotti (maxProducts, null = illimitato) e
@@ -696,7 +696,7 @@ export async function processInitialBulkSync(
     throw new Error(`Shop ${shopId} non autorizzato all'uso dell'app`);
   }
 
-  const shopifyClient = new ShopifyAPIClient(shop.shopDomain, shop.accessToken);
+  const shopifyClient = await ShopifyAPIClient.forShop(shop.shopDomain);
   const supabase = createSupabaseClient(shop.supabaseConfig);
 
   // Create sync job record
