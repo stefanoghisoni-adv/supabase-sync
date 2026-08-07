@@ -70,7 +70,6 @@ export function TrackingConflicts({
   // mentre l'admin carica, e clicca una seconda volta.
   const [leaving, setLeaving] = useState<string | null>(null);
 
-  if (findings.length === 0) return null;
 
   const rowKey = (finding: TrackingFinding) => `${finding.kind}-${finding.name}`;
 
@@ -92,6 +91,11 @@ export function TrackingConflicts({
     }
     setPending(null);
   }, [fetcher.state, fetcher.data, pending]);
+
+  // Il return anticipato sta DOPO tutti gli hook, e non prima: uscendo prima
+  // React ne conta un numero diverso fra un render e l'altro e la pagina muore
+  // con l'errore #310. E' successo davvero, e la dashboard non si apriva piu'.
+  if (findings.length === 0) return null;
 
   // Dove porta il pulsante di destra. Non esegue niente: accompagna il merchant
   // dove la cosa si fa davvero. Disinstallare un'app o modificare un tema non
