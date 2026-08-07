@@ -76,16 +76,14 @@ export function TrackingConflicts({
                 blockAlign="center"
                 gap="400"
               >
-                <BlockStack gap="0">
-                  <Text as="span" fontWeight="semibold">
-                    {finding.name}
-                  </Text>
-                  <Text as="span" tone="subdued" variant="bodySm">
-                    {finding.kind === 'channel'
-                      ? `Canale di vendita — ${finding.where}`
-                      : `Codice nel tema — ${finding.where}`}
-                  </Text>
-                </BlockStack>
+                {/* Il nome che il merchant riconosce e' quello dell'app come la
+                    vede nel suo admin ("Facebook & Instagram"), non il nome della
+                    piattaforma dietro ("Meta"): e' quello che deve andare a
+                    cercare fra i canali. Per il codice nel tema il nome dello
+                    strumento e' invece l'unica cosa che serve. */}
+                <Text as="span" fontWeight="semibold">
+                  {finding.kind === 'channel' ? finding.where : finding.name}
+                </Text>
 
                 <InlineStack gap="200">
                   <Button onClick={() => dismiss(finding)} disabled={working}>
@@ -93,7 +91,7 @@ export function TrackingConflicts({
                       ? 'Gestisce solo shop e cataloghi'
                       : 'Non considerare'}
                   </Button>
-                  <Button variant="primary" url={url ?? undefined} target="_blank" disabled={!url}>
+                  <Button variant="primary" url={url ?? undefined} disabled={!url}>
                     {finding.kind === 'channel' ? 'Disinstalla' : 'Rimuovi snippet'}
                   </Button>
                 </InlineStack>
