@@ -280,9 +280,12 @@ export default function Plan() {
         {partnerLabel && (
           <Banner tone="info" title="Hai un prezzo riservato">
             <Text as="p">
-              Questo negozio collabora con {partnerLabel}, e per questo i piani ti
-              costano meno del listino — sia sul mensile sia sull&apos;annuale. Trovi il
-              prezzo che ti spetta su ogni piano qui sotto
+              Questo negozio collabora con{' '}
+              <Text as="span" fontWeight="semibold">
+                {partnerLabel}
+              </Text>
+              , e per questo i piani ti costano meno del listino — sia sul mensile sia
+              sull&apos;annuale. Trovi il prezzo che ti spetta su ogni piano qui sotto
               {discountIntervals != null
                 ? `, per i primi ${discountIntervals} ${discountIntervals === 1 ? 'rinnovo' : 'rinnovi'}.`
                 : '.'}
