@@ -12,3 +12,10 @@ prisma/migrations/dev.db*
 
 # Scratch SDD interno (non deve finire nel repo pubblico)
 .superpowers/
+
+# Script di sonda usa e getta: leggono .env e interrogano le API vere.
+.probe.mjs
+.cmp.mjs
+.gq-probe.mjs
+.rest-probe.mjs
+.q.graphql
