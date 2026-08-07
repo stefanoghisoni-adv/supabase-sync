@@ -27,7 +27,13 @@ import {
   effectivePrice,
   savingBadge,
   type BillingInterval,
+  type EffectivePrice,
 } from '~/lib/billing/partner-pricing';
+
+/** Testo del risparmio, o niente: decide anche se il badge esiste. */
+function savingLabel(price: EffectivePrice): string | null {
+  return price.discountAmount > 0 ? savingBadge(price) : null;
+}
 import { shouldHighlightRecommended } from '~/components/Billing/plan-highlight';
 import { canAccessPlanTab } from '~/components/Billing/plan-access';
 import { PlanFeatureList } from '~/components/Billing/PlanFeatureList';
@@ -280,12 +286,9 @@ export default function Plan() {
         {partnerLabel && (
           <Banner tone="info" title="Hai un prezzo riservato">
             <Text as="p">
-              Questo negozio collabora con{' '}
-              <Text as="span" fontWeight="semibold">
-                {partnerLabel}
-              </Text>
-              , e per questo i piani ti costano meno del listino — sia sul mensile sia
-              sull&apos;annuale. Trovi il prezzo che ti spetta su ogni piano qui sotto
+              Quest&apos;app ha una partnership attiva con {partnerLabel}, e per questo i piani ti
+              costano meno del listino — sia sul mensile sia sull&apos;annuale. Trovi il
+              prezzo che ti spetta su ogni piano qui sotto
               {discountIntervals != null
                 ? `, per i primi ${discountIntervals} ${discountIntervals === 1 ? 'rinnovo' : 'rinnovi'}.`
                 : '.'}
@@ -405,22 +408,19 @@ export default function Plan() {
                               ha modo di sapere quanto valga la condizione riservata. */}
                           {price.discountAmount > 0 && (
                             <Text as="span" tone="subdued" textDecorationLine="line-through">
-                              €{formatPrice(price.listPrice)}
+                              € {formatPrice(price.listPrice)}
                             </Text>
                           )}
                         </InlineStack>
-                        {/* Il badge c'e' su OGNI card, anche senza sconto: un
-                            trattino grigio dove non c'e' niente da dire. Cosi'
-                            le card restano alte uguali e i pulsanti in fondo
-                            non si sfalsano — ed e' anche una risposta, invece
-                            di un vuoto che lascia il dubbio. */}
-                        <InlineStack>
-                          {savingBadge(price) ? (
-                            <Badge tone="info">{savingBadge(price) as string}</Badge>
-                          ) : (
-                            <Badge>—</Badge>
-                          )}
-                        </InlineStack>
+                        {/* Il badge nasce dal testo, non dalla condizione: cosi'
+                            non puo' esistere un badge senza niente dentro, che
+                            e' cio' che compariva ai negozi senza partnership —
+                            una pillina grigia vuota sotto ogni prezzo. */}
+                        {savingLabel(price) && (
+                          <InlineStack>
+                            <Badge tone="info">{savingLabel(price) as string}</Badge>
+                          </InlineStack>
+                        )}
                       </BlockStack>
 
                       <PlanFeatureList features={plan.features} />

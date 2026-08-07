@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useFetcher } from '@remix-run/react';
 import { Avatar, Banner, BlockStack, Box, Button, Icon, InlineStack, Text } from '@shopify/polaris';
 import { CodeIcon } from '@shopify/polaris-icons';
@@ -29,6 +29,8 @@ export interface TrackingConflictsProps {
   adminBase?: string;
   /** Id del tema pubblicato: senza, il collegamento all'editor non si costruisce. */
   themeId?: number | null;
+  /** Ricarica l'elenco dopo che una fonte e' stata messa a tacere. */
+  onDismissed?: () => void;
 }
 
 /**
@@ -57,45 +59,27 @@ export function TrackingConflicts({
   findings,
   adminBase,
   themeId,
+  onDismissed,
 }: TrackingConflictsProps) {
   const fetcher = useFetcher<{ ok: boolean }>();
-  // Riga in corso di registrazione, e righe gia' registrate in questa visita.
-  // La riga NON sparisce appena salvata: il merchant deve vedere l'esito della
-  // sua scelta, non un elenco che si accorcia da solo mentre lo guarda. Sparira'
-  // alla prossima apertura, perche' il server la filtra.
-  const [pending, setPending] = useState<string | null>(null);
-  const [confirmed, setConfirmed] = useState<string[]>([]);
-  // Quale riga sta portando fuori dall'app. Il pulsante e' un collegamento, non
-  // una richiesta: senza un segno il merchant resta a guardare una pagina ferma
-  // mentre l'admin carica, e clicca una seconda volta.
-  const [leaving, setLeaving] = useState<string | null>(null);
+  // Quale riga sta lavorando e con quale dei due pulsanti. L'attesa e' della
+  // RIGA, non della tabella: bloccare tutto vorrebbe dire impedire al merchant
+  // di occuparsi di Google mentre sta uscendo verso Meta, e le due cose non
+  // hanno niente a che vedere l'una con l'altra.
+  const [busy, setBusy] = useState<{ row: string; action: 'dismiss' | 'leave' } | null>(null);
 
+  if (findings.length === 0) return null;
 
   const rowKey = (finding: TrackingFinding) => `${finding.kind}-${finding.name}`;
 
   const dismiss = (finding: TrackingFinding) => {
-    setPending(rowKey(finding));
+    setBusy({ row: rowKey(finding), action: 'dismiss' });
     fetcher.submit(
       { kind: finding.kind, name: finding.name },
       { method: 'POST', action: '/api/tracking/dismiss' },
     );
+    onDismissed?.();
   };
-
-  // La conferma si mostra solo quando il server ha davvero registrato: dirlo
-  // prima significherebbe promettere che l'avviso non tornera', e vederlo
-  // ricomparire domani.
-  useEffect(() => {
-    if (fetcher.state !== 'idle' || !pending) return;
-    if (fetcher.data?.ok) {
-      setConfirmed((rows) => [...rows, pending]);
-    }
-    setPending(null);
-  }, [fetcher.state, fetcher.data, pending]);
-
-  // Il return anticipato sta DOPO tutti gli hook, e non prima: uscendo prima
-  // React ne conta un numero diverso fra un render e l'altro e la pagina muore
-  // con l'errore #310. E' successo davvero, e la dashboard non si apriva piu'.
-  if (findings.length === 0) return null;
 
   // Dove porta il pulsante di destra. Non esegue niente: accompagna il merchant
   // dove la cosa si fa davvero. Disinstallare un'app o modificare un tema non
@@ -123,17 +107,18 @@ export function TrackingConflicts({
         <BlockStack gap="200">
           {findings.map((finding) => {
             const url = actionUrl(finding);
+            const key = rowKey(finding);
+            // Entrambi i pulsanti della riga si spengono, ovunque si sia
+            // premuto: la riga sta gia' facendo qualcosa, e l'altra azione
+            // sarebbe un ripensamento a meta' strada.
+            const rowBusy = busy?.row === key;
             return (
               // I pulsanti seguono il nome invece di essere spinti al bordo
               // opposto del riquadro: a tutta larghezza l'occhio doveva
               // attraversare mezzo schermo per collegare la riga alla sua
               // azione. La colonna del nome ha una larghezza minima, cosi' i
               // pulsanti restano comunque incolonnati fra una riga e l'altra.
-              <InlineStack
-                key={`${finding.kind}-${finding.name}`}
-                blockAlign="center"
-                gap="400"
-              >
+              <InlineStack key={key} blockAlign="center" gap="400">
                 <Box minWidth="260px">
                 <InlineStack gap="300" blockAlign="center" wrap={false}>
                   {/* Segno visivo della riga. NON e' il logo dell'app: Shopify
@@ -169,18 +154,11 @@ export function TrackingConflicts({
                 </InlineStack>
                 </Box>
 
-                {confirmed.includes(rowKey(finding)) ? (
-                  <Text as="span" tone="subdued">
-                    {finding.kind === 'channel'
-                      ? 'L\u2019app gestisce solo shop e cataloghi, non trasmette dati'
-                      : 'Segnalato come non rilevante: non comparira\u2019 piu\u2019'}
-                  </Text>
-                ) : (
                 <InlineStack gap="200">
                   <Button
                     onClick={() => dismiss(finding)}
-                    loading={pending === rowKey(finding)}
-                    disabled={pending !== null}
+                    disabled={rowBusy}
+                    loading={rowBusy && busy?.action === 'dismiss'}
                   >
                     {finding.kind === 'channel'
                       ? 'Gestisce solo shop e cataloghi'
@@ -194,14 +172,13 @@ export function TrackingConflicts({
                     variant="primary"
                     url={url ?? undefined}
                     target="_top"
-                    disabled={!url || leaving !== null || pending !== null}
-                    loading={leaving === `${finding.kind}-${finding.name}`}
-                    onClick={() => setLeaving(`${finding.kind}-${finding.name}`)}
+                    disabled={!url || rowBusy}
+                    loading={rowBusy && busy?.action === 'leave'}
+                    onClick={() => setBusy({ row: key, action: 'leave' })}
                   >
                     {finding.kind === 'channel' ? 'Disinstalla' : 'Rimuovi snippet'}
                   </Button>
                 </InlineStack>
-                )}
               </InlineStack>
             );
           })}

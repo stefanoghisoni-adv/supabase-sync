@@ -4,6 +4,7 @@ import {
   Badge,
   Banner,
   BlockStack,
+  Box,
   Button,
   InlineStack,
   Modal,
@@ -14,6 +15,9 @@ import {
   planComparisonRows,
   type PlanForSuggestion,
 } from './plan-suggestion';
+
+/** Larghezza delle due colonne dei valori: uguale, cosi' restano incolonnate. */
+const VALUE_COLUMN = '120px';
 
 type SubscribeResponse =
   | { confirmationUrl: string }
@@ -109,30 +113,50 @@ export function ProductOverflowBanner({
       >
         <Modal.Section>
           <BlockStack gap="300">
+            {/* Le due colonne dei valori hanno la STESSA larghezza fissa. Senza,
+                ognuna si dimensionava sul proprio contenuto e i numeri finivano
+                addosso all'intestazione della colonna accanto, riga per riga in
+                posizioni diverse: la tabella smetteva di leggersi per colonne. */}
             <InlineStack gap="400" align="space-between" blockAlign="center">
               <Text as="span" variant="bodySm" tone="subdued">
                 Cosa cambia
               </Text>
-              <InlineStack gap="400">
-                <Text as="span" variant="bodySm" tone="subdued">
-                  {planLabel(currentPlan.planName)}
-                </Text>
-                <Text as="span" variant="bodySm" tone="subdued">
-                  {nextLabel}
-                </Text>
+              <InlineStack gap="300" blockAlign="center">
+                <Box minWidth={VALUE_COLUMN}>
+                  <InlineStack align="end">
+                    <Text as="span" variant="bodySm" tone="subdued">
+                      {planLabel(currentPlan.planName)}
+                    </Text>
+                  </InlineStack>
+                </Box>
+                <Box minWidth={VALUE_COLUMN}>
+                  <InlineStack align="end">
+                    <Text as="span" variant="bodySm" tone="subdued">
+                      {nextLabel}
+                    </Text>
+                  </InlineStack>
+                </Box>
               </InlineStack>
             </InlineStack>
 
             {rows.map((row) => (
               <InlineStack key={row.label} gap="400" align="space-between" blockAlign="center">
                 <Text as="span">{row.label}</Text>
-                <InlineStack gap="400" blockAlign="center">
+                <InlineStack gap="300" blockAlign="center">
                   {/* Il valore che si lascia resta in grigio: e' il termine di
                       paragone, non una cosa da leggere per prima. */}
-                  <Text as="span" tone="subdued">
-                    {row.current}
-                  </Text>
-                  <Badge tone="success">{row.next}</Badge>
+                  <Box minWidth={VALUE_COLUMN}>
+                    <InlineStack align="end">
+                      <Text as="span" tone="subdued">
+                        {row.current}
+                      </Text>
+                    </InlineStack>
+                  </Box>
+                  <Box minWidth={VALUE_COLUMN}>
+                    <InlineStack align="end">
+                      <Badge tone="success">{row.next}</Badge>
+                    </InlineStack>
+                  </Box>
                 </InlineStack>
               </InlineStack>
             ))}

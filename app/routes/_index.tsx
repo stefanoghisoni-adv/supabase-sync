@@ -811,6 +811,9 @@ export default function Dashboard() {
           findings={conflictsFetcher.data?.findings ?? []}
           adminBase={conflictsFetcher.data?.adminBase}
           themeId={conflictsFetcher.data?.themeId}
+          // Rileggere subito: la fonte messa a tacere deve sparire dall'elenco
+          // senza aspettare la prossima apertura.
+          onDismissed={() => conflictsFetcher.load('/api/tracking/conflicts')}
         />
 
         {/* Tabelle da allineare: non si chiude finche' l'aggiornamento non e'
