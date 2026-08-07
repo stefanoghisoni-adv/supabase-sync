@@ -3,7 +3,7 @@
 // dell'app li mostriamo SUBITO e li aggiorniamo live in background. Se Redis non
 // è raggiungibile la cache "sparisce" senza mai bloccare: si ricalcola live.
 import type Redis from 'ioredis';
-import { getRedisUrl } from '../queue/connection.server';
+import { redisConnectionOptions } from '../queue/connection.server';
 
 // ioredis è importato dinamicamente: il build server di Remix è un bundle unico,
 // quindi un import statico lo caricherebbe a ogni cold start — anche sulle rotte
@@ -12,16 +12,13 @@ let clientPromise: Promise<Redis> | null = null;
 
 function getClient(): Promise<Redis> {
   if (!clientPromise) {
-    const url = new URL(getRedisUrl());
     clientPromise = import('ioredis').then(
       ({ default: RedisClient }) =>
         new RedisClient({
-          host: url.hostname,
-          port: parseInt(url.port || '6379', 10),
-          username: url.username || undefined,
-          password: url.password || undefined,
-          tls: url.protocol === 'rediss:' ? {} : undefined,
-          lazyConnect: true,
+          ...redisConnectionOptions(),
+          // La cache non deve mai far aspettare: pochi tentativi e nessuna coda
+          // di comandi in attesa di riconnessione. Se Redis non c'e', si
+          // ricalcola live.
           maxRetriesPerRequest: 2,
           enableOfflineQueue: false,
         }),
