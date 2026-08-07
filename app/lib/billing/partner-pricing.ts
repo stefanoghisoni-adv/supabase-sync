@@ -89,12 +89,15 @@ export function priceForInterval(
  */
 export function savingBadge(price: EffectivePrice, currency = '€'): string | null {
   if (price.discountAmount <= 0) return null;
-  return `−${formatAmount(price.discountAmount)} ${currency}`;
+  return `− ${currency} ${formatAmount(price.discountAmount)}`;
 }
 
-/** Cifra tonda senza decimali quando e' intera, con due decimali altrimenti. */
+/**
+ * Importo con i centesimi sempre scritti.
+ *
+ * Anche quando la cifra e' tonda: e' un valore di denaro, e "€ 5" accanto a
+ * "€ 4,10" fa sembrare il primo un'approssimazione invece di un importo esatto.
+ */
 export function formatAmount(amount: number): string {
-  return Number.isInteger(amount)
-    ? String(amount)
-    : amount.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return amount.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }

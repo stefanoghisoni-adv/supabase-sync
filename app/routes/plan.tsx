@@ -54,7 +54,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
   // qui. 403 anche nello status, non solo a schermo.
   if (!canAccessPlanTab(currentPlan)) {
     return json(
-      { currentPlan, blocked: true as const, cards: [] as PlanCard[], discountIntervals: null },
+      {
+        currentPlan,
+        blocked: true as const,
+        cards: [] as PlanCard[],
+        discountIntervals: null,
+        partnerLabel: null,
+      },
       { status: 403 },
     );
   }
@@ -69,6 +75,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const partnerPrices = shop?.partnerName
     ? await prisma.partnerPlanPrice.findMany({ where: { partnerName: shop.partnerName } })
     : [];
+
+  // Solo se ci sono davvero prezzi riservati: un partner senza listino non da'
+  // diritto a niente, e annunciare una riduzione inesistente sarebbe peggio che
+  // tacere.
+  const partnerLabel =
+    shop?.partnerName && partnerPrices.length > 0
+      ? (await prisma.partner.findUnique({ where: { name: shop.partnerName } }))?.label ?? null
+      : null;
   const reserved = Object.fromEntries(
     partnerPrices.map((p) => [
       p.planName,
@@ -97,6 +111,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
     // Per quanti cicli vale il prezzo riservato: serve a dirlo nella pagina,
     // altrimenti il merchant crede che quella cifra sia per sempre.
     discountIntervals: shop?.discountIntervals ?? null,
+    // Nome per esteso del partner, da mostrare nel riquadro informativo. Si
+    // legge da partners.label e non dal nome tecnico: "WeBeing", non "webeing".
+    partnerLabel: partnerLabel,
   });
 }
 
@@ -107,7 +124,8 @@ type SubscribeResponse =
   | { error: string };            // messaggio già in italiano, da mostrare in un Banner
 
 export default function Plan() {
-  const { currentPlan, blocked, cards, discountIntervals } = useLoaderData<typeof loader>();
+  const { currentPlan, blocked, cards, discountIntervals, partnerLabel } =
+    useLoaderData<typeof loader>();
 
   // Quanto si risparmia al massimo scegliendo l'annuale, sul listino che il
   // merchant vede davvero (riservato se ce l'ha). Serve alla riga accanto al
@@ -272,6 +290,21 @@ export default function Plan() {
           </BlockStack>
         </Card>
 
+        {/* Condizione riservata. Permanente e non chiudibile: resta vera finche'
+            la collaborazione dura, e riguarda una cifra che il merchant paga. */}
+        {partnerLabel && (
+          <Banner tone="info" title="Hai un prezzo riservato">
+            <Text as="p">
+              Questo negozio collabora con {partnerLabel}, e per questo i piani ti
+              costano meno del listino — sia sul mensile sia sull&apos;annuale. Trovi il
+              prezzo che ti spetta su ogni piano qui sotto
+              {discountIntervals != null
+                ? `, per i primi ${discountIntervals} ${discountIntervals === 1 ? 'rinnovo' : 'rinnovi'}.`
+                : '.'}
+            </Text>
+          </Banner>
+        )}
+
         {/* Scelta del ciclo di fatturazione. Sta sopra le card perche' cambia
             tutti i prezzi insieme: metterla dentro ciascuna card avrebbe fatto
             credere che si potesse pagare un piano al mese e un altro all'anno. */}
@@ -326,9 +359,8 @@ export default function Plan() {
               // stirare la Card all'altezza della riga, come le altre colonne.
               <div
                 key={plan.name}
+                className="plan-card"
                 style={{
-                  display: 'grid',
-                  height: '100%',
                   borderRadius: 'var(--p-border-radius-300)',
                   outline: isHighlighted
                     ? '2px solid var(--p-color-bg-fill-brand)'
@@ -353,27 +385,30 @@ export default function Plan() {
                           {isCurrent && <Badge tone="info">Piano attuale</Badge>}
                         </InlineStack>
 
-                        <BlockStack gap="100">
-                          <InlineStack gap="100" blockAlign="baseline">
-                            <Text as="span" variant="heading3xl">
-                              €{formatPrice(price.payablePrice)}
-                            </Text>
-                            <Text as="span" tone="subdued">
-                              {interval === 'yearly' ? '/anno' : '/mese'}
-                            </Text>
-                          </InlineStack>
-                          {/* Il prezzo pieno resta visibile accanto allo sconto:
-                              senza, il merchant non ha modo di sapere quanto
-                              valga la condizione che gli abbiamo riservato. */}
+                        {/* Prezzo, periodo, prezzo pieno barrato e risparmio: tutto
+                            su UNA riga. Non e' solo estetica — su righe separate le
+                            sole card scontate diventavano piu' alte, e i pulsanti in
+                            fondo si sollevavano rispetto a quelli delle altre. */}
+                        <InlineStack gap="200" blockAlign="baseline" wrap={false}>
+                          <Text as="span" variant="heading3xl">
+                            €{formatPrice(price.payablePrice)}
+                          </Text>
+                          <Text as="span" tone="subdued">
+                            {interval === 'yearly' ? '/anno' : '/mese'}
+                          </Text>
+                          {/* Il prezzo pieno resta in vista: senza, il merchant non
+                              ha modo di sapere quanto valga la condizione riservata. */}
                           {price.discountAmount > 0 && (
-                            <InlineStack gap="200" blockAlign="center">
-                              <Text as="span" tone="subdued" textDecorationLine="line-through">
-                                €{formatPrice(price.listPrice)}
-                              </Text>
-                              <Badge tone="info">{savingBadge(price) ?? ''}</Badge>
-                            </InlineStack>
+                            <Text as="span" tone="subdued" textDecorationLine="line-through">
+                              €{formatPrice(price.listPrice)}
+                            </Text>
                           )}
-                        </BlockStack>
+                        </InlineStack>
+                        {price.discountAmount > 0 && (
+                          <InlineStack>
+                            <Badge tone="info">{savingBadge(price) ?? ''}</Badge>
+                          </InlineStack>
+                        )}
                       </BlockStack>
 
                       <PlanFeatureList features={plan.features} />
