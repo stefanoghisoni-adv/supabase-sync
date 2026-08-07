@@ -46,14 +46,31 @@ export interface AppSubscriptionSummary {
 export interface CreateSubscriptionOptions {
   /** Nome esatto dalla colonna `plan_name`: e' quello che il merchant vede in fattura. */
   planName: string;
-  /** Prezzo mensile in EUR. */
-  priceMonthly: number;
+  /** Prezzo di LISTINO nel ciclo scelto, in EUR. Lo sconto viaggia a parte. */
+  price: number;
+  /** Ogni quanto si paga. */
+  interval: 'monthly' | 'yearly';
   /** Null = nessuna prova. */
   trialDays: number | null;
   /** URL assoluto a cui Shopify rimanda dopo la conferma dell'addebito. */
   returnUrl: string;
   /** true = addebito di prova, obbligatorio sui development store. */
   test: boolean;
+  /**
+   * Sconto riservato, in valore assoluto sul prezzo di listino.
+   *
+   * Si passa come sconto e non come prezzo piu' basso perche' e' l'unico modo
+   * per farlo scadere: registrando direttamente l'importo agevolato, quello
+   * resterebbe per sempre. Con lo sconto, allo scadere dei cicli concordati il
+   * prezzo pieno riparte da solo, senza chiedere al merchant di riapprovare un
+   * addebito.
+   */
+  discount?: {
+    /** Quanto si toglie al prezzo di listino, in EUR. */
+    amount: number;
+    /** Per quanti cicli vale. null = per sempre. */
+    intervals: number | null;
+  } | null;
 }
 
 export interface CreateSubscriptionResult {
@@ -260,6 +277,29 @@ export async function isDevelopmentStore(admin: BillingAdmin): Promise<boolean> 
  * L'abbonamento nasce PENDING: diventa attivo solo dopo la conferma, quindi il
  * piano non va attivato qui ma nella callback, dopo aver riletto lo stato.
  */
+/**
+ * Blocco `discount` della mutation, o niente se non c'e' nulla da scontare.
+ *
+ * Uno sconto di importo zero o negativo non si manda: Shopify lo rifiuterebbe,
+ * e un rifiuto qui fermerebbe una sottoscrizione che sarebbe andata benissimo a
+ * prezzo pieno.
+ */
+function discountDetails(
+  discount: CreateSubscriptionOptions['discount'],
+): { discount: Record<string, unknown> } | null {
+  if (!discount || !(discount.amount > 0)) return null;
+
+  const details: Record<string, unknown> = {
+    value: { amount: discount.amount.toFixed(2) },
+  };
+  // Omesso quando lo sconto non scade: mandare null farebbe comparire il campo
+  // senza aggiungere nulla, e 0 significherebbe "mai", cioe' il contrario.
+  if (discount.intervals != null && discount.intervals > 0) {
+    details.durationLimitInIntervals = discount.intervals;
+  }
+  return { discount: details };
+}
+
 export async function createAppSubscription(
   admin: BillingAdmin,
   opts: CreateSubscriptionOptions,
@@ -274,8 +314,9 @@ export async function createAppSubscription(
           appRecurringPricingDetails: {
             // L'importo viaggia come stringa: e' un Decimal lato Shopify e un
             // float qui perderebbe i centesimi su certi prezzi.
-            price: { amount: opts.priceMonthly.toFixed(2), currencyCode: 'EUR' },
-            interval: 'EVERY_30_DAYS',
+            price: { amount: opts.price.toFixed(2), currencyCode: 'EUR' },
+            interval: opts.interval === 'yearly' ? 'ANNUAL' : 'EVERY_30_DAYS',
+            ...(discountDetails(opts.discount) ?? {}),
           },
         },
       },

@@ -100,7 +100,8 @@ describe('createAppSubscription', () => {
     const admin = adminWith(okPayload);
     const result = await createAppSubscription(admin, {
       planName: 'Pro',
-      priceMonthly: 29,
+      price: 29,
+      interval: 'monthly',
       trialDays: 7,
       returnUrl: 'https://app.example.com/billing/callback?plan=Pro',
       test: false,
@@ -133,7 +134,8 @@ describe('createAppSubscription', () => {
     const admin = adminWith(okPayload);
     await createAppSubscription(admin, {
       planName: 'Starter',
-      priceMonthly: 9.9,
+      price: 9.9,
+      interval: 'monthly',
       trialDays: null,
       returnUrl: 'https://app.example.com/billing/callback',
       test: true,
@@ -166,7 +168,8 @@ describe('createAppSubscription', () => {
     await expect(
       createAppSubscription(admin, {
         planName: 'Pro',
-        priceMonthly: 29,
+        price: 29,
+        interval: 'monthly',
         trialDays: null,
         returnUrl: 'https://app.example.com/billing/callback',
         test: false,
@@ -188,7 +191,8 @@ describe('createAppSubscription', () => {
     await expect(
       createAppSubscription(admin, {
         planName: 'Pro',
-        priceMonthly: 29,
+        price: 29,
+        interval: 'monthly',
         trialDays: null,
         returnUrl: 'https://app.example.com/billing/callback',
         test: false,
@@ -202,7 +206,8 @@ describe('createAppSubscription', () => {
     await expect(
       createAppSubscription(admin, {
         planName: 'Pro',
-        priceMonthly: 29,
+        price: 29,
+        interval: 'monthly',
         trialDays: null,
         returnUrl: 'https://app.example.com/billing/callback',
         test: false,
@@ -222,7 +227,8 @@ describe('createAppSubscription', () => {
     await expect(
       createAppSubscription(admin, {
         planName: 'Pro',
-        priceMonthly: 29,
+        price: 29,
+        interval: 'monthly',
         trialDays: null,
         returnUrl: 'https://app.example.com/billing/callback',
         test: false,

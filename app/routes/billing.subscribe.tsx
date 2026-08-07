@@ -13,6 +13,11 @@ import { appSubscriptionGid, applyPlanToShop } from '~/lib/billing/apply-plan.se
 import { embeddedContextParams } from '~/lib/billing/embedded-return.server';
 import { findPlanByName } from '~/lib/billing/find-plan.server';
 import { forcedTestCharge } from '~/lib/billing/test-charge';
+import {
+  effectivePrice,
+  priceForInterval,
+  type BillingInterval,
+} from '~/lib/billing/partner-pricing';
 import { samePlanName } from '~/lib/billing/plan-name';
 
 // Avvio del cambio di piano. Qui NON si attiva niente: l'abbonamento nasce in
@@ -89,7 +94,36 @@ export async function action({ request }: ActionFunctionArgs) {
     return json<SubscribeResponse>({ error: 'Stai già usando questo piano.' }, { status: 400 });
   }
 
-  const price = Number(plan.priceMonthly);
+  // Ciclo di fatturazione scelto dal merchant. Qualunque valore diverso da
+  // "yearly" vale mensile: e' il caso di gran lunga piu' comune e non deve
+  // dipendere da come il client scrive il campo.
+  const interval: BillingInterval =
+    String(form.get('interval') ?? '').trim().toLowerCase() === 'yearly' ? 'yearly' : 'monthly';
+
+  const listPrice = priceForInterval(
+    { priceMonthly: Number(plan.priceMonthly), priceYearly: Number(plan.priceYearly) },
+    interval,
+  );
+
+  // Listino riservato del partner a cui il negozio appartiene, se ce n'e' uno.
+  // Il prezzo lo si risolve QUI e non nel browser: e' quello che finisce in
+  // fattura, e non puo' dipendere da cosa il client dichiara di aver visto.
+  const partnerPrice = shop.partnerId
+    ? await prisma.partnerPlanPrice.findUnique({
+        where: { partnerId_planName: { partnerId: shop.partnerId, planName: plan.planName } },
+      })
+    : null;
+
+  const pricing = effectivePrice(
+    listPrice,
+    partnerPrice ? priceForInterval(
+      { priceMonthly: Number(partnerPrice.priceMonthly), priceYearly: Number(partnerPrice.priceYearly) },
+      interval,
+    ) : null,
+    shop.discountIntervals,
+  );
+
+  const price = pricing.payablePrice;
 
   try {
     // Piano gratuito: non c'e' niente da far confermare, quindi si chiude subito
@@ -137,10 +171,17 @@ export async function action({ request }: ActionFunctionArgs) {
 
     const created = await createAppSubscription(admin, {
       planName: plan.planName,
-      priceMonthly: price,
+      // A Shopify va il prezzo di LISTINO, con lo sconto a parte: e' l'unico
+      // modo perche' allo scadere dei cicli concordati il prezzo pieno riparta
+      // da solo.
+      price: pricing.listPrice,
+      interval,
       trialDays: plan.trialDays,
       returnUrl,
       test,
+      discount: pricing.discountAmount > 0
+        ? { amount: pricing.discountAmount, intervals: pricing.discountIntervals }
+        : null,
     });
 
     // La riga nasce "pending" apposta: e' la traccia che ci permette, al
