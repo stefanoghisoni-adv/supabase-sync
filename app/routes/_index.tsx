@@ -41,6 +41,8 @@ import { firstPlanWithCustomersSync } from '~/components/Dashboard/account-forma
 import { normalizePlanName, samePlanName } from '~/lib/billing/plan-name';
 import { authorizationBanners } from '~/components/Dashboard/authorization-banners';
 import { SchemaUpdateBanner } from '~/components/Dashboard/SchemaUpdateBanner';
+import { TrackingConflicts } from '~/components/Dashboard/TrackingConflicts';
+import type { TrackingFinding } from '~/lib/tracking/detect';
 import { needsSchemaUpdate } from '~/lib/supabase/merchant-migrations';
 import { triggerMerchantSchemaUpdate } from '~/lib/supabase/apply-schema-update.server';
 import {
@@ -321,6 +323,17 @@ export default function Dashboard() {
   const { shop, plan, supabaseConnected, supabaseAccountConnected, customersEnabled, authorization, syncState, planChanged, currentMaxProducts, previousMaxProducts, previousCustomersEnabled, customersTableCreated, customersUpgradePlan, trackingAuthorization, schemaUpdatePending } =
     useLoaderData<typeof loader>();
   const blocked = authorization !== 'ENABLED';
+
+  // Altre fonti di eventi gia' attive sul negozio. Si chiede una volta sola, a
+  // pagina aperta: e' un controllo di configurazione, non un dato che cambia
+  // mentre il merchant guarda.
+  const conflictsFetcher = useFetcher<{ findings: TrackingFinding[] }>();
+  useEffect(() => {
+    if (conflictsFetcher.state === 'idle' && !conflictsFetcher.data) {
+      conflictsFetcher.load('/api/tracking/conflicts');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Pulsanti-link (Impostazioni, Vedi logs): mentre Remix carica la rotta di
   // destinazione mostriamo lo spinner e disabilitiamo il pulsante, così un clic
@@ -752,6 +765,10 @@ export default function Dashboard() {
             <Text as="p">{b.message}</Text>
           </Banner>
         ))}
+
+        {/* Chi altro sta gia' inviando eventi. Non compare se non c'e' niente
+            da segnalare. */}
+        <TrackingConflicts findings={conflictsFetcher.data?.findings ?? []} />
 
         {/* Tabelle da allineare: non si chiude finche' l'aggiornamento non e'
             andato a buon fine. Di norma succede da solo e il banner nemmeno si

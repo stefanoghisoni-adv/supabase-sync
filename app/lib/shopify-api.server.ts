@@ -432,6 +432,76 @@ export class ShopifyAPIClient {
     return typeof data.customersCount?.count === 'number' ? data.customersCount.count : 0;
   }
 
+  /**
+   * Canali di vendita collegati al negozio.
+   *
+   * Serve a sapere se qualcun altro sta gia' inviando eventi: i canali Meta,
+   * Google e simili portano un tracciamento proprio, che non si puo' ne' leggere
+   * ne' modificare da qui.
+   */
+  async getPublications(): Promise<{ name: string }[]> {
+    const data = await this.graphql<{ publications: { nodes: { name: string }[] } }>(
+      '{ publications(first: 50) { nodes { name } } }',
+    );
+    return data.publications?.nodes ?? [];
+  }
+
+  /**
+   * Contenuto dei file indicati del tema pubblicato.
+   *
+   * Sola lettura, e solo i file richiesti: il tema del merchant e' roba sua, e
+   * l'unica ragione per aprirlo e' cercarci codice di tracciamento che
+   * entrerebbe in conflitto con il suo.
+   */
+  async getThemeFiles(filenames: string[]): Promise<{ filename: string; content: string }[]> {
+    if (filenames.length === 0) return [];
+
+    const data = await this.graphql<{
+      themes: {
+        nodes: {
+          files: {
+            nodes: { filename: string; body: { content?: string } | null }[];
+          };
+        }[];
+      };
+    }>(
+      `query ThemeFiles($filenames: [String!]) {
+        themes(first: 1, roles: MAIN) {
+          nodes {
+            files(first: 50, filenames: $filenames) {
+              nodes {
+                filename
+                body { ... on OnlineStoreThemeFileBodyText { content } }
+              }
+            }
+          }
+        }
+      }`,
+      { filenames },
+    );
+
+    const files = data.themes?.nodes?.[0]?.files?.nodes ?? [];
+    // I file binari (immagini, font) non hanno un corpo testuale: si scartano
+    // invece di trattarli come vuoti, che nasconderebbe un errore vero.
+    return files
+      .filter((f) => typeof f.body?.content === 'string')
+      .map((f) => ({ filename: f.filename, content: f.body!.content as string }));
+  }
+
+  /** Elenco dei file del tema pubblicato, senza il loro contenuto. */
+  async listThemeFilenames(): Promise<string[]> {
+    const data = await this.graphql<{
+      themes: { nodes: { files: { nodes: { filename: string }[] } }[] };
+    }>(
+      `{
+        themes(first: 1, roles: MAIN) {
+          nodes { files(first: 250) { nodes { filename } } }
+        }
+      }`,
+    );
+    return (data.themes?.nodes?.[0]?.files?.nodes ?? []).map((f) => f.filename);
+  }
+
   // Metadati del negozio. Serve iana_timezone (es. "Europe/Rome") per formattare
   // le date nel fuso del NEGOZIO: il server non puo' conoscere quello del browser,
   // e usare l'ora locale della macchina produrrebbe stringhe diverse fra render
