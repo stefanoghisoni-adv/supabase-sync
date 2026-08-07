@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { useFetcher } from '@remix-run/react';
-import { Avatar, Banner, BlockStack, Button, Icon, InlineStack, Text } from '@shopify/polaris';
+import { Avatar, Banner, BlockStack, Box, Button, Icon, InlineStack, Text } from '@shopify/polaris';
 import { CodeIcon } from '@shopify/polaris-icons';
 import type { TrackingFinding } from '~/lib/tracking/detect';
 import metaIcon from '~/assets/channel-meta.avif';
@@ -62,6 +63,10 @@ export function TrackingConflicts({
 }: TrackingConflictsProps) {
   const fetcher = useFetcher<{ ok: boolean }>();
   const working = fetcher.state !== 'idle';
+  // Quale riga sta portando fuori dall'app. Il pulsante e' un collegamento, non
+  // una richiesta: senza un segno il merchant resta a guardare una pagina ferma
+  // mentre l'admin carica, e clicca una seconda volta.
+  const [leaving, setLeaving] = useState<string | null>(null);
 
   if (findings.length === 0) return null;
 
@@ -100,12 +105,17 @@ export function TrackingConflicts({
           {findings.map((finding) => {
             const url = actionUrl(finding);
             return (
+              // I pulsanti seguono il nome invece di essere spinti al bordo
+              // opposto del riquadro: a tutta larghezza l'occhio doveva
+              // attraversare mezzo schermo per collegare la riga alla sua
+              // azione. La colonna del nome ha una larghezza minima, cosi' i
+              // pulsanti restano comunque incolonnati fra una riga e l'altra.
               <InlineStack
                 key={`${finding.kind}-${finding.name}`}
-                align="space-between"
                 blockAlign="center"
                 gap="400"
               >
+                <Box minWidth="260px">
                 <InlineStack gap="300" blockAlign="center" wrap={false}>
                   {/* Segno visivo della riga. NON e' il logo dell'app: Shopify
                       non espone l'icona delle applicazioni altrui — verificato,
@@ -138,6 +148,7 @@ export function TrackingConflicts({
                     {finding.kind === 'channel' ? finding.where : finding.name}
                   </Text>
                 </InlineStack>
+                </Box>
 
                 <InlineStack gap="200">
                   <Button onClick={() => dismiss(finding)} disabled={working}>
@@ -149,7 +160,14 @@ export function TrackingConflicts({
                       essere incorniciato, quindi un collegamento normale da qui
                       dentro finisce in "Connessione negata". Si esce dal riquadro
                       dell'app restando nella stessa scheda. */}
-                  <Button variant="primary" url={url ?? undefined} target="_top" disabled={!url}>
+                  <Button
+                    variant="primary"
+                    url={url ?? undefined}
+                    target="_top"
+                    disabled={!url || leaving !== null}
+                    loading={leaving === `${finding.kind}-${finding.name}`}
+                    onClick={() => setLeaving(`${finding.kind}-${finding.name}`)}
+                  >
                     {finding.kind === 'channel' ? 'Disinstalla' : 'Rimuovi snippet'}
                   </Button>
                 </InlineStack>
