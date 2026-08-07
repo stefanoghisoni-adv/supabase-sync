@@ -3,12 +3,23 @@ import { Avatar, Banner, BlockStack, Button, Icon, InlineStack, Text } from '@sh
 import { CodeIcon } from '@shopify/polaris-icons';
 import type { TrackingFinding } from '~/lib/tracking/detect';
 import metaIcon from '~/assets/channel-meta.avif';
+import googleIcon from '~/assets/channel-google.webp';
+import tiktokIcon from '~/assets/channel-tiktok.webp';
+import pinterestIcon from '~/assets/channel-pinterest.webp';
 
 // Icone dei canali che sappiamo riconoscere. Vite le trasforma in URL con hash
 // al build, quindi non serve una cartella pubblica ne' un percorso scritto a
 // mano che si romperebbe in silenzio.
+//
+// Le chiavi sono i nomi che assegna detectTrackingChannels, non quelli dei
+// canali: "Google" copre sia "Google & YouTube" sia le sue varianti tradotte.
+// Chi non e' elencato qui ricade sulle iniziali — Shopify non espone il logo
+// delle app altrui, quindi ogni icona va aggiunta a mano.
 const CHANNEL_ICONS: Record<string, string> = {
   Meta: metaIcon,
+  Google: googleIcon,
+  TikTok: tiktokIcon,
+  Pinterest: pinterestIcon,
 };
 
 export interface TrackingConflictsProps {
