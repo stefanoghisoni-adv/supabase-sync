@@ -47,9 +47,13 @@ export function TrackingConflicts({
   // dove la cosa si fa davvero. Disinstallare un'app o modificare un tema non
   // sono azioni che quest'app puo' compiere, e fingere il contrario sarebbe
   // peggio che non offrirle.
+  //
+  // I canali stanno in settings/sales_channels e non in settings/apps: la
+  // seconda elenca tutte le applicazioni installate, e il merchant si
+  // troverebbe a cercare fra quelle quella che gli abbiamo appena segnalato.
   const actionUrl = (finding: TrackingFinding): string | null => {
     if (!adminBase) return null;
-    if (finding.kind === 'channel') return `${adminBase}/settings/apps`;
+    if (finding.kind === 'channel') return `${adminBase}/settings/sales_channels`;
     return themeId ? `${adminBase}/themes/${themeId}` : null;
   };
 
