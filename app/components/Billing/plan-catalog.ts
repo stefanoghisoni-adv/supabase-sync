@@ -35,6 +35,10 @@ export interface PlanCard {
   /** Nome del piano com'e' scritto nella tabella: e' anche la chiave. */
   name: string;
   priceMonthly: number;
+  priceYearly: number;
+  /** Prezzo riservato al partner del negozio, se ce n'e' uno. null = listino. */
+  partnerMonthly: number | null;
+  partnerYearly: number | null;
   recommended: boolean;
   features: PlanFeature[];
 }
@@ -42,6 +46,7 @@ export interface PlanCard {
 /** La riga di `plans` per come serve alla tab. */
 export interface PlanRow {
   planName: string;
+  priceYearly: number;
   priceMonthly: number;
   maxProducts: number | null;
   maxCustomers: number | null;
@@ -112,16 +117,26 @@ export function buildPlanFeatures(plan: PlanRow): PlanFeature[] {
  * Fuori restano i piani non acquistabili (lifetime, assegnato dall'owner): non
  * c'e' nulla da comprare e non hanno posto in un listino.
  */
-export function buildPlanCards(plans: PlanRow[]): PlanCard[] {
+export function buildPlanCards(
+  plans: PlanRow[],
+  /** Listino riservato del negozio, per nome piano. Vuoto = nessuno sconto. */
+  partnerPrices: Record<string, { priceMonthly: number; priceYearly: number }> = {},
+): PlanCard[] {
   return plans
     .filter((plan) => isSelectablePlan(plan.planName))
     .sort((a, b) => a.priceMonthly - b.priceMonthly || a.planName.localeCompare(b.planName))
-    .map((plan) => ({
-      name: plan.planName,
-      priceMonthly: plan.priceMonthly,
-      recommended: plan.planName.trim().toLowerCase() === RECOMMENDED_PLAN,
-      features: buildPlanFeatures(plan),
-    }));
+    .map((plan) => {
+      const reserved = partnerPrices[plan.planName] ?? null;
+      return {
+        name: plan.planName,
+        priceMonthly: plan.priceMonthly,
+        priceYearly: plan.priceYearly,
+        partnerMonthly: reserved?.priceMonthly ?? null,
+        partnerYearly: reserved?.priceYearly ?? null,
+        recommended: plan.planName.trim().toLowerCase() === RECOMMENDED_PLAN,
+        features: buildPlanFeatures(plan),
+      };
+    });
 }
 
 /** Prezzo come va scritto sulla card: "29", "0", "9,90". */

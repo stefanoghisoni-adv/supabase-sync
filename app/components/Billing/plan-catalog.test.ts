@@ -11,6 +11,7 @@ import {
 const row = (over: Partial<PlanRow> = {}): PlanRow => ({
   planName: 'free',
   priceMonthly: 0,
+  priceYearly: 0,
   maxProducts: 50,
   maxCustomers: 0,
   maxSyncFrequencyHours: 168,

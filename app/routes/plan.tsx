@@ -16,12 +16,18 @@ import {
   Text,
   Badge,
   Button,
+  ButtonGroup,
   Banner,
 } from '@shopify/polaris';
 import { SettingsIcon } from '@shopify/polaris-icons';
 import { authenticate } from '~/shopify.server';
 import { prisma } from '~/db.server';
 import { buildPlanCards, formatPrice, type PlanCard } from '~/components/Billing/plan-catalog';
+import {
+  effectivePrice,
+  savingBadge,
+  type BillingInterval,
+} from '~/lib/billing/partner-pricing';
 import { shouldHighlightRecommended } from '~/components/Billing/plan-highlight';
 import { canAccessPlanTab } from '~/components/Billing/plan-access';
 import { PlanFeatureList } from '~/components/Billing/PlanFeatureList';
@@ -48,7 +54,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   // qui. 403 anche nello status, non solo a schermo.
   if (!canAccessPlanTab(currentPlan)) {
     return json(
-      { currentPlan, blocked: true as const, cards: [] as PlanCard[] },
+      { currentPlan, blocked: true as const, cards: [] as PlanCard[], discountIntervals: null },
       { status: 403 },
     );
   }
@@ -56,19 +62,42 @@ export async function loader({ request }: LoaderFunctionArgs) {
   // Le card vengono dal listino registrato, non da una copia nel codice: nomi,
   // prezzi e limiti sono quelli che l'app applica davvero.
   const plans = await prisma.plan.findMany();
+  // Listino riservato del partner a cui il negozio appartiene. Serve solo a
+  // mostrare i prezzi giusti: quello che viene addebitato lo ricalcola comunque
+  // /billing/subscribe leggendo il database, perche' il prezzo in fattura non
+  // puo' dipendere da cosa il browser ha ricevuto.
+  const partnerPrices = shop?.partnerName
+    ? await prisma.partnerPlanPrice.findMany({ where: { partnerName: shop.partnerName } })
+    : [];
+  const reserved = Object.fromEntries(
+    partnerPrices.map((p) => [
+      p.planName,
+      { priceMonthly: Number(p.priceMonthly), priceYearly: Number(p.priceYearly) },
+    ]),
+  );
+
   const cards = buildPlanCards(
     plans.map((plan) => ({
       planName: plan.planName,
       priceMonthly: Number(plan.priceMonthly),
+      priceYearly: Number(plan.priceYearly),
       maxProducts: plan.maxProducts,
       maxCustomers: plan.maxCustomers,
       maxSyncFrequencyHours: plan.maxSyncFrequencyHours,
       customersSyncEnabled: plan.customersSyncEnabled,
       supportLevel: plan.supportLevel,
     })),
+    reserved,
   );
 
-  return json({ currentPlan, blocked: false as const, cards });
+  return json({
+    currentPlan,
+    blocked: false as const,
+    cards,
+    // Per quanti cicli vale il prezzo riservato: serve a dirlo nella pagina,
+    // altrimenti il merchant crede che quella cifra sia per sempre.
+    discountIntervals: shop?.discountIntervals ?? null,
+  });
 }
 
 // Contratto della risposta di /billing/subscribe (endpoint di un altro task).
@@ -78,7 +107,18 @@ type SubscribeResponse =
   | { error: string };            // messaggio già in italiano, da mostrare in un Banner
 
 export default function Plan() {
-  const { currentPlan, blocked, cards } = useLoaderData<typeof loader>();
+  const { currentPlan, blocked, cards, discountIntervals } = useLoaderData<typeof loader>();
+
+  // Quanto si risparmia al massimo scegliendo l'annuale, sul listino che il
+  // merchant vede davvero (riservato se ce l'ha). Serve alla riga accanto al
+  // selettore: senza, l'annuale sembra solo un impegno piu' lungo.
+  const yearlySaving = cards.reduce<number | null>((best, plan) => {
+    const monthly = plan.partnerMonthly ?? plan.priceMonthly;
+    const yearly = plan.partnerYearly ?? plan.priceYearly;
+    if (!(monthly > 0) || !(yearly > 0)) return best;
+    const saving = monthly * 12 - yearly;
+    return saving > (best ?? 0) ? saving : best;
+  }, null);
 
   // Il "Consigliato" si risalta solo se è un upgrade rispetto al piano attuale.
   const highlightRecommended = shouldHighlightRecommended(cards, currentPlan);
@@ -91,6 +131,9 @@ export default function Plan() {
   // uno per card: lo stato locale (submittingPlan) traccia quale piano è in corso.
   const fetcher = useFetcher<SubscribeResponse>();
   const [submittingPlan, setSubmittingPlan] = useState<string | null>(null);
+  // Mensile di partenza: e' l'impegno piu' leggero, e chi arriva qui sta ancora
+  // decidendo se il servizio gli serve.
+  const [interval, setInterval] = useState<BillingInterval>('monthly');
 
   // Legge il parametro querystring ?billing=ok|ko dopo il ritorno dal flusso.
   const [searchParams, setSearchParams] = useSearchParams();
@@ -229,10 +272,52 @@ export default function Plan() {
           </BlockStack>
         </Card>
 
+        {/* Scelta del ciclo di fatturazione. Sta sopra le card perche' cambia
+            tutti i prezzi insieme: metterla dentro ciascuna card avrebbe fatto
+            credere che si potesse pagare un piano al mese e un altro all'anno. */}
+        <InlineStack gap="300" blockAlign="center">
+          <ButtonGroup variant="segmented">
+            <Button
+              pressed={interval === 'monthly'}
+              onClick={() => setInterval('monthly')}
+            >
+              Mensile
+            </Button>
+            <Button
+              pressed={interval === 'yearly'}
+              onClick={() => setInterval('yearly')}
+            >
+              Annuale
+            </Button>
+          </ButtonGroup>
+          {/* Il risparmio dell'annuale va detto, non lasciato da calcolare: e'
+              l'unica ragione per sceglierlo, e nessuno moltiplica per dodici. */}
+          {interval === 'monthly' && yearlySaving != null && (
+            <Text as="span" tone="subdued">
+              Con l&apos;annuale risparmi fino a €{formatPrice(yearlySaving)} l&apos;anno
+            </Text>
+          )}
+          {interval === 'yearly' && discountIntervals != null && (
+            <Text as="span" tone="subdued">
+              Il prezzo riservato vale per {discountIntervals}{' '}
+              {discountIntervals === 1 ? 'rinnovo' : 'rinnovi'}
+            </Text>
+          )}
+        </InlineStack>
+
         <InlineGrid columns={{ xs: 1, sm: 2, lg: 4 }} gap="400">
           {cards.map((plan) => {
             const isCurrent = plan.name.trim().toLowerCase() === currentPlan;
             const isHighlighted = plan.recommended && highlightRecommended;
+            // Prezzo mostrato: listino, oppure quello riservato al partner del
+            // negozio. Il calcolo e' lo stesso che /billing/subscribe rifa sul
+            // server per l'addebito, cosi' cifra vista e cifra pagata non
+            // possono divergere.
+            const price = effectivePrice(
+              interval === 'yearly' ? plan.priceYearly : plan.priceMonthly,
+              interval === 'yearly' ? plan.partnerYearly : plan.partnerMonthly,
+              discountIntervals,
+            );
             return (
               // Il consigliato non ha uno sfondo diverso (sembrava disabilitato) ma un
               // bordo piu' spesso nello stesso colore del pulsante primario. Polaris non
@@ -268,14 +353,27 @@ export default function Plan() {
                           {isCurrent && <Badge tone="info">Piano attuale</Badge>}
                         </InlineStack>
 
-                        <InlineStack gap="100" blockAlign="baseline">
-                          <Text as="span" variant="heading3xl">
-                            €{formatPrice(plan.priceMonthly)}
-                          </Text>
-                          <Text as="span" tone="subdued">
-                            /mese
-                          </Text>
-                        </InlineStack>
+                        <BlockStack gap="100">
+                          <InlineStack gap="100" blockAlign="baseline">
+                            <Text as="span" variant="heading3xl">
+                              €{formatPrice(price.payablePrice)}
+                            </Text>
+                            <Text as="span" tone="subdued">
+                              {interval === 'yearly' ? '/anno' : '/mese'}
+                            </Text>
+                          </InlineStack>
+                          {/* Il prezzo pieno resta visibile accanto allo sconto:
+                              senza, il merchant non ha modo di sapere quanto
+                              valga la condizione che gli abbiamo riservato. */}
+                          {price.discountAmount > 0 && (
+                            <InlineStack gap="200" blockAlign="center">
+                              <Text as="span" tone="subdued" textDecorationLine="line-through">
+                                €{formatPrice(price.listPrice)}
+                              </Text>
+                              <Badge tone="info">{savingBadge(price) ?? ''}</Badge>
+                            </InlineStack>
+                          )}
+                        </BlockStack>
                       </BlockStack>
 
                       <PlanFeatureList features={plan.features} />
@@ -292,7 +390,7 @@ export default function Plan() {
                           setSubmittingPlan(plan.name);
                           setFetcherError(null); // Azzera eventuali errori precedenti
                           fetcher.submit(
-                            { plan: plan.name },
+                            { plan: plan.name, interval },
                             { method: 'POST', action: '/billing/subscribe' },
                           );
                         }}

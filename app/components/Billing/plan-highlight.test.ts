@@ -5,6 +5,9 @@ import type { PlanCard } from './plan-catalog';
 const card = (name: string, priceMonthly: number, recommended = false): PlanCard => ({
   name,
   priceMonthly,
+  priceYearly: priceMonthly * 10,
+  partnerMonthly: null,
+  partnerYearly: null,
   recommended,
   features: [],
 });
