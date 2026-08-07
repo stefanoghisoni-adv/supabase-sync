@@ -68,6 +68,10 @@ CREATE TABLE "shops" (
     "plan_banner_shown_at" TIMESTAMP(3),
     "read_proxy_token_hash" TEXT,
     "read_proxy_token_enc" TEXT,
+    -- Listino riservato: partner di appartenenza e durata dello sconto in cicli
+    -- di fatturazione (vuoto = per sempre).
+    "partner_id" TEXT,
+    "discount_intervals" INTEGER,
 
     CONSTRAINT "shops_pkey" PRIMARY KEY ("id")
 );
@@ -89,6 +93,29 @@ CREATE TABLE "supabase_configs" (
     "updated_at" TIMESTAMP(3) NOT NULL,
 
     CONSTRAINT "supabase_configs_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "partners" (
+    "id" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "label" TEXT NOT NULL,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "partners_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+-- Prezzo FINALE riservato, non una percentuale: e' cosi' che si decide, e una
+-- percentuale darebbe cifre con i decimali invece di prezzi tondi.
+CREATE TABLE "partner_plan_prices" (
+    "id" TEXT NOT NULL,
+    "partner_id" TEXT NOT NULL,
+    "plan_name" TEXT NOT NULL,
+    "price_monthly" DECIMAL(10,2) NOT NULL,
+    "price_yearly" DECIMAL(10,2) NOT NULL,
+
+    CONSTRAINT "partner_plan_prices_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateTable
@@ -214,6 +241,12 @@ CREATE TABLE "sync_job_events" (
 );
 
 -- CreateIndex
+CREATE UNIQUE INDEX "partners_name_key" ON "partners"("name");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "partner_plan_prices_partner_id_plan_name_key" ON "partner_plan_prices"("partner_id", "plan_name");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "shops_shop_domain_key" ON "shops"("shop_domain");
 
 -- CreateIndex
@@ -257,6 +290,13 @@ CREATE UNIQUE INDEX "product_eligibility_snapshots_shop_id_day_key" ON "product_
 
 -- CreateIndex
 CREATE INDEX "sync_job_events_sync_job_id_idx" ON "sync_job_events"("sync_job_id");
+
+-- AddForeignKey
+ALTER TABLE "partner_plan_prices" ADD CONSTRAINT "partner_plan_prices_partner_id_fkey" FOREIGN KEY ("partner_id") REFERENCES "partners"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
+-- SET NULL e non CASCADE: cancellare un partner non deve portarsi via i negozi.
+ALTER TABLE "shops" ADD CONSTRAINT "shops_partner_id_fkey" FOREIGN KEY ("partner_id") REFERENCES "partners"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "supabase_configs" ADD CONSTRAINT "supabase_configs_shop_id_fkey" FOREIGN KEY ("shop_id") REFERENCES "shops"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -345,3 +385,8 @@ BEGIN
     EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', t);
   END LOOP;
 END $$;
+
+-- Partner di partenza: i negozi che seguiamo direttamente, senza agenzia.
+INSERT INTO "partners" ("id", "name", "label")
+VALUES (gen_random_uuid()::text, 'own_partner', 'Clienti diretti')
+ON CONFLICT ("name") DO NOTHING;

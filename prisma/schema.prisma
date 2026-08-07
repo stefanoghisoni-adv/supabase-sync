@@ -81,6 +81,13 @@ model Shop {
   readProxyTokenHash String? @unique @map("read_proxy_token_hash")
   readProxyTokenEnc  String? @map("read_proxy_token_enc")
 
+  // Listino riservato: a quale partner appartiene il negozio (agenzia con cui
+  // collaboriamo, oppure i clienti diretti) e per quanti cicli di fatturazione
+  // vale il prezzo agevolato. null = nessuno sconto / per sempre.
+  partnerId         String?            @map("partner_id")
+  discountIntervals Int?               @map("discount_intervals")
+
+  partner           Partner?           @relation(fields: [partnerId], references: [id], onDelete: SetNull)
   supabaseConfig    SupabaseConfig?
   supabaseOAuthToken SupabaseOAuthToken?
   billingCharges    BillingCharge[]
@@ -149,6 +156,45 @@ model Plan {
   createdAt              DateTime @default(now()) @map("created_at")
 
   @@map("plans")
+}
+
+/// Con chi e' in rapporto il negozio: un'agenzia con cui collaboriamo, oppure
+/// noi direttamente. Serve a categorizzare e a decidere quale listino applicare.
+model Partner {
+  id        String   @id @default(uuid())
+  /// Nome tecnico, usato nei riferimenti: "agenzia-rossi", "own_partner".
+  name      String   @unique
+  /// Nome per esteso, quello che si legge.
+  label     String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  shops      Shop[]
+  planPrices PartnerPlanPrice[]
+
+  @@map("partners")
+}
+
+/// Prezzo riservato di un piano per un partner.
+///
+/// Si registra il prezzo FINALE, quello che il merchant vede e paga (19 → 14):
+/// e' cosi' che lo si decide, e una percentuale produrrebbe cifre con i decimali
+/// invece di prezzi tondi. Lo sconto da comunicare a Shopify e' la differenza
+/// col listino, calcolata al momento della sottoscrizione.
+///
+/// Cambiare questi valori NON tocca gli abbonamenti gia' attivi: quelli vivono
+/// su Shopify con l'importo e la durata concordati allora. Il listino nuovo si
+/// incontra solo cambiando piano.
+model PartnerPlanPrice {
+  id           String  @id @default(uuid())
+  partnerId    String  @map("partner_id")
+  planName     String  @map("plan_name")
+  priceMonthly Decimal @map("price_monthly") @db.Decimal(10, 2)
+  priceYearly  Decimal @map("price_yearly") @db.Decimal(10, 2)
+
+  partner Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+
+  @@unique([partnerId, planName])
+  @@map("partner_plan_prices")
 }
 
 model BillingCharge {
