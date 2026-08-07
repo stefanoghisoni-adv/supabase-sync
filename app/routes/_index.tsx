@@ -277,8 +277,16 @@ export async function action({ request }: ActionFunctionArgs) {
   } catch (err) {
     // Non far crashare la pagina con "Unexpected Server Error": errore gestito.
     console.error('[dashboard action] sync fallita:', err instanceof Error ? err.message : 'errore sconosciuto');
+    // Il messaggio NON deve indicare una causa che non conosciamo. Qui si
+    // finisce per qualunque intoppo nell'avvio, e mandare il merchant a
+    // controllare il collegamento a Supabase — come diceva prima — gli fa
+    // cercare un guasto dove non c'e', mentre quello vero e' dalla nostra parte
+    // e lui non puo' farci niente.
     return json(
-      { error: 'Avvio sincronizzazione non riuscito. Verifica il collegamento a Supabase e riprova.' },
+      {
+        error:
+          'Non siamo riusciti ad avviare la sincronizzazione. Riprova fra qualche minuto: se continua, scrivici e ce ne occupiamo noi.',
+      },
       { status: 502 },
     );
   }
