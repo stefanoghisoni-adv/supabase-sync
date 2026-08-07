@@ -19,7 +19,6 @@ import { ProductIcon, PersonIcon, SettingsIcon, LockIcon } from '@shopify/polari
 import { ProductsCard } from '~/components/Dashboard/ProductsCard';
 import { PlanLimitBanner } from '~/components/Dashboard/PlanLimitBanner';
 import { CustomersCard } from '~/components/Dashboard/CustomersCard';
-import { PlanBanner } from '~/components/Dashboard/PlanBanner';
 import { Stepper, type StepperItem } from '~/components/Dashboard/Stepper';
 import { EligibilityChart } from '~/components/Dashboard/EligibilityChart';
 import { resolveStepStates } from '~/components/Dashboard/stepper-state';
@@ -766,7 +765,11 @@ export default function Dashboard() {
         },
       ]}
     >
-      <BlockStack gap="500">
+      {/* gap ridotto: gli avvisi sono una pila e vanno letti come tale.
+          Distanziati come sezioni sembravano problemi separati, e la pagina
+          cominciava con mezzo schermo di aria. Lo stacco vero resta uno solo,
+          prima del contenuto. */}
+      <BlockStack gap="300">
         {/* Esito della disconnessione: in cima perche' e' la risposta all'ultima
             azione del merchant, e il modal che l'ha avviata e' gia' sparito. */}
         {disconnectDone && (
@@ -857,17 +860,9 @@ export default function Dashboard() {
           </Banner>
         )}
 
-        {plan && (
-          <PlanBanner
-            shop={shop}
-            plan={plan}
-            currentUsage={{
-              products: counts?.totalProducts ?? 0,
-              customers: counts?.customerCount ?? 0,
-              customFields: 0,
-            }}
-          />
-        )}
+        {/* Qui finiscono gli avvisi e comincia il contenuto: e' l'unico punto in
+            cui serve respiro, ed e' quello che rende leggibile la pila sopra. */}
+        <Box paddingBlockStart="300" />
 
         <InlineGrid columns={{ xs: 1, md: 2 }} gap="400">
           <ProductsCard

@@ -273,6 +273,23 @@ export default function Plan() {
             cosa NON cambia al cambio di piano (dubbio tipico prima di pagare).
             Copy solo in termini di beneficio per il merchant: nessun riferimento a
             come l'app funziona dietro le quinte. */}
+        {/* Condizione riservata, in cima a tutto: e' la prima cosa da sapere
+            prima di guardare i prezzi, non una nota a margine da scoprire dopo
+            averli gia' letti. Permanente e non chiudibile — resta vera finche'
+            la collaborazione dura, e riguarda una cifra che il merchant paga. */}
+        {partnerLabel && (
+          <Banner tone="info" title="Hai un prezzo riservato">
+            <Text as="p">
+              Questo negozio collabora con {partnerLabel}, e per questo i piani ti
+              costano meno del listino — sia sul mensile sia sull&apos;annuale. Trovi il
+              prezzo che ti spetta su ogni piano qui sotto
+              {discountIntervals != null
+                ? `, per i primi ${discountIntervals} ${discountIntervals === 1 ? 'rinnovo' : 'rinnovi'}.`
+                : '.'}
+            </Text>
+          </Banner>
+        )}
+
         <Card>
           <BlockStack gap="200">
             <Text as="h2" variant="headingMd">
@@ -289,21 +306,6 @@ export default function Plan() {
             </Text>
           </BlockStack>
         </Card>
-
-        {/* Condizione riservata. Permanente e non chiudibile: resta vera finche'
-            la collaborazione dura, e riguarda una cifra che il merchant paga. */}
-        {partnerLabel && (
-          <Banner tone="info" title="Hai un prezzo riservato">
-            <Text as="p">
-              Questo negozio collabora con {partnerLabel}, e per questo i piani ti
-              costano meno del listino — sia sul mensile sia sull&apos;annuale. Trovi il
-              prezzo che ti spetta su ogni piano qui sotto
-              {discountIntervals != null
-                ? `, per i primi ${discountIntervals} ${discountIntervals === 1 ? 'rinnovo' : 'rinnovi'}.`
-                : '.'}
-            </Text>
-          </Banner>
-        )}
 
         {/* Scelta del ciclo di fatturazione. Sta sopra le card perche' cambia
             tutti i prezzi insieme: metterla dentro ciascuna card avrebbe fatto
