@@ -765,11 +765,13 @@ export default function Dashboard() {
         },
       ]}
     >
-      {/* gap ridotto: gli avvisi sono una pila e vanno letti come tale.
-          Distanziati come sezioni sembravano problemi separati, e la pagina
-          cominciava con mezzo schermo di aria. Lo stacco vero resta uno solo,
-          prima del contenuto. */}
-      <BlockStack gap="300">
+      <BlockStack gap="500">
+        {/* Gli avvisi stanno in una pila propria, stretta: sono una lista da
+            leggere in fila, non sezioni indipendenti. Tenendoli nel contenitore
+            del contenuto avrebbero avuto per forza la stessa distanza delle
+            card, che fra un avviso e l'altro e' troppa. Lo stacco piu' ampio
+            resta uno solo, fra l'ultimo avviso e il contenuto. */}
+        <BlockStack gap="200">
         {/* Esito della disconnessione: in cima perche' e' la risposta all'ultima
             azione del merchant, e il modal che l'ha avviata e' gia' sparito. */}
         {disconnectDone && (
@@ -860,9 +862,7 @@ export default function Dashboard() {
           </Banner>
         )}
 
-        {/* Qui finiscono gli avvisi e comincia il contenuto: e' l'unico punto in
-            cui serve respiro, ed e' quello che rende leggibile la pila sopra. */}
-        <Box paddingBlockStart="300" />
+        </BlockStack>
 
         <InlineGrid columns={{ xs: 1, md: 2 }} gap="400">
           <ProductsCard
