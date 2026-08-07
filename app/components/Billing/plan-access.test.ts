@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { canAccessPlanTab } from './plan-access';
+import { canAccessPlanTab, isSelectablePlan } from './plan-access';
 
 describe('canAccessPlanTab', () => {
   it('nega l\'accesso al piano lifetime', () => {
@@ -23,5 +23,22 @@ describe('canAccessPlanTab', () => {
     expect(canAccessPlanTab(undefined)).toBe(true);
     expect(canAccessPlanTab('')).toBe(true);
     expect(canAccessPlanTab('   ')).toBe(true);
+  });
+});
+
+describe('isSelectablePlan', () => {
+  it('il piano assegnato dall owner non e mai offribile', () => {
+    // E' la regola: lo assegna l'owner a sua discrezione, e non deve comparire
+    // in nessun elenco, proposta o suggerimento.
+    expect(isSelectablePlan('lifetime')).toBe(false);
+    expect(isSelectablePlan('  LIFETIME  ')).toBe(false);
+    expect(isSelectablePlan('Lifetime')).toBe(false);
+  });
+
+  it('i piani commerciali si possono offrire', () => {
+    expect(isSelectablePlan('free')).toBe(true);
+    expect(isSelectablePlan('pro')).toBe(true);
+    expect(isSelectablePlan('business')).toBe(true);
+    expect(isSelectablePlan('enterprise')).toBe(true);
   });
 });

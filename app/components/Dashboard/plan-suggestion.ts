@@ -1,4 +1,4 @@
-import { canAccessPlanTab } from '~/components/Billing/plan-access';
+import { isSelectablePlan } from '~/components/Billing/plan-access';
 
 /**
  * Quale piano proporre a chi ha piu' prodotti di quanti il suo ne sincronizzi.
@@ -40,7 +40,7 @@ export function suggestPlanForProducts(
     // merchant su una pagina che per lui non esiste. Senza questo filtro
     // sarebbero anche i primi a essere scelti, perche' costano zero e non
     // hanno tetti.
-    if (!canAccessPlanTab(plan.planName)) return false;
+    if (!isSelectablePlan(plan.planName)) return false;
     if (plan.planName.trim().toLowerCase() === current) return false;
     // Deve contenerli tutti: un piano che ne lascia comunque fuori una parte
     // non risolve il problema per cui lo stiamo proponendo.

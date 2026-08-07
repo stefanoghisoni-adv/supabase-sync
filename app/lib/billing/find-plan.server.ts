@@ -1,6 +1,6 @@
 import type { Plan } from '@prisma/client';
 import { prisma } from '~/db.server';
-import { canAccessPlanTab } from '~/components/Billing/plan-access';
+import { isSelectablePlan } from '~/components/Billing/plan-access';
 
 // Il nome del piano viaggia in due posti che non si aggiornano insieme: la
 // colonna `plans.plan_name` (il listino) e `shops.current_plan` (quello scritto
@@ -55,7 +55,7 @@ export async function findFreePlan(): Promise<Plan | null> {
   // ripiego: finirci per la cancellazione di un abbonamento regalerebbe un
   // piano senza limiti. Il piano gratuito e' quello che un merchant puo'
   // davvero ritrovarsi.
-  return freeOfCharge.find((plan) => canAccessPlanTab(plan.planName)) ?? null;
+  return freeOfCharge.find((plan) => isSelectablePlan(plan.planName)) ?? null;
 }
 
 /** Il nome esatto del piano gratuito, per chi deve solo scriverlo su uno shop. */

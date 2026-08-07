@@ -3,7 +3,7 @@ import { json } from '@remix-run/node';
 import { authenticate } from '~/shopify.server';
 import { prisma } from '~/db.server';
 import { authorizationMessage, normalizeAuthorization } from '~/utils/authorization.server';
-import { canAccessPlanTab } from '~/components/Billing/plan-access';
+import { canAccessPlanTab, isSelectablePlan } from '~/components/Billing/plan-access';
 import {
   cancelAppSubscription,
   createAppSubscription,
@@ -79,7 +79,7 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   const plan = await findPlanByName(requestedName);
-  if (!plan || !canAccessPlanTab(plan.planName)) {
+  if (!plan || !isSelectablePlan(plan.planName)) {
     return json<SubscribeResponse>(
       { error: 'Il piano scelto non è disponibile.' },
       { status: 400 },

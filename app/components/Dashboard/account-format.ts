@@ -1,4 +1,4 @@
-import { canAccessPlanTab } from '~/components/Billing/plan-access';
+import { isSelectablePlan } from '~/components/Billing/plan-access';
 
 // Il nome tecnico del piano (colonna plan_name) non e' adatto alla UI: mappa esplicita.
 const PLAN_LABELS: Record<string, string> = {
@@ -52,7 +52,7 @@ export function firstPlanWithCustomersSync(
     .filter(
       (p) =>
         p.customersSyncEnabled &&
-        canAccessPlanTab(p.planName) &&
+        isSelectablePlan(p.planName) &&
         p.planName.trim().toLowerCase() !== current,
     )
     // A parita' di prezzo l'ordine alfabetico rende il risultato prevedibile.

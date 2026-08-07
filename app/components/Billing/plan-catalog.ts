@@ -1,5 +1,5 @@
 import { syncFrequencyLabel } from '~/components/Dashboard/account-format';
-import { canAccessPlanTab } from './plan-access';
+import { isSelectablePlan } from './plan-access';
 
 // Le card della tab Piano si costruiscono dalla tabella `plans`: nome, prezzo e
 // limiti sono quelli registrati li', non una copia scritta a mano che col tempo
@@ -114,7 +114,7 @@ export function buildPlanFeatures(plan: PlanRow): PlanFeature[] {
  */
 export function buildPlanCards(plans: PlanRow[]): PlanCard[] {
   return plans
-    .filter((plan) => canAccessPlanTab(plan.planName))
+    .filter((plan) => isSelectablePlan(plan.planName))
     .sort((a, b) => a.priceMonthly - b.priceMonthly || a.planName.localeCompare(b.planName))
     .map((plan) => ({
       name: plan.planName,
