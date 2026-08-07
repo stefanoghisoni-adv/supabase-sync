@@ -2,6 +2,14 @@ import { useFetcher } from '@remix-run/react';
 import { Avatar, Banner, BlockStack, Button, Icon, InlineStack, Text } from '@shopify/polaris';
 import { CodeIcon } from '@shopify/polaris-icons';
 import type { TrackingFinding } from '~/lib/tracking/detect';
+import metaIcon from '~/assets/channel-meta.avif';
+
+// Icone dei canali che sappiamo riconoscere. Vite le trasforma in URL con hash
+// al build, quindi non serve una cartella pubblica ne' un percorso scritto a
+// mano che si romperebbe in silenzio.
+const CHANNEL_ICONS: Record<string, string> = {
+  Meta: metaIcon,
+};
 
 export interface TrackingConflictsProps {
   findings: TrackingFinding[];
@@ -94,10 +102,21 @@ export function TrackingConflicts({
                       marchio di Meta o Google sarebbe usare un segno che non ci
                       appartiene per parlare di loro. Le iniziali del canale
                       distinguono le righe senza spacciarsi per altro. */}
-                  {finding.kind === 'channel' ? (
-                    <Avatar size="sm" name={finding.where} initials={initials(finding.where)} />
-                  ) : (
+                  {finding.kind !== 'channel' ? (
                     <Icon source={CodeIcon} tone="subdued" />
+                  ) : CHANNEL_ICONS[finding.name] ? (
+                    <img
+                      src={CHANNEL_ICONS[finding.name]}
+                      alt=""
+                      width={24}
+                      height={24}
+                      style={{ borderRadius: 'var(--p-border-radius-100)', display: 'block' }}
+                    />
+                  ) : (
+                    // Canale di cui non abbiamo l'icona: le iniziali. Shopify non
+                    // espone il logo delle app altrui (verificato: `catalog` torna
+                    // null), quindi ogni icona va aggiunta a mano qui sopra.
+                    <Avatar size="sm" name={finding.where} initials={initials(finding.where)} />
                   )}
                   {/* Il nome che il merchant riconosce e' quello dell'app come la
                       vede nel suo admin ("Facebook & Instagram"), non il nome della
@@ -115,7 +134,11 @@ export function TrackingConflicts({
                       ? 'Gestisce solo shop e cataloghi'
                       : 'Non considerare'}
                   </Button>
-                  <Button variant="primary" url={url ?? undefined} disabled={!url}>
+                  {/* _top e non una scheda nuova: l'admin di Shopify rifiuta di
+                      essere incorniciato, quindi un collegamento normale da qui
+                      dentro finisce in "Connessione negata". Si esce dal riquadro
+                      dell'app restando nella stessa scheda. */}
+                  <Button variant="primary" url={url ?? undefined} target="_top" disabled={!url}>
                     {finding.kind === 'channel' ? 'Disinstalla' : 'Rimuovi snippet'}
                   </Button>
                 </InlineStack>
