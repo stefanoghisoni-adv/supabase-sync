@@ -42,6 +42,8 @@ import { normalizePlanName, samePlanName } from '~/lib/billing/plan-name';
 import { authorizationBanners } from '~/components/Dashboard/authorization-banners';
 import { SchemaUpdateBanner } from '~/components/Dashboard/SchemaUpdateBanner';
 import { TrackingConflicts } from '~/components/Dashboard/TrackingConflicts';
+import { ProductOverflowBanner } from '~/components/Dashboard/ProductOverflowBanner';
+import { suggestPlanForProducts } from '~/components/Dashboard/plan-suggestion';
 import type { TrackingFinding } from '~/lib/tracking/detect';
 import { needsSchemaUpdate } from '~/lib/supabase/merchant-migrations';
 import { triggerMerchantSchemaUpdate } from '~/lib/supabase/apply-schema-update.server';
@@ -231,6 +233,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
             shop.currentPlan,
           ),
       customersTableCreated: customersTableJob !== null,
+      // Listino completo: serve al banner che propone il piano giusto a chi ha
+      // piu' prodotti di quanti il suo ne sincronizzi. Sono poche righe e le
+      // abbiamo gia' in memoria: passarle costa meno di una seconda richiesta.
+      planOptions: plans.map((p) => ({
+        planName: p.planName,
+        priceMonthly: Number(p.priceMonthly),
+        priceYearly: Number(p.priceYearly),
+        maxProducts: p.maxProducts,
+        maxCustomers: p.maxCustomers,
+        customersSyncEnabled: p.customersSyncEnabled,
+      })),
     });
   } catch (err) {
     // Le Response (redirect di auth, 404) devono passare intatte.
@@ -328,7 +341,7 @@ interface ProductHistoryResponse {
 }
 
 export default function Dashboard() {
-  const { shop, plan, supabaseConnected, supabaseAccountConnected, customersEnabled, authorization, syncState, planChanged, currentMaxProducts, previousMaxProducts, previousCustomersEnabled, customersTableCreated, customersUpgradePlan, trackingAuthorization, schemaUpdatePending } =
+  const { shop, plan, supabaseConnected, supabaseAccountConnected, customersEnabled, authorization, syncState, planChanged, currentMaxProducts, previousMaxProducts, previousCustomersEnabled, customersTableCreated, customersUpgradePlan, trackingAuthorization, schemaUpdatePending, planOptions } =
     useLoaderData<typeof loader>();
   const blocked = authorization !== 'ENABLED';
 
@@ -469,6 +482,15 @@ export default function Dashboard() {
     completed: syncCompleted,
     planChanged,
   });
+
+  // Prodotti TOTALI, idonei e non: il tetto del piano li taglia comunque, e un
+  // prodotto oggi senza costo diventa idoneo appena il merchant lo compila.
+  const totalProducts = (readiness?.readyCount ?? 0) + (readiness?.problemCount ?? 0);
+  const currentPlanOption = planOptions.find((p) => samePlanName(p.planName, shop.currentPlan)) ?? null;
+  const suggestedPlan =
+    currentPlanOption && readiness
+      ? suggestPlanForProducts(planOptions, shop.currentPlan, totalProducts)
+      : null;
 
   const steps = resolveStepStates(supabaseAccountConnected, supabaseConnected);
 
@@ -783,12 +805,27 @@ export default function Dashboard() {
             vede. */}
         {schemaUpdatePending && <SchemaUpdateBanner />}
 
+        {/* Catalogo piu' grande del tetto: dice quanti restano fuori e propone
+            il piano che li contiene tutti. */}
+        {currentPlanOption && (
+          <ProductOverflowBanner
+            totalProducts={totalProducts}
+            currentPlan={currentPlanOption}
+            suggestedPlan={suggestedPlan}
+            disabled={blocked}
+          />
+        )}
+
         {/* Quota prodotti agli sgoccioli: non si chiude, perche' resta vero
-            finche' il piano non cambia. */}
+            finche' il piano non cambia. Tace quando il banner qui sopra e' gia'
+            visibile: direbbero la stessa cosa, e quello sopra porta anche la
+            soluzione. */}
+        {!suggestedPlan && (
         <PlanLimitBanner
           count={readiness?.readyCount ?? 0}
           limit={currentMaxProducts}
         />
+        )}
 
         {showPlanBanner && banner && (
           <Banner
