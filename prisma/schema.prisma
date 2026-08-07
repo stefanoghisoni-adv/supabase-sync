@@ -84,10 +84,13 @@ model Shop {
   // Listino riservato: a quale partner appartiene il negozio (agenzia con cui
   // collaboriamo, oppure i clienti diretti) e per quanti cicli di fatturazione
   // vale il prezzo agevolato. null = nessuno sconto / per sempre.
-  partnerId         String?            @map("partner_id")
+  // Il riferimento e' il NOME del partner, non un id opaco: la riga si legge
+  // ("webeing") mentre la si modifica a mano nel Table Editor, che e' come la
+  // si assegna. Stessa scelta gia' fatta per shops.current_plan → plans.plan_name.
+  partnerName       String?            @map("partner_name")
   discountIntervals Int?               @map("discount_intervals")
 
-  partner           Partner?           @relation(fields: [partnerId], references: [id], onDelete: SetNull)
+  partner           Partner?           @relation(fields: [partnerName], references: [name], onDelete: SetNull, onUpdate: Cascade)
   supabaseConfig    SupabaseConfig?
   supabaseOAuthToken SupabaseOAuthToken?
   billingCharges    BillingCharge[]
@@ -186,14 +189,14 @@ model Partner {
 /// incontra solo cambiando piano.
 model PartnerPlanPrice {
   id           String  @id @default(uuid())
-  partnerId    String  @map("partner_id")
+  partnerName  String  @map("partner_name")
   planName     String  @map("plan_name")
   priceMonthly Decimal @map("price_monthly") @db.Decimal(10, 2)
   priceYearly  Decimal @map("price_yearly") @db.Decimal(10, 2)
 
-  partner Partner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+  partner Partner @relation(fields: [partnerName], references: [name], onDelete: Cascade, onUpdate: Cascade)
 
-  @@unique([partnerId, planName])
+  @@unique([partnerName, planName])
   @@map("partner_plan_prices")
 }
 

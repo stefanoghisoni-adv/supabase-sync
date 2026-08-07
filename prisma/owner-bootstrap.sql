@@ -70,7 +70,9 @@ CREATE TABLE "shops" (
     "read_proxy_token_enc" TEXT,
     -- Listino riservato: partner di appartenenza e durata dello sconto in cicli
     -- di fatturazione (vuoto = per sempre).
-    "partner_id" TEXT,
+    -- Riferimento al NOME del partner, non a un id opaco: la riga si legge
+    -- mentre la si modifica a mano.
+    "partner_name" TEXT,
     "discount_intervals" INTEGER,
 
     CONSTRAINT "shops_pkey" PRIMARY KEY ("id")
@@ -110,7 +112,7 @@ CREATE TABLE "partners" (
 -- percentuale darebbe cifre con i decimali invece di prezzi tondi.
 CREATE TABLE "partner_plan_prices" (
     "id" TEXT NOT NULL,
-    "partner_id" TEXT NOT NULL,
+    "partner_name" TEXT NOT NULL,
     "plan_name" TEXT NOT NULL,
     "price_monthly" DECIMAL(10,2) NOT NULL,
     "price_yearly" DECIMAL(10,2) NOT NULL,
@@ -244,7 +246,7 @@ CREATE TABLE "sync_job_events" (
 CREATE UNIQUE INDEX "partners_name_key" ON "partners"("name");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "partner_plan_prices_partner_id_plan_name_key" ON "partner_plan_prices"("partner_id", "plan_name");
+CREATE UNIQUE INDEX "partner_plan_prices_partner_name_plan_name_key" ON "partner_plan_prices"("partner_name", "plan_name");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "shops_shop_domain_key" ON "shops"("shop_domain");
@@ -292,11 +294,11 @@ CREATE UNIQUE INDEX "product_eligibility_snapshots_shop_id_day_key" ON "product_
 CREATE INDEX "sync_job_events_sync_job_id_idx" ON "sync_job_events"("sync_job_id");
 
 -- AddForeignKey
-ALTER TABLE "partner_plan_prices" ADD CONSTRAINT "partner_plan_prices_partner_id_fkey" FOREIGN KEY ("partner_id") REFERENCES "partners"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "partner_plan_prices" ADD CONSTRAINT "partner_plan_prices_partner_name_fkey" FOREIGN KEY ("partner_name") REFERENCES "partners"("name") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 -- SET NULL e non CASCADE: cancellare un partner non deve portarsi via i negozi.
-ALTER TABLE "shops" ADD CONSTRAINT "shops_partner_id_fkey" FOREIGN KEY ("partner_id") REFERENCES "partners"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "shops" ADD CONSTRAINT "shops_partner_name_fkey" FOREIGN KEY ("partner_name") REFERENCES "partners"("name") ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "supabase_configs" ADD CONSTRAINT "supabase_configs_shop_id_fkey" FOREIGN KEY ("shop_id") REFERENCES "shops"("id") ON DELETE CASCADE ON UPDATE CASCADE;

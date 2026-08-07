@@ -108,9 +108,11 @@ export async function action({ request }: ActionFunctionArgs) {
   // Listino riservato del partner a cui il negozio appartiene, se ce n'e' uno.
   // Il prezzo lo si risolve QUI e non nel browser: e' quello che finisce in
   // fattura, e non puo' dipendere da cosa il client dichiara di aver visto.
-  const partnerPrice = shop.partnerId
+  const partnerPrice = shop.partnerName
     ? await prisma.partnerPlanPrice.findUnique({
-        where: { partnerId_planName: { partnerId: shop.partnerId, planName: plan.planName } },
+        where: {
+          partnerName_planName: { partnerName: shop.partnerName, planName: plan.planName },
+        },
       })
     : null;
 
