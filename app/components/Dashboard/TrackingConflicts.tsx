@@ -1,5 +1,6 @@
 import { useFetcher } from '@remix-run/react';
-import { Banner, BlockStack, Button, InlineStack, Text } from '@shopify/polaris';
+import { Avatar, Banner, BlockStack, Button, Icon, InlineStack, Text } from '@shopify/polaris';
+import { CodeIcon } from '@shopify/polaris-icons';
 import type { TrackingFinding } from '~/lib/tracking/detect';
 
 export interface TrackingConflictsProps {
@@ -24,6 +25,16 @@ export interface TrackingConflictsProps {
  * essere collegato per il solo catalogo, con il tracciamento spento, e in quel
  * caso l'avviso e' rumore. Dichiararlo lo mette a tacere per sempre.
  */
+/** Iniziali di un canale: "Facebook & Instagram" → "FI". */
+function initials(name: string): string {
+  return name
+    .split(/[\s&]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((word) => word[0]?.toUpperCase() ?? '')
+    .join('');
+}
+
 export function TrackingConflicts({
   findings,
   adminBase,
@@ -76,14 +87,27 @@ export function TrackingConflicts({
                 blockAlign="center"
                 gap="400"
               >
-                {/* Il nome che il merchant riconosce e' quello dell'app come la
-                    vede nel suo admin ("Facebook & Instagram"), non il nome della
-                    piattaforma dietro ("Meta"): e' quello che deve andare a
-                    cercare fra i canali. Per il codice nel tema il nome dello
-                    strumento e' invece l'unica cosa che serve. */}
-                <Text as="span" fontWeight="semibold">
-                  {finding.kind === 'channel' ? finding.where : finding.name}
-                </Text>
+                <InlineStack gap="300" blockAlign="center" wrap={false}>
+                  {/* Segno visivo della riga. NON e' il logo dell'app: Shopify
+                      non espone l'icona delle applicazioni altrui — verificato,
+                      `catalog` torna null su ogni canale — e disegnare noi il
+                      marchio di Meta o Google sarebbe usare un segno che non ci
+                      appartiene per parlare di loro. Le iniziali del canale
+                      distinguono le righe senza spacciarsi per altro. */}
+                  {finding.kind === 'channel' ? (
+                    <Avatar size="sm" name={finding.where} initials={initials(finding.where)} />
+                  ) : (
+                    <Icon source={CodeIcon} tone="subdued" />
+                  )}
+                  {/* Il nome che il merchant riconosce e' quello dell'app come la
+                      vede nel suo admin ("Facebook & Instagram"), non il nome della
+                      piattaforma dietro ("Meta"): e' quello che deve andare a
+                      cercare fra i canali. Per il codice nel tema il nome dello
+                      strumento e' invece l'unica cosa che serve. */}
+                  <Text as="span" fontWeight="semibold">
+                    {finding.kind === 'channel' ? finding.where : finding.name}
+                  </Text>
+                </InlineStack>
 
                 <InlineStack gap="200">
                   <Button onClick={() => dismiss(finding)} disabled={working}>
