@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useFetcher } from '@remix-run/react';
 import { Avatar, Banner, BlockStack, Box, Button, Icon, InlineStack, Text } from '@shopify/polaris';
 import { CodeIcon } from '@shopify/polaris-icons';
@@ -29,8 +29,6 @@ export interface TrackingConflictsProps {
   adminBase?: string;
   /** Id del tema pubblicato: senza, il collegamento all'editor non si costruisce. */
   themeId?: number | null;
-  /** Ricarica l'elenco dopo che una fonte e' stata messa a tacere. */
-  onDismissed?: () => void;
 }
 
 /**
@@ -59,10 +57,14 @@ export function TrackingConflicts({
   findings,
   adminBase,
   themeId,
-  onDismissed,
 }: TrackingConflictsProps) {
   const fetcher = useFetcher<{ ok: boolean }>();
-  const working = fetcher.state !== 'idle';
+  // Riga in corso di registrazione, e righe gia' registrate in questa visita.
+  // La riga NON sparisce appena salvata: il merchant deve vedere l'esito della
+  // sua scelta, non un elenco che si accorcia da solo mentre lo guarda. Sparira'
+  // alla prossima apertura, perche' il server la filtra.
+  const [pending, setPending] = useState<string | null>(null);
+  const [confirmed, setConfirmed] = useState<string[]>([]);
   // Quale riga sta portando fuori dall'app. Il pulsante e' un collegamento, non
   // una richiesta: senza un segno il merchant resta a guardare una pagina ferma
   // mentre l'admin carica, e clicca una seconda volta.
@@ -70,13 +72,26 @@ export function TrackingConflicts({
 
   if (findings.length === 0) return null;
 
+  const rowKey = (finding: TrackingFinding) => `${finding.kind}-${finding.name}`;
+
   const dismiss = (finding: TrackingFinding) => {
+    setPending(rowKey(finding));
     fetcher.submit(
       { kind: finding.kind, name: finding.name },
       { method: 'POST', action: '/api/tracking/dismiss' },
     );
-    onDismissed?.();
   };
+
+  // La conferma si mostra solo quando il server ha davvero registrato: dirlo
+  // prima significherebbe promettere che l'avviso non tornera', e vederlo
+  // ricomparire domani.
+  useEffect(() => {
+    if (fetcher.state !== 'idle' || !pending) return;
+    if (fetcher.data?.ok) {
+      setConfirmed((rows) => [...rows, pending]);
+    }
+    setPending(null);
+  }, [fetcher.state, fetcher.data, pending]);
 
   // Dove porta il pulsante di destra. Non esegue niente: accompagna il merchant
   // dove la cosa si fa davvero. Disinstallare un'app o modificare un tema non
@@ -150,8 +165,19 @@ export function TrackingConflicts({
                 </InlineStack>
                 </Box>
 
+                {confirmed.includes(rowKey(finding)) ? (
+                  <Text as="span" tone="subdued">
+                    {finding.kind === 'channel'
+                      ? 'L\u2019app gestisce solo shop e cataloghi, non trasmette dati'
+                      : 'Segnalato come non rilevante: non comparira\u2019 piu\u2019'}
+                  </Text>
+                ) : (
                 <InlineStack gap="200">
-                  <Button onClick={() => dismiss(finding)} disabled={working}>
+                  <Button
+                    onClick={() => dismiss(finding)}
+                    loading={pending === rowKey(finding)}
+                    disabled={pending !== null}
+                  >
                     {finding.kind === 'channel'
                       ? 'Gestisce solo shop e cataloghi'
                       : 'Non considerare'}
@@ -164,13 +190,14 @@ export function TrackingConflicts({
                     variant="primary"
                     url={url ?? undefined}
                     target="_top"
-                    disabled={!url || leaving !== null}
+                    disabled={!url || leaving !== null || pending !== null}
                     loading={leaving === `${finding.kind}-${finding.name}`}
                     onClick={() => setLeaving(`${finding.kind}-${finding.name}`)}
                   >
                     {finding.kind === 'channel' ? 'Disinstalla' : 'Rimuovi snippet'}
                   </Button>
                 </InlineStack>
+                )}
               </InlineStack>
             );
           })}
