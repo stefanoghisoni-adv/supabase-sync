@@ -30,6 +30,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const findings: TrackingFinding[] = [];
   let partial = false;
 
+  // Fonti che il merchant ha gia' valutato e dichiarato innocue: si continuano a
+  // rilevare, ma non gliene si parla piu'.
+  const dismissed = await prisma.dismissedTrackingSource.findMany({
+    where: { shopId: shop.id },
+    select: { kind: true, name: true },
+  });
+  const isDismissed = (f: TrackingFinding) =>
+    dismissed.some((d) => d.kind === f.kind && d.name === f.name);
+
+  let themeId: number | null = null;
+
   try {
     findings.push(...detectTrackingChannels(await client.getPublications()));
   } catch (err) {
@@ -43,7 +54,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
   try {
     // Prima i nomi, poi il contenuto dei soli file che interessano: chiedere il
     // corpo dell'intero tema costerebbe molto e servirebbe a niente.
-    const wanted = themeFilesToInspect(await client.listThemeFilenames());
+    const theme = await client.getPublishedTheme();
+    themeId = theme.id;
+    const wanted = themeFilesToInspect(theme.filenames);
     if (wanted.length > 0) {
       findings.push(...detectThemeTracking(await client.getThemeFiles(wanted)));
     }
@@ -55,5 +68,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
     );
   }
 
-  return json({ findings, partial });
+  return json({
+    findings: findings.filter((f) => !isDismissed(f)),
+    partial,
+    // Quante ne ha messe a tacere: serve a poterglielo ricordare, invece di far
+    // sparire l'informazione per sempre senza modo di tornarci.
+    dismissedCount: dismissed.length,
+    // Indirizzi dell'admin per i pulsanti: si costruiscono qui perche' solo il
+    // server conosce il dominio del negozio e l'id del tema pubblicato.
+    adminBase: `https://admin.shopify.com/store/${shop.shopDomain.replace('.myshopify.com', '')}`,
+    themeId,
+  });
 }

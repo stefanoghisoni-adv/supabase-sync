@@ -488,18 +488,27 @@ export class ShopifyAPIClient {
       .map((f) => ({ filename: f.filename, content: f.body!.content as string }));
   }
 
-  /** Elenco dei file del tema pubblicato, senza il loro contenuto. */
-  async listThemeFilenames(): Promise<string[]> {
+  /**
+   * Tema pubblicato: id e nomi dei file, senza il loro contenuto.
+   *
+   * L'id serve a costruire il collegamento all'editor del codice: senza, si
+   * potrebbe solo mandare il merchant nell'elenco dei temi a cercarselo.
+   */
+  async getPublishedTheme(): Promise<{ id: number | null; filenames: string[] }> {
     const data = await this.graphql<{
-      themes: { nodes: { files: { nodes: { filename: string }[] } }[] };
+      themes: { nodes: { id: string; files: { nodes: { filename: string }[] } }[] };
     }>(
       `{
         themes(first: 1, roles: MAIN) {
-          nodes { files(first: 250) { nodes { filename } } }
+          nodes { id files(first: 250) { nodes { filename } } }
         }
       }`,
     );
-    return (data.themes?.nodes?.[0]?.files?.nodes ?? []).map((f) => f.filename);
+    const theme = data.themes?.nodes?.[0];
+    return {
+      id: gidToId(theme?.id),
+      filenames: (theme?.files?.nodes ?? []).map((f) => f.filename),
+    };
   }
 
   // Metadati del negozio. Serve iana_timezone (es. "Europe/Rome") per formattare

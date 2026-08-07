@@ -98,6 +98,17 @@ CREATE TABLE "supabase_configs" (
 );
 
 -- CreateTable
+CREATE TABLE "dismissed_tracking_sources" (
+    "id" TEXT NOT NULL,
+    "shop_id" TEXT NOT NULL,
+    "kind" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "dismissed_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "dismissed_tracking_sources_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "partners" (
     "id" TEXT NOT NULL,
     "name" TEXT NOT NULL,
@@ -243,6 +254,9 @@ CREATE TABLE "sync_job_events" (
 );
 
 -- CreateIndex
+CREATE UNIQUE INDEX "dismissed_tracking_sources_shop_id_kind_name_key" ON "dismissed_tracking_sources"("shop_id", "kind", "name");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "partners_name_key" ON "partners"("name");
 
 -- CreateIndex
@@ -292,6 +306,9 @@ CREATE UNIQUE INDEX "product_eligibility_snapshots_shop_id_day_key" ON "product_
 
 -- CreateIndex
 CREATE INDEX "sync_job_events_sync_job_id_idx" ON "sync_job_events"("sync_job_id");
+
+-- AddForeignKey
+ALTER TABLE "dismissed_tracking_sources" ADD CONSTRAINT "dismissed_tracking_sources_shop_id_fkey" FOREIGN KEY ("shop_id") REFERENCES "shops"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "partner_plan_prices" ADD CONSTRAINT "partner_plan_prices_partner_name_fkey" FOREIGN KEY ("partner_name") REFERENCES "partners"("name") ON DELETE CASCADE ON UPDATE CASCADE;

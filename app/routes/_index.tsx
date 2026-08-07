@@ -347,7 +347,11 @@ export default function Dashboard() {
   // Altre fonti di eventi gia' attive sul negozio. Si chiede una volta sola, a
   // pagina aperta: e' un controllo di configurazione, non un dato che cambia
   // mentre il merchant guarda.
-  const conflictsFetcher = useFetcher<{ findings: TrackingFinding[] }>();
+  const conflictsFetcher = useFetcher<{
+    findings: TrackingFinding[];
+    adminBase?: string;
+    themeId?: number | null;
+  }>();
   useEffect(() => {
     if (conflictsFetcher.state === 'idle' && !conflictsFetcher.data) {
       conflictsFetcher.load('/api/tracking/conflicts');
@@ -803,7 +807,14 @@ export default function Dashboard() {
 
         {/* Chi altro sta gia' inviando eventi. Non compare se non c'e' niente
             da segnalare. */}
-        <TrackingConflicts findings={conflictsFetcher.data?.findings ?? []} />
+        <TrackingConflicts
+          findings={conflictsFetcher.data?.findings ?? []}
+          adminBase={conflictsFetcher.data?.adminBase}
+          themeId={conflictsFetcher.data?.themeId}
+          // Rileggere subito: la fonte messa a tacere deve sparire dall'elenco
+          // senza aspettare la prossima apertura.
+          onDismissed={() => conflictsFetcher.load('/api/tracking/conflicts')}
+        />
 
         {/* Tabelle da allineare: non si chiude finche' l'aggiornamento non e'
             andato a buon fine. Di norma succede da solo e il banner nemmeno si

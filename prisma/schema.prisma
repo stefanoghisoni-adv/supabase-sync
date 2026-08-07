@@ -99,6 +99,7 @@ model Shop {
   fieldMappings     FieldMapping[]
   eligibilitySnapshots ProductEligibilitySnapshot[]
   customerDataAccessLogs CustomerDataAccessLog[]
+  dismissedTrackingSources DismissedTrackingSource[]
 
   @@index([shopDomain])
   @@map("shops")
@@ -198,6 +199,30 @@ model PartnerPlanPrice {
 
   @@unique([partnerName, planName])
   @@map("partner_plan_prices")
+}
+
+/// Fonti di eventi che il merchant ha dichiarato innocue.
+///
+/// Un canale puo' essere collegato solo per sincronizzare il catalogo, con il
+/// tracciamento spento: in quel caso l'avviso e' rumore, e un avviso che non si
+/// puo' far tacere si impara a ignorare — anche quando dice qualcosa di vero.
+///
+/// Si registra la sola identita' della fonte (tipo + nome), non il dettaglio di
+/// dove si trovava: se domani lo stesso strumento ricompare altrove, resta
+/// quello che il merchant ha gia' valutato.
+model DismissedTrackingSource {
+  id      String   @id @default(uuid())
+  shopId  String   @map("shop_id")
+  /// 'channel' oppure 'theme'.
+  kind    String
+  /// Nome dello strumento: "Meta", "Google Analytics 4", …
+  name    String
+  dismissedAt DateTime @default(now()) @map("dismissed_at")
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@unique([shopId, kind, name])
+  @@map("dismissed_tracking_sources")
 }
 
 model BillingCharge {
