@@ -81,15 +81,20 @@ export function priceForInterval(
 }
 
 /**
- * Etichetta del risparmio, da mostrare accanto al piano.
+ * Etichetta dello sconto, da mostrare accanto al piano.
  *
- * In valuta e non in percentuale: i prezzi riservati sono decisi come cifre
- * tonde, e una percentuale ricavata all'indietro darebbe numeri come "26,3%"
- * che non corrispondono a niente di concordato.
+ * Percentuale intera arrotondata per difetto. Per difetto e non al piu' vicino:
+ * su 19 → 14 lo sconto reale e' il 26,3%, e scrivere "27%" annuncerebbe una
+ * riduzione piu' grande di quella applicata. Meglio dichiarare meno di quanto
+ * si da' che il contrario.
  */
-export function savingBadge(price: EffectivePrice, currency = '€'): string | null {
-  if (price.discountAmount <= 0) return null;
-  return `− ${currency} ${formatAmount(price.discountAmount)}`;
+export function savingBadge(price: EffectivePrice): string | null {
+  if (price.discountAmount <= 0 || price.listPrice <= 0) return null;
+  const percent = Math.floor((price.discountAmount / price.listPrice) * 100);
+  // Uno sconto che non arriva all'uno per cento non si annuncia: "Scontato dello
+  // 0%" e' una presa in giro.
+  if (percent < 1) return null;
+  return `Scontato del ${percent}%`;
 }
 
 /**

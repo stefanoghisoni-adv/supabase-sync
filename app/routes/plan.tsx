@@ -406,11 +406,18 @@ export default function Plan() {
                             </Text>
                           )}
                         </InlineStack>
-                        {price.discountAmount > 0 && (
-                          <InlineStack>
-                            <Badge tone="info">{savingBadge(price) ?? ''}</Badge>
-                          </InlineStack>
-                        )}
+                        {/* Il badge c'e' su OGNI card, anche senza sconto: un
+                            trattino grigio dove non c'e' niente da dire. Cosi'
+                            le card restano alte uguali e i pulsanti in fondo
+                            non si sfalsano — ed e' anche una risposta, invece
+                            di un vuoto che lascia il dubbio. */}
+                        <InlineStack>
+                          {savingBadge(price) ? (
+                            <Badge tone="info">{savingBadge(price) as string}</Badge>
+                          ) : (
+                            <Badge>—</Badge>
+                          )}
+                        </InlineStack>
                       </BlockStack>
 
                       <PlanFeatureList features={plan.features} />

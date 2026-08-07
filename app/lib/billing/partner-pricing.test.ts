@@ -76,15 +76,21 @@ describe('priceForInterval', () => {
 });
 
 describe('savingBadge', () => {
-  it('scrive il risparmio in valuta, non in percentuale', () => {
-    // I prezzi riservati si decidono come cifre tonde: una percentuale ricavata
-    // all'indietro darebbe "26,3%", che non corrisponde a niente di concordato.
-    expect(savingBadge(effectivePrice(19, 14, 3))).toBe('− € 5,00');
-    expect(savingBadge(effectivePrice(79, 59, null))).toBe('− € 20,00');
+  it('scrive la percentuale intera, arrotondata per difetto', () => {
+    // 5 su 19 fa il 26,3%: scrivere 27 annuncerebbe piu' di quanto si applica.
+    expect(savingBadge(effectivePrice(19, 14, 3))).toBe('Scontato del 26%');
+    // 10 su 39 fa il 25,6%.
+    expect(savingBadge(effectivePrice(39, 29, 3))).toBe('Scontato del 25%');
+    expect(savingBadge(effectivePrice(79, 59, null))).toBe('Scontato del 25%');
   });
 
   it('senza sconto non c e nessun badge', () => {
     expect(savingBadge(effectivePrice(19, null, null))).toBeNull();
+  });
+
+  it('uno sconto sotto l uno per cento non si annuncia', () => {
+    // "Scontato dello 0%" e' una presa in giro.
+    expect(savingBadge(effectivePrice(1000, 999.5, null))).toBeNull();
   });
 });
 
