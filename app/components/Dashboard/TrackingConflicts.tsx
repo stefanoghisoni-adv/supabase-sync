@@ -1,5 +1,4 @@
-import { useState } from 'react';
-import { useFetcher } from '@remix-run/react';
+import { useCallback, useState } from 'react';
 import { Avatar, Banner, BlockStack, Box, Button, Icon, InlineStack, Text } from '@shopify/polaris';
 import { CodeIcon } from '@shopify/polaris-icons';
 import type { TrackingFinding } from '~/lib/tracking/detect';
@@ -61,25 +60,43 @@ export function TrackingConflicts({
   themeId,
   onDismissed,
 }: TrackingConflictsProps) {
-  const fetcher = useFetcher<{ ok: boolean }>();
-  // Quale riga sta lavorando e con quale dei due pulsanti. L'attesa e' della
-  // RIGA, non della tabella: bloccare tutto vorrebbe dire impedire al merchant
-  // di occuparsi di Google mentre sta uscendo verso Meta, e le due cose non
-  // hanno niente a che vedere l'una con l'altra.
-  const [busy, setBusy] = useState<{ row: string; action: 'dismiss' | 'leave' } | null>(null);
+  // Stato per riga, non uno solo per la tabella: le righe sono indipendenti, e
+  // dichiarare Meta innocuo mentre si dichiara anche Google deve poter avvenire
+  // insieme, con ciascuna riga che mostra la propria attesa.
+  const [busy, setBusy] = useState<Record<string, 'dismiss' | 'leave'>>({});
 
   if (findings.length === 0) return null;
 
   const rowKey = (finding: TrackingFinding) => `${finding.kind}-${finding.name}`;
 
-  const dismiss = (finding: TrackingFinding) => {
-    setBusy({ row: rowKey(finding), action: 'dismiss' });
-    fetcher.submit(
-      { kind: finding.kind, name: finding.name },
-      { method: 'POST', action: '/api/tracking/dismiss' },
-    );
-    onDismissed?.();
-  };
+  // fetch e non useFetcher: un fetcher solo per tutta la tabella verrebbe
+  // riusato a ogni clic, e in Remix una seconda richiesta sullo stesso fetcher
+  // annulla quella ancora in volo. Non si sarebbe perso solo il caricamento
+  // della prima riga: si sarebbe potuta perdere la dichiarazione stessa.
+  const dismiss = useCallback(
+    async (finding: TrackingFinding) => {
+      const key = `${finding.kind}-${finding.name}`;
+      setBusy((current) => ({ ...current, [key]: 'dismiss' }));
+
+      const body = new FormData();
+      body.set('kind', finding.kind);
+      body.set('name', finding.name);
+
+      try {
+        await fetch('/api/tracking/dismiss', { method: 'POST', body });
+        onDismissed?.();
+      } finally {
+        // La riga sparisce dall'elenco appena la rilettura arriva; se invece la
+        // richiesta e' fallita, sbloccarla e' l'unico modo per riprovare.
+        setBusy((current) => {
+          const next = { ...current };
+          delete next[key];
+          return next;
+        });
+      }
+    },
+    [onDismissed],
+  );
 
   // Dove porta il pulsante di destra. Non esegue niente: accompagna il merchant
   // dove la cosa si fa davvero. Disinstallare un'app o modificare un tema non
@@ -111,7 +128,7 @@ export function TrackingConflicts({
             // Entrambi i pulsanti della riga si spengono, ovunque si sia
             // premuto: la riga sta gia' facendo qualcosa, e l'altra azione
             // sarebbe un ripensamento a meta' strada.
-            const rowBusy = busy?.row === key;
+            const rowBusy = busy[key] !== undefined;
             return (
               // I pulsanti seguono il nome invece di essere spinti al bordo
               // opposto del riquadro: a tutta larghezza l'occhio doveva
@@ -158,7 +175,7 @@ export function TrackingConflicts({
                   <Button
                     onClick={() => dismiss(finding)}
                     disabled={rowBusy}
-                    loading={rowBusy && busy?.action === 'dismiss'}
+                    loading={busy[key] === 'dismiss'}
                   >
                     {finding.kind === 'channel'
                       ? 'Gestisce solo shop e cataloghi'
@@ -173,8 +190,8 @@ export function TrackingConflicts({
                     url={url ?? undefined}
                     target="_top"
                     disabled={!url || rowBusy}
-                    loading={rowBusy && busy?.action === 'leave'}
-                    onClick={() => setBusy({ row: key, action: 'leave' })}
+                    loading={busy[key] === 'leave'}
+                    onClick={() => setBusy((current) => ({ ...current, [key]: 'leave' }))}
                   >
                     {finding.kind === 'channel' ? 'Disinstalla' : 'Rimuovi snippet'}
                   </Button>

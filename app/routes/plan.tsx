@@ -136,6 +136,16 @@ export default function Plan() {
   // Quanto si risparmia al massimo scegliendo l'annuale, sul listino che il
   // merchant vede davvero (riservato se ce l'ha). Serve alla riga accanto al
   // selettore: senza, l'annuale sembra solo un impegno piu' lungo.
+  // Se anche una sola card mostra il risparmio, tutte riservano quella riga:
+  // altrimenti gli elenchi partono ad altezze diverse e le card, affiancate,
+  // sembrano disallineate. Quando nessuno ha uno sconto la riga non esiste
+  // proprio, e nessuno paga uno spazio vuoto.
+  const anyDiscount = cards.some((plan) =>
+    interval === 'yearly'
+      ? plan.partnerYearly != null && plan.partnerYearly < plan.priceYearly
+      : plan.partnerMonthly != null && plan.partnerMonthly < plan.priceMonthly,
+  );
+
   const yearlySaving = cards.reduce<number | null>((best, plan) => {
     const monthly = plan.partnerMonthly ?? plan.priceMonthly;
     const yearly = plan.partnerYearly ?? plan.priceYearly;
@@ -416,10 +426,17 @@ export default function Plan() {
                             non puo' esistere un badge senza niente dentro, che
                             e' cio' che compariva ai negozi senza partnership —
                             una pillina grigia vuota sotto ogni prezzo. */}
-                        {savingLabel(price) && (
-                          <InlineStack>
-                            <Badge tone="info">{savingLabel(price) as string}</Badge>
-                          </InlineStack>
+                        {anyDiscount && (
+                          // Altezza riservata anche dove il badge non c'e': e'
+                          // quella riga a decidere dove comincia l'elenco, e su
+                          // card affiancate deve cominciare alla stessa quota.
+                          <Box minHeight="20px">
+                            {savingLabel(price) && (
+                              <InlineStack>
+                                <Badge tone="info">{savingLabel(price) as string}</Badge>
+                              </InlineStack>
+                            )}
+                          </Box>
                         )}
                       </BlockStack>
 
