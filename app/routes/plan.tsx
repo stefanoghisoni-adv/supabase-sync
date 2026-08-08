@@ -136,6 +136,10 @@ export default function Plan() {
   // Quanto si risparmia al massimo scegliendo l'annuale, sul listino che il
   // merchant vede davvero (riservato se ce l'ha). Serve alla riga accanto al
   // selettore: senza, l'annuale sembra solo un impegno piu' lungo.
+  // Mensile di partenza: e' l'impegno piu' leggero, e chi arriva qui sta ancora
+  // decidendo se il servizio gli serve.
+  const [interval, setInterval] = useState<BillingInterval>('monthly');
+
   // Se anche una sola card mostra il risparmio, tutte riservano quella riga:
   // altrimenti gli elenchi partono ad altezze diverse e le card, affiancate,
   // sembrano disallineate. Quando nessuno ha uno sconto la riga non esiste
@@ -165,9 +169,6 @@ export default function Plan() {
   // uno per card: lo stato locale (submittingPlan) traccia quale piano è in corso.
   const fetcher = useFetcher<SubscribeResponse>();
   const [submittingPlan, setSubmittingPlan] = useState<string | null>(null);
-  // Mensile di partenza: e' l'impegno piu' leggero, e chi arriva qui sta ancora
-  // decidendo se il servizio gli serve.
-  const [interval, setInterval] = useState<BillingInterval>('monthly');
 
   // Legge il parametro querystring ?billing=ok|ko dopo il ritorno dal flusso.
   const [searchParams, setSearchParams] = useSearchParams();

@@ -86,9 +86,17 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }
 }
 
-export default function App() {
-  const { apiKey, canSeePlanTab } = useLoaderData<typeof loader>();
-
+/**
+ * Guscio del documento, condiviso fra l'app e la pagina d'errore.
+ *
+ * Esportato come `Layout`: Remix lo applica a entrambe. Prima le due parti lo
+ * ripetevano identico, ma un errore avvenuto durante una navigazione nel
+ * browser faceva rendere a React un secondo <html> dentro quello gia'
+ * esistente. Il browser scartava il duplicato e con lui la classe del tema e lo
+ * stile qui sotto: il riquadro dell'app tornava scuro, ogni volta, dopo ogni
+ * errore. Con un guscio solo quel caso non si pone.
+ */
+export function Layout({ children }: { children: React.ReactNode }) {
   return (
     // className p-theme-light nel JSX, non solo via App Bridge a runtime: così
     // React tiene ferma la classe del tema chiaro anche durante un render
@@ -107,6 +115,18 @@ export default function App() {
         <style dangerouslySetInnerHTML={{ __html: FORCE_LIGHT_CRITICAL }} />
       </head>
       <body>
+        {children}
+        <ScrollRestoration />
+        <Scripts />
+      </body>
+    </html>
+  );
+}
+
+export default function App() {
+  const { apiKey, canSeePlanTab } = useLoaderData<typeof loader>();
+
+  return (
         <AppProvider isEmbeddedApp apiKey={apiKey} theme="light">
           <NavMenu>
             {/* rel="home" e' la radice dell'app: l'admin la usa per il nome
@@ -125,10 +145,6 @@ export default function App() {
           </NavMenu>
           <Outlet />
         </AppProvider>
-        <ScrollRestoration />
-        <Scripts />
-      </body>
-    </html>
   );
 }
 
@@ -169,18 +185,6 @@ export function ErrorBoundary() {
   }
 
   return (
-    <html lang="it" className="p-theme-light">
-      <head>
-        <meta charSet="utf-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <meta name="color-scheme" content="light" />
-        <Meta />
-        <Links />
-        {/* Dopo <Links />: in coda al documento vince sull'ordine, oltre che
-            per !important. */}
-        <style dangerouslySetInnerHTML={{ __html: FORCE_LIGHT_CRITICAL }} />
-      </head>
-      <body>
         <AppProvider isEmbeddedApp apiKey={apiKey} theme="light">
           <NavMenu>
             {/* rel="home" e' la radice dell'app: l'admin la usa per il nome
@@ -219,9 +223,5 @@ export function ErrorBoundary() {
             </BlockStack>
           </Page>
         </AppProvider>
-        <ScrollRestoration />
-        <Scripts />
-      </body>
-    </html>
   );
 }
