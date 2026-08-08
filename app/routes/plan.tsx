@@ -297,7 +297,11 @@ export default function Plan() {
         {partnerLabel && (
           <Banner tone="info" title="Hai un prezzo riservato">
             <Text as="p">
-              Quest&apos;app ha una partnership attiva con {partnerLabel}, e per questo i piani ti
+              Quest&apos;app ha una partnership attiva con{' '}
+              <Text as="span" fontWeight="semibold">
+                {partnerLabel}
+              </Text>
+              , e per questo i piani ti
               costano meno del listino — sia sul mensile sia sull&apos;annuale. Trovi il
               prezzo che ti spetta su ogni piano qui sotto
               {discountIntervals != null
