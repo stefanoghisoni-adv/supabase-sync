@@ -185,7 +185,11 @@ export function EligibilityChart({
     if (top > maxData && top > (planLimit ?? 0)) {
       series.push({
         name: AXIS_PADDING_SERIES,
-        color: 'transparent',
+        // Grigio chiarissimo e non 'transparent': il pallino che polaris-viz
+        // disegna sul punto attivo non eredita il colore della linea, e con
+        // 'transparent' ricadeva sul nero — un puntino scuro appeso in cima
+        // all'asse, senza spiegazione.
+        color: 'rgb(237, 237, 239)',
         data: points.map((p) => ({ key: String(p.day), value: top })),
         styleOverride: { line: { strokeDasharray: '0', width: 0, hasArea: false } },
       });

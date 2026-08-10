@@ -215,18 +215,20 @@ export default function EligibilityChartCanvas({
               <TooltipContent
                 theme={tooltip.theme}
                 title={pointDateLabel(tooltip.title ?? '', monthStart)}
-                data={tooltip.data
-                  // Fuori la serie di appoggio: comparirebbe come una voce senza
-                  // nome, con un numero che non corrisponde a niente.
-                  .filter((s) => s.name !== AXIS_PADDING_SERIES)
-                  .map((series) => ({
+                data={tooltip.data.map((series) => ({
                   shape: series.shape,
                   name: series.name,
-                  data: series.data.map((point) => ({
-                    ...point,
-                    key: String(point.key),
-                    value: point.value == null ? '—' : String(point.value),
-                  })),
+                  // Il filtro va QUI, sulle righe, non sui gruppi: le voci del
+                  // riquadro sono i punti, e ciascuno porta come chiave il nome
+                  // della propria serie. Filtrando il gruppo, quella di appoggio
+                  // restava — e mostrava "__axis_padding__ 15" a video.
+                  data: series.data
+                    .filter((point) => String(point.key) !== AXIS_PADDING_SERIES)
+                    .map((point) => ({
+                      ...point,
+                      key: String(point.key),
+                      value: point.value == null ? '—' : String(point.value),
+                    })),
                 }))}
               />
             ),
