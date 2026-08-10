@@ -39,7 +39,7 @@ import {
   computeProductReadiness,
   type ProblemVariant,
 } from '~/lib/stats/product-readiness';
-import { PlanLimitBanner } from '~/components/Dashboard/PlanLimitBanner';
+import { ProductOverflowBanner } from '~/components/Dashboard/ProductOverflowBanner';
 import { findPlanByName } from '~/lib/billing/find-plan.server';
 import { filterProblemVariants, pageCount, pageSlice } from '~/lib/stats/problem-filter';
 import {
@@ -470,14 +470,7 @@ export default function ProblemProducts() {
       }}
     >
       <BlockStack gap="400">
-        {/* Stesso avviso della dashboard: qui e' anche piu' pertinente, perche'
-            ogni costo inserito rende idoneo un prodotto in piu' e avvicina al
-            tetto. Il conteggio segue le righe risolte in questa sessione, senza
-            aspettare un ricaricamento. */}
-        <PlanLimitBanner
-          count={readyCount + (loaderData.rows.length - rows.length)}
-          limit={planLimit}
-        />
+        <ProductOverflowBanner disabled={blocked} />
 
         {error && <Banner tone="critical">{error}</Banner>}
 

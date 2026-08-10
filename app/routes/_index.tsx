@@ -17,7 +17,6 @@ import {
 } from '@shopify/polaris';
 import { ProductIcon, PersonIcon, SettingsIcon, LockIcon } from '@shopify/polaris-icons';
 import { ProductsCard } from '~/components/Dashboard/ProductsCard';
-import { PlanLimitBanner } from '~/components/Dashboard/PlanLimitBanner';
 import { CustomersCard } from '~/components/Dashboard/CustomersCard';
 import { Stepper, type StepperItem } from '~/components/Dashboard/Stepper';
 import { EligibilityChart } from '~/components/Dashboard/EligibilityChart';
@@ -823,25 +822,8 @@ export default function Dashboard() {
 
         {/* Catalogo piu' grande del tetto: dice quanti restano fuori e propone
             il piano che li contiene tutti. */}
-        {currentPlanOption && (
-          <ProductOverflowBanner
-            totalProducts={totalProducts}
-            currentPlan={currentPlanOption}
-            suggestedPlan={suggestedPlan}
-            disabled={blocked}
-          />
-        )}
+        <ProductOverflowBanner disabled={blocked} />
 
-        {/* Quota prodotti agli sgoccioli: non si chiude, perche' resta vero
-            finche' il piano non cambia. Tace quando il banner qui sopra e' gia'
-            visibile: direbbero la stessa cosa, e quello sopra porta anche la
-            soluzione. */}
-        {!suggestedPlan && (
-        <PlanLimitBanner
-          count={readiness?.readyCount ?? 0}
-          limit={currentMaxProducts}
-        />
-        )}
 
         {showPlanBanner && banner && (
           <Banner

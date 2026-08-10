@@ -8,6 +8,7 @@ import { prisma } from '~/db.server';
 import { SyncLog } from '~/components/Dashboard/SyncLog';
 import { findPlanByName } from '~/lib/billing/find-plan.server';
 import { useNavLoading } from '~/components/Dashboard/nav-loading';
+import { ProductOverflowBanner } from '~/components/Dashboard/ProductOverflowBanner';
 
 // Quanti eventi mostrare: la tabella resta una lista unica senza paginazione,
 // quindi teniamo il tetto a 20 righe per non allungarla a dismisura.
@@ -65,6 +66,12 @@ export default function Logs() {
     >
       <Layout>
         <Layout.Section>
+          {/* Il tetto raggiunto si vede anche qui: chi guarda il registro sta
+              cercando di capire perche' un prodotto non e' arrivato, ed e'
+              esattamente la risposta. */}
+          <Box paddingBlockEnd="400">
+            <ProductOverflowBanner />
+          </Box>
           <SyncLog jobs={jobs} customersEnabled={customersEnabled} timeZone={timeZone} />
         </Layout.Section>
       </Layout>

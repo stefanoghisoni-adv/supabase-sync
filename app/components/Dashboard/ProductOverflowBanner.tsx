@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useFetcher } from '@remix-run/react';
 import {
   Badge,
@@ -13,6 +13,7 @@ import {
 import { planLabel } from './account-format';
 import {
   planComparisonRows,
+  suggestPlanForProducts,
   type PlanForSuggestion,
 } from './plan-suggestion';
 
@@ -25,12 +26,18 @@ type SubscribeResponse =
   | { error: string };
 
 export interface ProductOverflowBannerProps {
-  /** Prodotti totali del negozio: idonei e non idonei insieme. */
-  totalProducts: number;
-  currentPlan: PlanForSuggestion;
-  /** Piano proposto; null = non c'e' niente da proporre e il banner non compare. */
-  suggestedPlan: PlanForSuggestion | null;
   disabled?: boolean;
+}
+
+interface LimitsResponse {
+  currentPlanName?: string | null;
+  currentPlan?: PlanForSuggestion | null;
+  plans?: PlanForSuggestion[];
+}
+
+interface ReadinessResponse {
+  readyCount: number;
+  problemCount: number;
 }
 
 /**
@@ -41,15 +48,33 @@ export interface ProductOverflowBannerProps {
  * porta con se' la soluzione, invece di rimandare a un'altra pagina: il nome
  * del piano che basta e' gia' calcolato, e l'aggiornamento si conferma qui.
  */
-export function ProductOverflowBanner({
-  totalProducts,
-  currentPlan,
-  suggestedPlan,
-  disabled,
-}: ProductOverflowBannerProps) {
+export function ProductOverflowBanner({ disabled }: ProductOverflowBannerProps) {
   const [confirming, setConfirming] = useState(false);
   const fetcher = useFetcher<SubscribeResponse>();
   const submitting = fetcher.state !== 'idle';
+
+  // I dati se li procura il componente, invece di riceverli: cosi' le pagine che
+  // lo mostrano — dashboard, prodotti non idonei, logs — non devono ognuna
+  // caricarseli nel proprio loader, e soprattutto non possono finire a mostrare
+  // numeri diversi per la stessa cosa.
+  //
+  // La readiness ha gia' la sua cache, quindi sulle pagine diverse dalla
+  // dashboard non costa una lettura del catalogo.
+  const limits = useFetcher<LimitsResponse>();
+  const readiness = useFetcher<ReadinessResponse>();
+  useEffect(() => {
+    if (limits.state === 'idle' && !limits.data) limits.load('/api/plan/limits');
+    if (readiness.state === 'idle' && !readiness.data) readiness.load('/api/stats/products');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const currentPlan = limits.data?.currentPlan ?? null;
+  const totalProducts =
+    readiness.data != null ? readiness.data.readyCount + readiness.data.problemCount : null;
+  const suggestedPlan =
+    currentPlan && totalProducts != null
+      ? suggestPlanForProducts(limits.data?.plans ?? [], currentPlan.planName, totalProducts)
+      : null;
 
   const confirm = useCallback(() => {
     if (!suggestedPlan) return;
@@ -67,7 +92,7 @@ export function ProductOverflowBanner({
     window.top?.location.replace(confirmationUrl);
   }
 
-  if (!suggestedPlan) return null;
+  if (!suggestedPlan || !currentPlan || totalProducts == null) return null;
 
   const nextLabel = planLabel(suggestedPlan.planName);
   const excluded = currentPlan.maxProducts == null ? 0 : totalProducts - currentPlan.maxProducts;
@@ -76,13 +101,12 @@ export function ProductOverflowBanner({
 
   return (
     <>
-      <Banner tone="warning" title="Una parte del catalogo resta fuori">
+      <Banner tone="warning" title="Limite prodotti raggiunto">
         <BlockStack gap="300">
           <Text as="p">
-            Il negozio ha {totalProducts} prodotti e il piano {planLabel(currentPlan.planName)} ne
-            sincronizza fino a {currentPlan.maxProducts}: {excluded}{' '}
-            {excluded === 1 ? 'resta escluso' : 'restano esclusi'}. Con {nextLabel} rientrano tutti,
-            anche quelli che oggi non sono ancora idonei.
+            {excluded} {excluded === 1 ? 'prodotto non verrà sincronizzato' : 'prodotti non verranno sincronizzati'}{' '}
+            dato che hai raggiunto il limite del tuo piano. Contando i prodotti totali, il piano più
+            in linea con le tue necessità sarebbe {nextLabel}.
           </Text>
           {error && <Text as="p" tone="critical">{error}</Text>}
           <InlineStack>
