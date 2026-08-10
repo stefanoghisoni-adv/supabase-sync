@@ -94,6 +94,21 @@ function ChartCard({
   );
 }
 
+/**
+ * Serie che serve solo ad alzare l'asse, non a disegnare qualcosa.
+ *
+ * polaris-viz ignora il tetto che gli chiediamo: nel suo useYScale
+ * `maxYOverride` viene applicato SOLO a grafico vuoto, e appena c'e' un punto il
+ * massimo lo detta il dato piu' alto. La tacca sopra la linea del limite —
+ * quella che dice quanto margine resta — cadeva percio' fuori dall'area
+ * disegnabile e non compariva mai. L'unico modo di alzare quel massimo e' dargli
+ * un dato piu' alto.
+ */
+export const AXIS_PADDING_SERIES = '__axis_padding__';
+
+/** Colore della serie principale, fissato invece che ereditato dal tema. */
+export const ELIGIBLE_COLOR = '#13ACF0';
+
 export function EligibilityChart({
   points,
   monthLabel,
@@ -132,9 +147,14 @@ export function EligibilityChart({
 
   // Le chiavi sono i giorni del mese: l'asse orizzontale va dal primo
   // all'ultimo, cosi' si vede in che punto del mese il numero e' cambiato.
+  // Colore dichiarato e non lasciato al tema: la legenda la disegniamo noi (vedi
+  // EligibilityChartCanvas), e per essere fedele deve conoscere i colori. E' lo
+  // stesso valore che polaris-viz assegnerebbe alla prima serie, quindi
+  // l'aspetto non cambia.
   const series: ChartSeries[] = [
     {
       name: 'Prodotti sincronizzabili',
+      color: ELIGIBLE_COLOR,
       data: points.map((p) => ({ key: String(p.day), value: p.count })),
     },
   ];
@@ -157,6 +177,20 @@ export function EligibilityChart({
   const maxData = points.reduce((m, p) => Math.max(m, p.count ?? 0), 0);
   const ticks = computeChartYTicks(planLimit, maxData);
   const maxY = ticks ? ticks[ticks.length - 1] : computeChartYMax(planLimit, maxData);
+
+  // Alza l'asse fino alla tacca piu' alta, quando serve. Invisibile e fuori
+  // dalla legenda e dal riquadro del punto: esiste solo per il massimo.
+  if (ticks && ticks.length > 0) {
+    const top = ticks[ticks.length - 1];
+    if (top > maxData && top > (planLimit ?? 0)) {
+      series.push({
+        name: AXIS_PADDING_SERIES,
+        color: 'transparent',
+        data: points.map((p) => ({ key: String(p.day), value: top })),
+        styleOverride: { line: { strokeDasharray: '0', width: 0, hasArea: false } },
+      });
+    }
+  }
 
   return (
     <ChartCard subtitle={subtitle}>

@@ -13,6 +13,7 @@ import { LineChart, PolarisVizProvider, TooltipContent } from '@shopify/polaris-
 import { FONT_FAMILY } from '@shopify/polaris-viz-core';
 import type { DataSeries } from '@shopify/polaris-viz-core';
 import { pointDateLabel } from '~/lib/stats/history-series';
+import { AXIS_PADDING_SERIES, ELIGIBLE_COLOR } from './EligibilityChart';
 
 // Lo stesso arancione della linea tratteggiata: il numero sull'asse e la soglia
 // che segna sono la stessa cosa e devono leggersi come tale.
@@ -122,6 +123,66 @@ function LimitTickLabel({ y, value }: { y: number; value: number }) {
   );
 }
 
+/**
+ * Legenda disegnata da noi.
+ *
+ * Quella di polaris-viz elenca tutte le serie, e fra queste c'e' quella che
+ * serve solo ad alzare l'asse: comparirebbe come una voce senza nome. Non e'
+ * filtrabile — `renderLegendContent` non riceve le voci, le si puo' solo
+ * sostituire — quindi la scriviamo, ed e' il motivo per cui i colori delle due
+ * serie sono dichiarati invece che ereditati dal tema.
+ */
+function ChartLegend({ hasLimit }: { hasLimit: boolean }) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        justifyContent: 'center',
+        gap: 'var(--p-space-500)',
+        paddingBlockStart: 'var(--p-space-300)',
+      }}
+    >
+      <LegendItem color={ELIGIBLE_COLOR} label="Prodotti sincronizzabili" />
+      {hasLimit && <LegendItem color={LIMIT_COLOR} label="Limite del piano" dashed />}
+    </div>
+  );
+}
+
+function LegendItem({
+  color,
+  label,
+  dashed,
+}: {
+  color: string;
+  label: string;
+  dashed?: boolean;
+}) {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 'var(--p-space-200)' }}>
+      <svg width="16" height="2" aria-hidden="true">
+        <line
+          x1="0"
+          y1="1"
+          x2="16"
+          y2="1"
+          stroke={color}
+          strokeWidth="2"
+          strokeDasharray={dashed ? '4 3' : undefined}
+        />
+      </svg>
+      <span
+        style={{
+          font: 'var(--p-font-family-sans)',
+          fontSize: 'var(--p-font-size-325)',
+          color: 'var(--p-color-text-secondary)',
+        }}
+      >
+        {label}
+      </span>
+    </span>
+  );
+}
+
 export default function EligibilityChartCanvas({
   series,
   maxY,
@@ -135,10 +196,12 @@ export default function EligibilityChartCanvas({
     // lascia (vedi .chart-card__canvas in dashboard.css): con una misura fissa,
     // nelle card piu' basse il grafico eccedeva lo spazio e traboccava sopra il
     // titolo.
+    <>
     <div className="chart-card__canvas">
       <PolarisVizProvider>
         <LineChart
           data={series}
+          showLegend={false}
           yAxisOptions={{
             ...(maxY != null ? { maxYOverride: maxY } : {}),
             ...(ticks != null ? { ticksOverride: ticks } : {}),
@@ -152,7 +215,11 @@ export default function EligibilityChartCanvas({
               <TooltipContent
                 theme={tooltip.theme}
                 title={pointDateLabel(tooltip.title ?? '', monthStart)}
-                data={tooltip.data.map((series) => ({
+                data={tooltip.data
+                  // Fuori la serie di appoggio: comparirebbe come una voce senza
+                  // nome, con un numero che non corrisponde a niente.
+                  .filter((s) => s.name !== AXIS_PADDING_SERIES)
+                  .map((series) => ({
                   shape: series.shape,
                   name: series.name,
                   data: series.data.map((point) => ({
@@ -176,5 +243,9 @@ export default function EligibilityChartCanvas({
         />
       </PolarisVizProvider>
     </div>
+    {/* Fuori dal contenitore del grafico: dentro, gliela toglierebbe
+        dall'altezza — e' quel contenitore a prendersi lo spazio che avanza. */}
+    <ChartLegend hasLimit={limit != null} />
+    </>
   );
 }
