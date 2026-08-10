@@ -18,6 +18,8 @@ import { DatabaseCard } from '~/components/Dashboard/DatabaseCard';
 import { firstPlanWithCustomersSync } from '~/components/Dashboard/account-format';
 import { samePlanName } from '~/lib/billing/plan-name';
 import { syncIsActive } from '~/lib/sync/sync-active';
+import { nextSyncAt } from '~/lib/sync/next-sync';
+import { SyncCard } from '~/components/Dashboard/SyncCard';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const { session } = await authenticate.admin(request);
@@ -60,9 +62,32 @@ export async function loader({ request }: LoaderFunctionArgs) {
         ),
   };
 
+  // Cadenza del piano e ultima corsa completata: la sincronizzazione e' una
+  // delle cose che il merchant viene a controllare qui, e finora la pagina non
+  // ne diceva niente.
+  const lastCheck = shop
+    ? await prisma.syncJob.findFirst({
+        where: { shopId: shop.id, jobType: 'periodic_check', status: 'completed' },
+        orderBy: { completedAt: 'desc' },
+        select: { completedAt: true },
+      })
+    : null;
+
+  const sync = {
+    frequencyHours: plan?.maxSyncFrequencyHours ?? null,
+    lastSync: lastCheck?.completedAt?.toISOString() ?? null,
+    nextSync:
+      nextSyncAt(
+        lastCheck?.completedAt ?? null,
+        plan?.maxSyncFrequencyHours ?? null,
+        new Date(),
+      )?.toISOString() ?? null,
+    timeZone: shop?.ianaTimezone ?? null,
+  };
+
   const config = shop?.supabaseConfig;
   if (!config) {
-    return json({ account, config: null });
+    return json({ account, config: null, sync });
   }
 
   // Le letture di tracciamento non passano più dalla anon key del merchant ma
@@ -76,6 +101,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   return json({
     account,
+    sync,
     config: {
       readToken,
       proxyBaseUrl,
@@ -91,7 +117,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 // automatica e non ha impostazioni, la chiave di lettura viene emessa una volta
 // al collegamento del progetto e le chiavi del progetto non si toccano da qui.
 export default function SupabaseSettings() {
-  const { account, config } = useLoaderData<typeof loader>();
+  const { account, config, sync } = useLoaderData<typeof loader>();
 
   return (
     <Page title="Impostazioni" backAction={{ url: '/' }}>
@@ -122,6 +148,13 @@ export default function SupabaseSettings() {
                 databaseUrl={config?.databaseUrl ?? null}
               />
             </InlineGrid>
+
+            <SyncCard
+              frequencyHours={sync.frequencyHours}
+              lastSync={sync.lastSync}
+              nextSync={sync.nextSync}
+              timeZone={sync.timeZone}
+            />
 
             {!config ? (
               <Banner tone="info">

@@ -1,7 +1,7 @@
 import type { LoaderFunctionArgs } from '@remix-run/node';
 import { json } from '@remix-run/node';
 import { useLoaderData } from '@remix-run/react';
-import { Page, Layout, Box } from '@shopify/polaris';
+import { Page, Layout, Box, Banner, Text } from '@shopify/polaris';
 import { SettingsIcon } from '@shopify/polaris-icons';
 import { authenticate } from '~/shopify.server';
 import { prisma } from '~/db.server';
@@ -9,6 +9,7 @@ import { SyncLog } from '~/components/Dashboard/SyncLog';
 import { findPlanByName } from '~/lib/billing/find-plan.server';
 import { useNavLoading } from '~/components/Dashboard/nav-loading';
 import { ProductOverflowBanner } from '~/components/Dashboard/ProductOverflowBanner';
+import { nextSyncAt, formatCountdown } from '~/lib/sync/next-sync';
 
 // Quanti eventi mostrare: la tabella resta una lista unica senza paginazione,
 // quindi teniamo il tetto a 20 righe per non allungarla a dismisura.
@@ -22,7 +23,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   });
 
   if (!shop) {
-    return json({ jobs: [], customersEnabled: false, timeZone: null });
+    return json({ jobs: [], customersEnabled: false, timeZone: null, nextSync: null });
   }
 
   const [plan, jobs] = await Promise.all([
@@ -34,15 +35,31 @@ export async function loader({ request }: LoaderFunctionArgs) {
     }),
   ]);
 
+  // Quando ripartira' la sincronizzazione. Si calcola qui, sull'ultima corsa
+  // completata: e' la stessa regola che applica il cron, non una stima a parte.
+  const lastCheck = jobs.find(
+    (job) => job.jobType === 'periodic_check' && job.status === 'completed' && job.completedAt,
+  );
+
   return json({
     jobs,
     customersEnabled: plan?.customersSyncEnabled ?? false,
     timeZone: shop.ianaTimezone,
+    nextSync:
+      nextSyncAt(
+        lastCheck?.completedAt ?? null,
+        plan?.maxSyncFrequencyHours ?? null,
+        new Date(),
+      )?.toISOString() ?? null,
   });
 }
 
 export default function Logs() {
-  const { jobs, customersEnabled, timeZone } = useLoaderData<typeof loader>();
+  const { jobs, customersEnabled, timeZone, nextSync } = useLoaderData<typeof loader>();
+  // Il conto alla rovescia si scrive al render: calcolato nel loader
+  // invecchierebbe con la pagina aperta, e "fra un minuto" resterebbe li' a
+  // lungo dopo che quel minuto e' passato.
+  const countdown = nextSync ? formatCountdown(new Date(), new Date(nextSync)) : null;
 
   // Spinner e disabilitazione solo se e' stato questo pulsante a far partire
   // la navigazione: dal menu laterale dell'admin deve restare fermo.
@@ -72,6 +89,17 @@ export default function Logs() {
           <Box paddingBlockEnd="400">
             <ProductOverflowBanner />
           </Box>
+          {/* Solo la frase, senza titolo: e' un'informazione di servizio, e un
+              titolo la farebbe pesare come un avviso. Non compare quando non
+              c'e' una risposta — meglio tacere che promettere un orario che non
+              sappiamo. */}
+          {countdown && (
+            <Box paddingBlockEnd="400">
+              <Banner tone="info">
+                <Text as="p">Prossima sincronizzazione tra {countdown}</Text>
+              </Banner>
+            </Box>
+          )}
           <SyncLog jobs={jobs} customersEnabled={customersEnabled} timeZone={timeZone} />
         </Layout.Section>
       </Layout>
