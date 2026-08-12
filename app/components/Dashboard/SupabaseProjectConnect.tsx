@@ -489,26 +489,20 @@ export function SupabaseProjectConnect({
         // collegato alcun database, quindi non c'è nulla da eliminare — si
         // scollega e basta, senza il modal "mantieni/elimina dati".
         <InlineStack gap="300" blockAlign="center">
-          {planLimitHit ? (
-            // Limite raggiunto: creare non è possibile, quindi offriamo l'upgrade.
-            <Button
-              variant="primary"
-              url={planLimitBillingUrl ?? undefined}
-              target="_blank"
-              disabled={disabled || !planLimitBillingUrl || disconnecting}
-            >
-              Aggiorna piano Supabase
-            </Button>
-          ) : (
-            <Button
-              onClick={() => setShowCreate(true)}
-              // Loader finché non sappiamo se il piano consente un altro progetto.
-              loading={limitsChecking}
-              disabled={disabled || limitsChecking || disconnecting}
-            >
-              ➕ Crea nuovo database
-            </Button>
-          )}
+          {/* A limite raggiunto il comando resta al suo posto, spento: dice cosa
+              non si puo' fare e perche' — l'avviso qui sopra porta gia'
+              all'aggiornamento del piano. Sostituirlo con un pulsante diverso
+              faceva sparire l'azione che il merchant stava cercando e ne
+              proponeva una che non aveva chiesto, con il richiamo
+              all'aggiornamento ripetuto due volte nella stessa card. */}
+          <Button
+            onClick={() => setShowCreate(true)}
+            // Loader finché non sappiamo se il piano consente un altro progetto.
+            loading={limitsChecking}
+            disabled={disabled || limitsChecking || disconnecting || planLimitHit}
+          >
+            ➕ Crea nuovo database
+          </Button>
           <Button
             tone="critical"
             onClick={() => disconnect(false)}
