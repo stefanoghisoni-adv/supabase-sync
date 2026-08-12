@@ -463,6 +463,14 @@ export function SupabaseProjectConnect({
                 value={selectedRef ? selectedName : query}
                 placeholder="Seleziona un database…"
                 autoComplete="off"
+                // Con una scelta fatta il campo non si puo' piu' svuotare
+                // scrivendoci dentro: la "x" e' l'unico modo per tornare
+                // indietro e poter creare un progetto nuovo.
+                clearButton={Boolean(selectedRef || query)}
+                onClearButtonClick={() => {
+                  setSelectedRef('');
+                  setQuery('');
+                }}
               />
             }
           >
@@ -489,24 +497,36 @@ export function SupabaseProjectConnect({
         // collegato alcun database, quindi non c'è nulla da eliminare — si
         // scollega e basta, senza il modal "mantieni/elimina dati".
         <InlineStack gap="300" blockAlign="center">
-          {/* A limite raggiunto il comando resta al suo posto, spento: dice cosa
-              non si puo' fare e perche' — l'avviso qui sopra porta gia'
-              all'aggiornamento del piano. Sostituirlo con un pulsante diverso
-              faceva sparire l'azione che il merchant stava cercando e ne
-              proponeva una che non aveva chiesto, con il richiamo
-              all'aggiornamento ripetuto due volte nella stessa card. */}
-          <Button
-            // Icona di Polaris e non l'emoji: l'emoji ha colori propri e restava
-            // nera a pulsante spento, come se quella parte fosse ancora attiva.
-            // L'icona segue lo stato del comando e si spegne con lui.
-            icon={PlusIcon}
-            onClick={() => setShowCreate(true)}
-            // Loader finché non sappiamo se il piano consente un altro progetto.
-            loading={limitsChecking}
-            disabled={disabled || limitsChecking || disconnecting || planLimitHit}
-          >
-            Crea nuovo database
-          </Button>
+          {selectedRef ? (
+            // Scelto un database, l'azione e' una sola e prende il posto della
+            // creazione: con entrambi i comandi visibili il merchant doveva
+            // decidere fra due strade quando ne aveva gia' imboccata una.
+            // Per tornare indietro c'e' la "x" nel campo.
+            <Button
+              variant="primary"
+              onClick={confirmSelection}
+              loading={selectFetcher.state !== 'idle'}
+              disabled={disabled}
+            >
+              Conferma
+            </Button>
+          ) : (
+            /* A limite raggiunto il comando resta al suo posto, spento: dice
+               cosa non si puo' fare e perche' — l'avviso qui sopra porta gia'
+               all'aggiornamento del piano. */
+            <Button
+              // Icona di Polaris e non l'emoji: l'emoji ha colori propri e
+              // restava nera a pulsante spento, come se quella parte fosse
+              // ancora attiva. L'icona segue lo stato del comando.
+              icon={PlusIcon}
+              onClick={() => setShowCreate(true)}
+              // Loader finché non sappiamo se il piano consente un altro progetto.
+              loading={limitsChecking}
+              disabled={disabled || limitsChecking || disconnecting || planLimitHit}
+            >
+              Crea nuovo database
+            </Button>
+          )}
           <Button
             tone="critical"
             onClick={() => disconnect(false)}
@@ -608,26 +628,8 @@ export function SupabaseProjectConnect({
         </Box>
       )}
 
-      {selectedRef && (
-        <BlockStack gap="200">
-          <Text as="p" tone="subdued">
-            Database: <strong>{selectedName}</strong>. Confermando, l&apos;app preparerà le
-            tabelle e collegherà il database.
-          </Text>
-          {selectFetcher.data?.error && (
-            <Banner tone="critical">{selectFetcher.data.error}</Banner>
-          )}
-          <InlineStack>
-            <Button
-              variant="primary"
-              onClick={confirmSelection}
-              loading={selectFetcher.state !== 'idle'}
-              disabled={disabled}
-            >
-              Conferma e prepara le tabelle
-            </Button>
-          </InlineStack>
-        </BlockStack>
+      {selectedRef && selectFetcher.data?.error && (
+        <Banner tone="critical">{selectFetcher.data.error}</Banner>
       )}
     </BlockStack>
   );
