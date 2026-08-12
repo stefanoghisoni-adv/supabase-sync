@@ -193,8 +193,13 @@ export async function action({ request }: ActionFunctionArgs) {
         shopId: shop.id,
         shopifyChargeId: created.chargeId,
         planType: plan.planName,
-        price: plan.priceMonthly,
-        billingCycle: 'monthly',
+        // Cio' che il merchant paga davvero, e con quale cadenza. Prima era
+        // fisso su plan.priceMonthly e 'monthly': su un abbonamento annuale
+        // avrebbe registrato il prezzo di un mese, e a un negozio con prezzo
+        // riservato il listino invece della cifra concordata. E' la riga su cui
+        // si guarda quando un merchant chiede conto di un addebito.
+        price: pricing.payablePrice,
+        billingCycle: interval,
         status: 'pending',
         trialDays: plan.trialDays ?? 0,
         confirmationUrl: created.confirmationUrl,
