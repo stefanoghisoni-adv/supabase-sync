@@ -408,8 +408,20 @@ export function SupabaseProjectConnect({
             {limits?.planLabel && limits.maxProjects !== null
               ? `Il tuo piano ${limits.planLabel} consente al massimo ${limits.maxProjects} progetti attivi e ne hai già ${limits.activeProjects}.`
               : 'Il tuo piano Supabase non consente di creare altri progetti.'}{' '}
-            Per crearne un altro aggiorna il piano, oppure metti in pausa un progetto
-            esistente dalla dashboard Supabase: i progetti in pausa non occupano uno slot.
+            Per crearne un altro{' '}
+            {/* Button e non Link: dentro un Banner, Polaris spegne i Link
+                rendendoli monocromatici (leggono BannerContext e non hanno una
+                prop per chiedere il contrario). Il Button variant="plain" resta
+                blu, ed e' lo stesso comando gia' usato altrove nell'app. */}
+            {planLimitBillingUrl ? (
+              <Button variant="plain" url={planLimitBillingUrl} target="_blank">
+                aggiorna ora il piano Supabase
+              </Button>
+            ) : (
+              'aggiorna il piano Supabase'
+            )}
+            , oppure metti in pausa un progetto esistente dalla dashboard Supabase: i
+            progetti in pausa non occupano nessuno slot.
           </Text>
         </Banner>
       )}
