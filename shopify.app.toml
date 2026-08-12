@@ -3,13 +3,17 @@
 # Questo file e' la fonte di verita': `shopify app deploy` sovrascrive i campi
 # del dashboard, non il contrario. Si modifica qui, poi si fa il deploy.
 #
-# URL di produzione: https://supabase-sync-six.vercel.app
-# Passera' a https://api.coreward.app quando il sottodominio sara' configurato:
-# vanno cambiate application_url e redirect_urls, poi un nuovo deploy.
+# URL di produzione: https://api.coreward.app
+#
+# L'indirizzo di Vercel resta fra i redirect consentiti. Non e' pigrizia: un
+# merchant che avesse un giro di autenticazione a meta' strada durante il
+# passaggio verrebbe rimandato al vecchio indirizzo, e trovandolo non piu'
+# dichiarato si vedrebbe rifiutare l'accesso. Si toglie quando il nuovo dominio
+# ha qualche giorno di vita.
 
 client_id = "461a83c84e9ce41a23b5364f1c1140ad"
 name = "CoreWard"
-application_url = "https://supabase-sync-six.vercel.app"
+application_url = "https://api.coreward.app"
 embedded = true
 
 [access_scopes]
@@ -22,6 +26,7 @@ use_legacy_install_flow = false
 
 [auth]
 redirect_urls = [
+  "https://api.coreward.app/auth/callback",
   "https://supabase-sync-six.vercel.app/auth/callback"
 ]
 
