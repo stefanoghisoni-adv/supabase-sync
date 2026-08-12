@@ -5,11 +5,11 @@
 #
 # URL di produzione: https://api.coreward.app
 #
-# L'indirizzo di Vercel resta fra i redirect consentiti. Non e' pigrizia: un
-# merchant che avesse un giro di autenticazione a meta' strada durante il
-# passaggio verrebbe rimandato al vecchio indirizzo, e trovandolo non piu'
-# dichiarato si vedrebbe rifiutare l'accesso. Si toglie quando il nuovo dominio
-# ha qualche giorno di vita.
+# Un solo redirect dichiarato, e per una ragione di sicurezza: un indirizzo
+# lasciato fra quelli consentiti dopo che non serve piu' e' un varco che si
+# apre da solo il giorno in cui quel nome torna libero — chi lo rivendicasse
+# riceverebbe i codici di autorizzazione destinati a noi. L'indirizzo Vercel
+# ora inoltra qui da se', quindi non c'e' nulla da tenere aperto.
 
 client_id = "461a83c84e9ce41a23b5364f1c1140ad"
 name = "CoreWard"
@@ -26,8 +26,7 @@ use_legacy_install_flow = false
 
 [auth]
 redirect_urls = [
-  "https://api.coreward.app/auth/callback",
-  "https://supabase-sync-six.vercel.app/auth/callback"
+  "https://api.coreward.app/auth/callback"
 ]
 
 [webhooks]
