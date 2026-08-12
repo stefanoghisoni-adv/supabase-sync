@@ -128,15 +128,18 @@ Il database dell'applicazione risiede nell'Unione Europea (Parigi, Francia), e
 nell'Unione Europea avviene anche l'elaborazione: le funzioni dell'applicazione
 sono eseguite nella regione di Parigi.
 
-La coda dei lavori di sincronizzazione risiede negli Stati Uniti (N. Virginia,
-us-east-1). Vi transitano esclusivamente identificatori interni di negozio:
-nessun dato personale dei clienti del merchant lascia l'Unione Europea per
-questa via.
+Anche la coda dei lavori di sincronizzazione risiede nell'Unione Europea
+(Francoforte, Germania). Vi transitano peraltro esclusivamente identificatori
+interni di negozio, nessun dato personale.
 
-I fornitori elencati al punto 5 sono società statunitensi: i trasferimenti
-avvengono sulla base delle garanzie previste dai rispettivi accordi
-(clausole contrattuali standard e, ove applicabile, EU-US Data Privacy
-Framework). Il merchant sceglie la regione del proprio database.
+Ogni componente gestito da CoreWard si trova quindi nell'Unione Europea, e il
+merchant sceglie la regione del proprio database.
+
+I fornitori elencati al punto 5 sono società statunitensi che erogano il
+servizio da infrastrutture europee: per le funzioni accessorie che dovessero
+comportare un accesso dagli Stati Uniti (assistenza, manutenzione) valgono le
+garanzie previste dai rispettivi accordi — clausole contrattuali standard e,
+ove applicabile, EU-US Data Privacy Framework.
 
 ## 11. Audit
 

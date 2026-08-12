@@ -68,11 +68,11 @@ servirgli per finalità diverse dal marketing, per le quali risponde lui.
 |---|---|---|
 | Database dell'applicazione | Parigi, Francia (UE) | Supabase |
 | Esecuzione dell'applicazione | Parigi, Francia (UE) | Vercel |
-| Coda dei lavori di sincronizzazione | N. Virginia, Stati Uniti (us-east-1) | Upstash |
+| Coda dei lavori di sincronizzazione | Francoforte, Germania (UE) | Upstash |
 | Dati di catalogo e clientela | Progetto del merchant, **nella regione che il merchant sceglie** | Supabase, sotto contratto del merchant |
 
 Nella coda transitano soltanto identificatori interni di negozio: nessun dato
-personale.
+personale. Ogni componente gestito da CoreWard si trova nell'Unione Europea.
 
 I dati di catalogo e clientela non risiedono sull'infrastruttura di CoreWard.
 Vivono nel progetto database del merchant, di cui il merchant è intestatario.
