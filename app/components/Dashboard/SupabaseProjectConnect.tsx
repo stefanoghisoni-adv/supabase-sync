@@ -17,7 +17,7 @@ import {
   Text,
   TextField,
 } from '@shopify/polaris';
-import { SearchIcon } from '@shopify/polaris-icons';
+import { SearchIcon, PlusIcon } from '@shopify/polaris-icons';
 import { groupRegionsByContinent } from '~/lib/supabase-regions';
 import { projectConfirmationName, matchesProjectName } from './disconnect-confirm';
 
@@ -496,12 +496,16 @@ export function SupabaseProjectConnect({
               proponeva una che non aveva chiesto, con il richiamo
               all'aggiornamento ripetuto due volte nella stessa card. */}
           <Button
+            // Icona di Polaris e non l'emoji: l'emoji ha colori propri e restava
+            // nera a pulsante spento, come se quella parte fosse ancora attiva.
+            // L'icona segue lo stato del comando e si spegne con lui.
+            icon={PlusIcon}
             onClick={() => setShowCreate(true)}
             // Loader finché non sappiamo se il piano consente un altro progetto.
             loading={limitsChecking}
             disabled={disabled || limitsChecking || disconnecting || planLimitHit}
           >
-            ➕ Crea nuovo database
+            Crea nuovo database
           </Button>
           <Button
             tone="critical"
