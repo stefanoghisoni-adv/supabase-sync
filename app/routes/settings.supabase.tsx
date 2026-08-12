@@ -124,6 +124,44 @@ export default function SupabaseSettings() {
       <Layout>
         <Layout.Section>
           <BlockStack gap="400">
+            {/* Gli avvisi stanno in cima, prima delle card: dicono se quello
+                che si sta per leggere ha senso — senza un progetto collegato,
+                meta' dei valori sotto sono vuoti per forza. In fondo li si
+                trovava dopo averli gia' cercati. */}
+            {!config ? (
+              <Banner tone="info">
+                {/* "Dashboard" e' il posto dove si collega: tanto vale
+                    portarcelo, invece di dirgli di cercarlo.
+
+                    Button e non Link: Polaris rende monocromatici i Link dentro
+                    un Banner (Link legge BannerContext e si spegne, senza una
+                    prop per chiedere il contrario). Il Button variant="plain" e'
+                    lo stesso comando di "Aggiorna a Pro", quindi il blu e' lo
+                    stesso per costruzione e non per una regola copiata. */}
+                Nessun progetto Supabase collegato. Vai alla{' '}
+                <Button variant="plain" url="/">
+                  Dashboard
+                </Button>{' '}
+                per collegare il tuo database.
+              </Banner>
+            ) : (
+              <>
+                {!config.readToken && (
+                  <Banner tone="warning">
+                    Chiave di lettura non disponibile: il tracciamento non riesce
+                    a leggere i dati. Scrivici e la rimettiamo a posto.
+                  </Banner>
+                )}
+                {!config.proxyBaseUrl && (
+                  <Banner tone="critical">
+                    Indirizzo di lettura non disponibile: manca la configurazione
+                    del dominio dell&apos;app. Contatta il supporto prima di
+                    impostare il tracciamento.
+                  </Banner>
+                )}
+              </>
+            )}
+
             {/* Account e Database affiancati: sono due letture dello stesso
                 colpo d'occhio (cosa prevede il piano, cosa risponde il progetto).
                 A Database va la parte larga: indirizzo e chiave sono lunghi e
@@ -156,39 +194,6 @@ export default function SupabaseSettings() {
               timeZone={sync.timeZone}
             />
 
-            {!config ? (
-              <Banner tone="info">
-                {/* "Dashboard" e' il posto dove si collega: tanto vale
-                    portarcelo, invece di dirgli di cercarlo.
-
-                    Button e non Link: Polaris rende monocromatici i Link dentro
-                    un Banner (Link legge BannerContext e si spegne, senza una
-                    prop per chiedere il contrario). Il Button variant="plain" e'
-                    lo stesso comando di "Aggiorna a Pro", quindi il blu e' lo
-                    stesso per costruzione e non per una regola copiata. */}
-                Nessun progetto Supabase collegato. Vai nella{' '}
-                <Button variant="plain" url="/">
-                  Dashboard
-                </Button>{' '}
-                per collegare il tuo database.
-              </Banner>
-            ) : (
-              <>
-                {!config.readToken && (
-                  <Banner tone="warning">
-                    Chiave di lettura non disponibile: il tracciamento non riesce
-                    a leggere i dati. Scrivici e la rimettiamo a posto.
-                  </Banner>
-                )}
-                {!config.proxyBaseUrl && (
-                  <Banner tone="critical">
-                    Indirizzo di lettura non disponibile: manca la configurazione
-                    del dominio dell&apos;app. Contatta il supporto prima di
-                    impostare il tracciamento.
-                  </Banner>
-                )}
-              </>
-            )}
           </BlockStack>
         </Layout.Section>
       </Layout>
