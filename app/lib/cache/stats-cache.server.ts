@@ -16,15 +16,35 @@ function getClient(): Promise<Redis> {
       ({ default: RedisClient }) =>
         new RedisClient({
           ...redisConnectionOptions(),
-          // La cache non deve mai far aspettare: pochi tentativi e nessuna coda
-          // di comandi in attesa di riconnessione. Se Redis non c'e', si
-          // ricalcola live.
+          // Pochi tentativi: la cache non e' un dato che valga la pena
+          // rincorrere. Se non risponde si ricalcola live.
           maxRetriesPerRequest: 2,
-          enableOfflineQueue: false,
         }),
     );
   }
   return clientPromise;
+}
+
+/**
+ * Quanto si concede alla cache prima di rinunciare.
+ *
+ * Serve perche' il client accoda i comandi mentre la connessione si apre: senza
+ * un tetto, una funzione che parte a freddo con Redis irraggiungibile
+ * resterebbe in attesa invece di ricalcolare.
+ *
+ * Prima quell'attesa era esclusa a monte (`enableOfflineQueue: false`), e il
+ * rimedio era peggio del male: su Vercel ogni invocazione a freddo apre una
+ * connessione nuova, e il primo comando partiva durante la stretta di mano TLS
+ * — "Stream isn't writeable" — cioe' sempre. La cache non veniva letta mai, e a
+ * ogni apertura dell'app il catalogo si rileggeva per intero da Shopify.
+ */
+const TIMEOUT_MS = 1000;
+
+function withTimeout<T>(operation: Promise<T>, fallback: T): Promise<T> {
+  return Promise.race([
+    operation,
+    new Promise<T>((resolve) => setTimeout(() => resolve(fallback), TIMEOUT_MS)),
+  ]);
 }
 
 export interface ReadinessStats {
@@ -46,7 +66,7 @@ export async function getReadinessCache(
 ): Promise<(ReadinessStats & { computedAt: string }) | null> {
   try {
     const redis = await getClient();
-    const raw = await redis.get(key(shopId));
+    const raw = await withTimeout(redis.get(key(shopId)), null);
     return raw ? JSON.parse(raw) : null;
   } catch (err) {
     console.error('[stats-cache] get fallito (ignoro, calcolo live):', err);
@@ -61,7 +81,7 @@ export async function setReadinessCache(
   try {
     const payload = JSON.stringify({ ...stats, computedAt: new Date().toISOString() });
     const redis = await getClient();
-    await redis.set(key(shopId), payload, 'EX', TTL_SECONDS);
+    await withTimeout(redis.set(key(shopId), payload, 'EX', TTL_SECONDS), 'OK');
   } catch (err) {
     console.error('[stats-cache] set fallito (ignoro):', err);
   }
@@ -82,7 +102,7 @@ export async function getCustomerStatsCache(
 ): Promise<(CustomerStats & { computedAt: string }) | null> {
   try {
     const redis = await getClient();
-    const raw = await redis.get(customerKey(shopId));
+    const raw = await withTimeout(redis.get(customerKey(shopId)), null);
     return raw ? JSON.parse(raw) : null;
   } catch (err) {
     console.error('[stats-cache] get clienti fallito (ignoro, calcolo live):', err);
@@ -97,7 +117,7 @@ export async function setCustomerStatsCache(
   try {
     const payload = JSON.stringify({ ...stats, computedAt: new Date().toISOString() });
     const redis = await getClient();
-    await redis.set(customerKey(shopId), payload, 'EX', TTL_SECONDS);
+    await withTimeout(redis.set(customerKey(shopId), payload, 'EX', TTL_SECONDS), 'OK');
   } catch (err) {
     console.error('[stats-cache] set clienti fallito (ignoro):', err);
   }
