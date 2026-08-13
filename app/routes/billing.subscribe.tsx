@@ -166,6 +166,12 @@ export async function action({ request }: ActionFunctionArgs) {
       shopDomain: shop.shopDomain,
       host: typeof form.get('host') === 'string' ? String(form.get('host')) : null,
     });
+    // Chi ha scelto il piano dal terzo passo della dashboard ci torna: la
+    // configurazione si chiude li'. Si accetta la sola parola 'dashboard', e a
+    // che indirizzo corrisponda lo decide la callback.
+    if (String(form.get('returnTo') ?? '') === 'dashboard') {
+      params.set('return_to', 'dashboard');
+    }
     const returnUrl = new URL(
       `/billing/callback?${params.toString()}`,
       process.env.SHOPIFY_APP_URL || requestUrl.origin,

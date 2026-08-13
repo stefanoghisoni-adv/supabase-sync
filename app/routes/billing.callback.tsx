@@ -30,12 +30,24 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  */
 type Outcome = 'ok' | 'ko';
 
+/**
+ * Dove torna il merchant dopo l'approvazione.
+ *
+ * Di norma la tab Piano, da cui e' partito. Ma il piano si sceglie anche dal
+ * terzo passo della dashboard, durante la configurazione: chi arriva da li'
+ * deve tornare li', dove la sincronizzazione riparte da sola — non su una
+ * pagina di listino che a quel punto non gli serve piu'.
+ *
+ * L'unico valore riconosciuto e' `dashboard`, e la destinazione e' scritta qui:
+ * un indirizzo preso dalla querystring sarebbe un rimando aperto.
+ */
 function backToPlan(requestUrl: URL, shopDomain: string, outcome: Outcome): Response {
   // shop/host/embedded viaggiano con il rimando: senza, la tab Piano verrebbe
   // raggiunta fuori dall'admin e finirebbe sul modulo che chiede il negozio.
   const params = embeddedContextParams({ requestUrl, shopDomain });
   params.set('billing', outcome);
-  return redirect(`/plan?${params.toString()}`);
+  const path = requestUrl.searchParams.get('return_to') === 'dashboard' ? '/' : '/plan';
+  return redirect(`${path}?${params.toString()}`);
 }
 
 /**

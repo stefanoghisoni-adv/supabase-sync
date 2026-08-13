@@ -1,7 +1,12 @@
 import type { ActionFunctionArgs, LoaderFunctionArgs } from '@remix-run/node';
 import { json } from '@remix-run/node';
-import { useLoaderData, useFetcher, useRevalidator } from '@remix-run/react';
-import { useEffect, useState } from 'react';
+import {
+  useLoaderData,
+  useFetcher,
+  useRevalidator,
+  useSearchParams,
+} from '@remix-run/react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Page,
   Box,
@@ -33,7 +38,6 @@ import {
   hasPlanChanged,
   planChangeBanner,
   shouldTriggerPlanCatchUp,
-  syncCtaState,
 } from '~/components/Dashboard/plan-upgrade';
 import { firstPlanWithCustomersSync } from '~/components/Dashboard/account-format';
 import { normalizePlanName, samePlanName } from '~/lib/billing/plan-name';
@@ -54,6 +58,15 @@ import { SyncCard } from '~/components/Dashboard/SyncCard';
 import { ConnectionCard } from '~/components/Dashboard/ConnectionCard';
 import { RecentRunsCard } from '~/components/Dashboard/RecentRunsCard';
 import { loadSyncRuns, syncTimingFrom } from '~/lib/sync/sync-timing.server';
+import { buildPlanCards } from '~/components/Billing/plan-catalog';
+import { canAccessPlanTab } from '~/components/Billing/plan-access';
+import type { SubscribeResponse } from '~/routes/billing.subscribe';
+import { PlanStep } from '~/components/Dashboard/PlanStep';
+import {
+  planChoiceOptions,
+  planSummary,
+  preselectedPlan,
+} from '~/components/Dashboard/plan-step';
 
 // Solo per questo store mostriamo il messaggio d'errore reale (utile in debug),
 // invece del generico "Errore interno": gli altri merchant non devono vedere
@@ -96,7 +109,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     // il loader costa due round-trip in profondità invece di tre. Su Vercel il
     // DB è remoto, quindi ogni round-trip risparmiato è latenza in meno sul TTFB
     // — che è ciò che domina l'LCP di questa pagina.
-    const [plans, recentJobs, customersTableJob, oauthToken, syncRuns] = await Promise.all([
+    const [plans, recentJobs, customersTableJob, oauthToken, syncRuns, partnerPrices] = await Promise.all([
       // Tutti i piani, non solo quello in uso: quando i clienti restano fuori
       // serve anche sapere quale piano li rimetterebbe dentro, e leggerli tutti
       // costa come leggerne uno (la tabella e' di poche righe).
@@ -131,6 +144,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
       // "Prossima" della card Sincronizzazione. Non dipendono dal piano, quindi
       // viaggiano con le altre invece di costare un round-trip proprio.
       loadSyncRuns(shop.id),
+      // Listino riservato del partner, se il negozio ne ha uno: il terzo passo
+      // mostra i prezzi che il merchant paga davvero, non quelli di listino.
+      shop.partnerName
+        ? prisma.partnerPlanPrice.findMany({ where: { partnerName: shop.partnerName } })
+        : Promise.resolve([]),
     ]);
 
     const plan = plans.find((p) => samePlanName(p.planName, shop.currentPlan)) ?? null;
@@ -239,6 +257,34 @@ export async function loader({ request }: LoaderFunctionArgs) {
             shop.currentPlan,
           ),
       customersTableCreated: customersTableJob !== null,
+      // Il negozio ha gia' scelto un piano almeno una volta? planStartedAt lo
+      // scrive l'attivazione, gratuita o a pagamento che sia. Al terzo passo
+      // serve a sapere se chiedere una scelta o una conferma.
+      planChosen: shop.planStartedAt !== null,
+      // I piani interni assegnati dall'owner non si comprano e non si cambiano:
+      // per quei negozi il terzo passo non ha nessuna scelta da proporre.
+      planPickable: canAccessPlanTab(shop.currentPlan),
+      // Le card del listino come le vede la tab Piano, prezzi riservati
+      // compresi: il terzo passo ne fa un elenco a scelta singola.
+      planCards: buildPlanCards(
+        plans.map((p) => ({
+          planName: p.planName,
+          priceMonthly: Number(p.priceMonthly),
+          priceYearly: Number(p.priceYearly),
+          maxProducts: p.maxProducts,
+          maxCustomers: p.maxCustomers,
+          maxSyncFrequencyHours: p.maxSyncFrequencyHours,
+          customersSyncEnabled: p.customersSyncEnabled,
+          supportLevel: p.supportLevel,
+        })),
+        Object.fromEntries(
+          partnerPrices.map((p) => [
+            p.planName,
+            { priceMonthly: Number(p.priceMonthly), priceYearly: Number(p.priceYearly) },
+          ]),
+        ),
+      ),
+      discountIntervals: shop.discountIntervals,
       // Cadenza e date della sincronizzazione: la dashboard e' il posto dove il
       // merchant le cerca, e finora stavano solo in Impostazioni.
       sync: {
@@ -361,7 +407,7 @@ interface ProductHistoryResponse {
 }
 
 export default function Dashboard() {
-  const { shop, plan, supabaseConnected, supabaseAccountConnected, customersEnabled, authorization, syncState, planChanged, currentMaxProducts, previousMaxProducts, previousCustomersEnabled, customersTableCreated, customersUpgradePlan, trackingAuthorization, schemaUpdatePending, planOptions, sync, recentRuns } =
+  const { shop, plan, supabaseConnected, supabaseAccountConnected, customersEnabled, authorization, syncState, planChanged, currentMaxProducts, previousMaxProducts, previousCustomersEnabled, customersTableCreated, customersUpgradePlan, trackingAuthorization, schemaUpdatePending, planOptions, sync, recentRuns, planChosen, planPickable, planCards, discountIntervals } =
     useLoaderData<typeof loader>();
   const blocked = authorization !== 'ENABLED';
 
@@ -380,13 +426,12 @@ export default function Dashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Pulsanti-link (Impostazioni, Vedi logs): mentre Remix carica la rotta di
-  // destinazione mostriamo lo spinner e disabilitiamo il pulsante, così un clic
-  // su un DB remoto (Vercel) non sembra "morto". Solo pero' se e' stato quel
-  // pulsante a far partire la navigazione: cambiando sezione dal menu laterale
-  // dell'admin si accendevano lo stesso, senza che nessuno li avesse premuti.
+  // Pulsante-link Impostazioni: mentre Remix carica la rotta di destinazione
+  // mostriamo lo spinner e disabilitiamo il pulsante, così un clic su un DB
+  // remoto (Vercel) non sembra "morto". Solo pero' se e' stato quel pulsante a
+  // far partire la navigazione: cambiando sezione dal menu laterale dell'admin
+  // si accendeva lo stesso, senza che nessuno l'avesse premuto.
   const settingsNav = useNavLoading('/settings/supabase');
-  const logsNav = useNavLoading('/logs');
 
   // Stato del collegamento Supabase per il badge del primo step: Non collegato
   // (grigio) → In corso (arancione) → Fallito (rosso) / Collegato (verde).
@@ -469,6 +514,73 @@ export default function Dashboard() {
   const inProgress =
     submitting || syncState === 'in_progress' || (justQueued && !syncCompleted);
 
+  // Terzo passo: il piano, e con esso la prima sincronizzazione. Se il piano
+  // scelto e' gia' quello attivo non c'e' niente da acquistare e si sincronizza
+  // e basta; se e' un altro, prima si passa dall'addebito di Shopify.
+  const subscribeFetcher = useFetcher<SubscribeResponse>();
+  const [selectedPlan, setSelectedPlan] = useState(() =>
+    preselectedPlan(planCards, shop.currentPlan),
+  );
+  const [planError, setPlanError] = useState<string | null>(null);
+  const subscribing = subscribeFetcher.state !== 'idle';
+
+  const startSync = useCallback(() => {
+    syncFetcher.submit({}, { method: 'post' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [syncFetcher]);
+
+  const confirmPlanAndSync = useCallback(() => {
+    setPlanError(null);
+    // Piano gia' scelto in passato: qui si conferma quello attivo, e il cambio
+    // sta nella tab Piano. Nessun acquisto da avviare.
+    const changing =
+      !planChosen && selectedPlan && !samePlanName(selectedPlan, shop.currentPlan);
+    if (!changing) {
+      startSync();
+      return;
+    }
+    subscribeFetcher.submit(
+      { plan: selectedPlan, interval: 'monthly', returnTo: 'dashboard' },
+      { method: 'POST', action: '/billing/subscribe' },
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [planChosen, selectedPlan, shop.currentPlan, startSync, subscribeFetcher]);
+
+  // Esito dell'avvio dell'acquisto.
+  useEffect(() => {
+    const data = subscribeFetcher.data;
+    if (!data) return;
+    if ('confirmationUrl' in data) {
+      // Fuori dal riquadro: la pagina di approvazione di Shopify non si lascia
+      // incorniciare. App Bridge intercetta il '_top' e naviga il contenitore.
+      window.open(data.confirmationUrl, '_top');
+      return;
+    }
+    if ('ok' in data) {
+      // Piano senza addebito: applicato subito, si sincronizza senza uscire.
+      startSync();
+      return;
+    }
+    if ('error' in data) setPlanError(data.error);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subscribeFetcher.data]);
+
+  // Ritorno dall'approvazione dell'addebito: il piano ora c'e', e la
+  // sincronizzazione parte da sola. E' la promessa del pulsante che ha avviato
+  // l'acquisto — "Conferma e sincronizza" — mantenuta dall'altra parte del giro.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const billingApproved = searchParams.get('billing') === 'ok';
+  useEffect(() => {
+    if (!billingApproved) return;
+    // Il parametro si toglie subito: ricaricando la pagina non deve rilanciare
+    // una seconda sincronizzazione.
+    const next = new URLSearchParams(searchParams);
+    next.delete('billing');
+    setSearchParams(next, { replace: true });
+    if (supabaseConnected && !syncCompleted) startSync();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [billingApproved]);
+
   // Polling mentre la sync è in corso: rileva il passaggio a "completed".
   useEffect(() => {
     if (!inProgress || syncCompleted) return;
@@ -497,16 +609,6 @@ export default function Dashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [catchUpPending, catchUpTicks]);
 
-  // A sync completata il pulsante resta disabilitato: al cambio di piano
-  // l'allineamento (clienti e/o prodotti oltre il vecchio tetto) parte da solo,
-  // quindi non c'e' nulla da premere — si mostra solo che sta succedendo.
-  const cta = syncCtaState({
-    blocked,
-    inProgress,
-    completed: syncCompleted,
-    planChanged,
-  });
-
   // Prodotti TOTALI, idonei e non: il tetto del piano li taglia comunque, e un
   // prodotto oggi senza costo diventa idoneo appena il merchant lo compila.
   const totalProducts = (readiness?.readyCount ?? 0) + (readiness?.problemCount ?? 0);
@@ -518,13 +620,23 @@ export default function Dashboard() {
 
   const steps = resolveStepStates(supabaseAccountConnected, supabaseConnected);
 
-  // I tre passi hanno finito: account collegato, database collegato, prima
-  // sincronizzazione fatta. Da qui in poi lo stepper non ha piu' niente da
-  // chiedere, e continuare a mostrarlo significa tenere meta' pagina occupata
-  // da tre caselle tutte spuntate. Sparisce, e quel che di utile conteneva —
-  // account, database, disconnessione — passa nella card Connessione.
+  // I tre passi hanno finito: account collegato, database collegato, piano
+  // deciso e prima sincronizzazione fatta. Da qui in poi lo stepper non ha piu'
+  // niente da chiedere, e continuare a mostrarlo significa tenere spazio
+  // occupato da tre caselle tutte spuntate. Sparisce, e quel che di utile
+  // conteneva — account, database, disconnessione — passa nella card
+  // Connessione.
+  //
+  // Il piano conta a parte dalla sincronizzazione: ora che questa parte da sola
+  // al collegamento del database, puo' concludersi prima che qualcuno abbia
+  // scelto un piano, e i passi sparirebbero portandosi via quella scelta. Chi
+  // ha un piano assegnato dall'owner non ha invece niente da scegliere, e per
+  // lui la questione e' chiusa in partenza.
   const setupComplete =
-    supabaseAccountConnected && supabaseConnected && syncCompleted;
+    supabaseAccountConnected &&
+    supabaseConnected &&
+    syncCompleted &&
+    (planChosen || !planPickable);
 
   const planBanner = planChangeBanner({
     planChanged,
@@ -684,17 +796,32 @@ export default function Dashboard() {
       ),
     },
     {
-      id: 'sync',
-      // Cosa entra nella sincronizzazione lo dice il riquadro qui sotto, riga
-      // per riga: ripeterlo nel titolo lo allungava senza aggiungere nulla.
-      title: 'Sincronizzazione',
+      id: 'plan',
+      // Il piano, non la sincronizzazione: e' il piano a stabilire quanti
+      // prodotti entrano e ogni quanto si aggiornano, quindi e' li' che si
+      // decide. La sincronizzazione parte con la conferma, senza un pulsante
+      // suo — dopo il collegamento del database non c'e' piu' niente da premere
+      // per farla iniziare.
+      title: planChosen ? 'Conferma il piano' : 'Scegli il piano',
       state: steps.sync,
       // A sync completata: nessun badge sullo step (né "In corso" né altro).
       hideBadge: syncCompleted,
-      lockedHint:
-        'Collega un database per sbloccare la sincronizzazione.',
+      lockedHint: 'Collega un database per scegliere il piano.',
       content: (
-        <BlockStack gap="400">
+        <PlanStep
+          options={planChoiceOptions(planCards, discountIntervals)}
+          selected={selectedPlan}
+          onSelect={setSelectedPlan}
+          planChosen={planChosen}
+          currentPlanName={shop.currentPlan}
+          currentPlanSummary={planSummary(
+            planCards.find((card) => samePlanName(card.name, shop.currentPlan)),
+          )}
+          onConfirm={confirmPlanAndSync}
+          loading={inProgress || subscribing}
+          disabled={blocked}
+          error={planError ?? syncFetcher.data?.error ?? null}
+        >
           <Box background="bg-surface-secondary" borderRadius="200" padding="400">
             <BlockStack gap="300">
               <Text as="h3" variant="headingSm">
@@ -734,51 +861,15 @@ export default function Dashboard() {
               </BlockStack>
             </BlockStack>
           </Box>
-
-          <syncFetcher.Form method="post">
-            <InlineStack gap="300" blockAlign="center">
-              <Button
-                submit
-                variant="primary"
-                disabled={cta.disabled}
-                loading={cta.loading}
-              >
-                {cta.label}
-              </Button>
-              {syncCompleted ? (
-                <>
-                  {/* url + Remix Link: il clic arma logsNav, che disabilita il
-                      pulsante e mostra lo spinner fino all'arrivo su /logs. */}
-                  <Button
-                    url="/logs"
-                    onClick={logsNav.start}
-                    disabled={logsNav.loading}
-                    loading={logsNav.loading}
-                  >
-                    Vedi logs
-                  </Button>
-                  {planChanged ? (
-                    <Text as="span" tone="subdued">
-                      Stiamo allineando i dati al nuovo piano: non devi fare nulla.
-                    </Text>
-                  ) : (
-                    <Text as="span" tone="success">
-                      Le sincronizzazioni successive avvengono in automatico.
-                    </Text>
-                  )}
-                </>
-              ) : inProgress ? (
-                <Text as="span" tone="subdued">
-                  Prosegue in background: puoi chiudere questa pagina.
-                </Text>
-              ) : null}
-            </InlineStack>
-          </syncFetcher.Form>
-
-          {syncFetcher.data?.error && (
-            <Banner tone="critical">{syncFetcher.data.error}</Banner>
+          {/* La sincronizzazione prosegue per conto suo: e' l'unica cosa che
+              serve sapere mentre gira, e il pulsante e' gia' in attesa. */}
+          {inProgress && (
+            <Text as="span" tone="subdued">
+              Sincronizzazione in corso: prosegue in background, puoi chiudere
+              questa pagina.
+            </Text>
           )}
-        </BlockStack>
+        </PlanStep>
       ),
     },
   ];
@@ -888,6 +979,34 @@ export default function Dashboard() {
 
         </BlockStack>
 
+        {/* I passi vengono prima di tutto il resto: finche' ce n'e' uno aperto,
+            e' quello la cosa da fare, e leggerlo dopo le card significherebbe
+            trovarlo dopo aver gia' cercato altrove.
+
+            Larghezza ridotta e centrata: la stessa che la Page aveva prima di
+            passare a fullWidth. E' l'espressione di Polaris, non un numero
+            copiato, quindi resta allineata anche se il tema cambia. Un modulo
+            da compilare largo tutto lo schermo si legge peggio, e le card che
+            arrivano dopo hanno bisogno di tutta la larghezza, non lui. */}
+        {!setupComplete && (
+          <div
+            style={{
+              maxWidth:
+                'calc(var(--pg-layout-width-primary-max) + var(--pg-layout-width-secondary-max) + var(--pg-layout-width-inner-spacing-base))',
+              marginInline: 'auto',
+              width: '100%',
+            }}
+          >
+            <Stepper steps={stepperItems} />
+          </div>
+        )}
+
+        {/* Prima del collegamento non c'e' niente da mostrare: nessun numero,
+            nessun grafico. I dati arrivano dal database del merchant, e finche'
+            non ce n'e' uno quelle card direbbero zero — che non e' un dato, e'
+            l'assenza di un dato. */}
+        {supabaseConnected && (
+          <>
         {/* Le card di stato. A setup concluso diventano quattro e prendono
             tutta la riga; finche' c'e' da collegare restano due, perche' le
             altre due direbbero "non collegato" accanto allo stepper che sta
@@ -932,34 +1051,24 @@ export default function Dashboard() {
           )}
         </InlineGrid>
 
-        {/* Finita la configurazione, il grafico prende i due terzi e accanto
-            gli sta il registro in breve. Prima invece la meta' sinistra e' dei
-            tre passi, che sono la cosa da fare. */}
-        {setupComplete ? (
-          <InlineGrid
-            columns={{ xs: 1, lg: 'minmax(0, 2fr) minmax(0, 1fr)' }}
-            gap="400"
-          >
-            <EligibilityChart
-              points={historyFetcher.data?.points ?? []}
-              monthLabel={historyFetcher.data?.monthLabel}
-              monthStart={historyFetcher.data?.monthStart}
-              planLimit={historyFetcher.data?.planLimit ?? null}
-              loading={!historyFetcher.data}
-            />
-            <RecentRunsCard runs={recentRuns} timeZone={shop.ianaTimezone} />
-          </InlineGrid>
-        ) : (
-          <InlineGrid columns={{ xs: 1, md: 2 }} gap="400">
-            <Stepper steps={stepperItems} />
-            <EligibilityChart
-              points={historyFetcher.data?.points ?? []}
-              monthLabel={historyFetcher.data?.monthLabel}
-              monthStart={historyFetcher.data?.monthStart}
-              planLimit={historyFetcher.data?.planLimit ?? null}
-              loading={!historyFetcher.data}
-            />
-          </InlineGrid>
+        {/* Il grafico prende i due terzi e accanto gli sta il registro in
+            breve: la sincronizzazione parte da sola al collegamento, quindi
+            qualcosa da mostrare c'e' gia' prima che la configurazione sia
+            chiusa. */}
+        <InlineGrid
+          columns={{ xs: 1, lg: 'minmax(0, 2fr) minmax(0, 1fr)' }}
+          gap="400"
+        >
+          <EligibilityChart
+            points={historyFetcher.data?.points ?? []}
+            monthLabel={historyFetcher.data?.monthLabel}
+            monthStart={historyFetcher.data?.monthStart}
+            planLimit={historyFetcher.data?.planLimit ?? null}
+            loading={!historyFetcher.data}
+          />
+          <RecentRunsCard runs={recentRuns} timeZone={shop.ianaTimezone} />
+        </InlineGrid>
+          </>
         )}
 
         {/* Respiro in fondo: senza, il bordo dell'ultima card tocca il fondo dell'iframe. */}

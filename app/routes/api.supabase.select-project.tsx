@@ -20,6 +20,7 @@ import {
 } from '~/lib/supabase/detect-created-tables';
 import { RELOAD_SCHEMA_SQL } from '~/lib/supabase/ensure-table.server';
 import { LATEST_SCHEMA_VERSION } from '~/lib/supabase/merchant-migrations';
+import { enqueueManualSync, triggerSyncDrain } from '~/lib/queue/trigger.server';
 
 export async function action({ request }: ActionFunctionArgs) {
   const { session } = await authenticate.admin(request);
@@ -163,6 +164,24 @@ export async function action({ request }: ActionFunctionArgs) {
       console.warn(
         '[api.supabase.select-project] collegamento riuscito ma emissione del token-proxy fallita:',
         tokenErr instanceof Error ? tokenErr.message : 'errore sconosciuto',
+      );
+    }
+
+    // La prima sincronizzazione parte da sola. Il merchant ha appena scelto il
+    // database: chiedergli un secondo gesto per far succedere l'unica cosa che
+    // quel gesto prometteva sarebbe una domanda senza alternative.
+    //
+    // Best effort come le due operazioni qui sopra: il collegamento e' gia'
+    // completo, e se la coda non risponde ci pensa il giro programmato. Il
+    // terzo passo resta comunque a disposizione per rilanciarla insieme alla
+    // conferma del piano.
+    try {
+      await enqueueManualSync(shop.id);
+      triggerSyncDrain();
+    } catch (syncErr) {
+      console.warn(
+        '[api.supabase.select-project] collegamento riuscito ma avvio della sincronizzazione fallito:',
+        syncErr instanceof Error ? syncErr.message : 'errore sconosciuto',
       );
     }
 

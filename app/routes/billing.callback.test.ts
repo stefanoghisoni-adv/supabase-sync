@@ -187,6 +187,31 @@ describe('/billing/callback', () => {
     ).toBe('admin.shopify.com/store/test-shop');
   });
 
+  it('chi ha scelto il piano dal terzo passo torna in dashboard', async () => {
+    // Il piano si sceglie anche durante la configurazione: chi arriva da li'
+    // deve ritrovarsi dove la sincronizzazione riparte da sola, non sul listino.
+    getSubscription.mockResolvedValue(subscription());
+
+    const url = location(
+      await call('?charge_id=1234&shop=test-shop.myshopify.com&return_to=dashboard'),
+    );
+
+    expect(url.pathname).toBe('/');
+    expect(url.searchParams.get('billing')).toBe('ok');
+  });
+
+  it('un return_to inventato non porta da nessuna parte se non sul listino', async () => {
+    // La destinazione la decide questo file: un indirizzo preso dalla
+    // querystring sarebbe un rimando aperto.
+    getSubscription.mockResolvedValue(subscription());
+
+    const url = location(
+      await call('?charge_id=1234&shop=test-shop.myshopify.com&return_to=https://evil.example'),
+    );
+
+    expect(url.pathname).toBe('/plan');
+  });
+
   it('la chiusura del precedente non annulla l attivazione appena registrata', async () => {
     getSubscription.mockResolvedValue(subscription());
     getActiveSubscriptions.mockRejectedValue(new Error('rete'));
