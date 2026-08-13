@@ -65,8 +65,6 @@ export function TrackingConflicts({
   // insieme, con ciascuna riga che mostra la propria attesa.
   const [busy, setBusy] = useState<Record<string, 'dismiss' | 'leave'>>({});
 
-  if (findings.length === 0) return null;
-
   const rowKey = (finding: TrackingFinding) => `${finding.kind}-${finding.name}`;
 
   // fetch e non useFetcher: un fetcher solo per tutta la tabella verrebbe
@@ -111,6 +109,14 @@ export function TrackingConflicts({
     if (finding.kind === 'channel') return `${adminBase}/settings/sales_channels`;
     return themeId ? `${adminBase}/themes/${themeId}` : null;
   };
+
+  // L'uscita anticipata sta DOPO tutti gli hook, e non e' una questione di
+  // stile: l'elenco arriva da una richiesta, quindi al primo render e' vuoto e
+  // al secondo no. Con il `return` piu' in alto il secondo render eseguiva un
+  // hook in piu' del primo, e React interrompeva la pagina intera con l'errore
+  // #310 — "Rendered more hooks than during the previous render". E' quello che
+  // faceva comparire "Si e' verificato un errore" al posto della dashboard.
+  if (findings.length === 0) return null;
 
   return (
     <Banner tone="warning" title="Altre fonti di eventi su questo negozio">

@@ -3,6 +3,7 @@ import {
   detectTrackingChannels,
   detectThemeTracking,
   themeFilesToInspect,
+  MAX_THEME_FILES,
 } from './detect';
 
 describe('detectTrackingChannels', () => {
@@ -123,5 +124,23 @@ describe('themeFilesToInspect', () => {
       'layout/password.liquid',
       'snippets/tracking.liquid',
     ]);
+  });
+
+  it('non supera il tetto che Shopify impone', () => {
+    // Oltre cinquanta nomi la richiesta non viene troncata: viene rifiutata
+    // intera, e il tema resta non letto senza che nessuno se ne accorga.
+    const many = Array.from({ length: 80 }, (_, i) => `snippets/s${i}.liquid`);
+
+    expect(themeFilesToInspect(many)).toHaveLength(MAX_THEME_FILES);
+  });
+
+  it('se deve tagliare, taglia gli snippet e non i layout', () => {
+    // Il codice di tracciamento sta quasi sempre nel layout: e' l'ultimo file a
+    // cui rinunciare.
+    const many = Array.from({ length: 80 }, (_, i) => `snippets/s${i}.liquid`);
+    const files = themeFilesToInspect([...many, 'layout/theme.liquid']);
+
+    expect(files[0]).toBe('layout/theme.liquid');
+    expect(files).toHaveLength(MAX_THEME_FILES);
   });
 });

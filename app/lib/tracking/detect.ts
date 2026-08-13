@@ -124,6 +124,15 @@ function stripLiquidComments(content: string): string {
 }
 
 /**
+ * Quanti file del tema si possono chiedere in una volta.
+ *
+ * Non e' una nostra prudenza: e' il tetto che Shopify impone all'argomento
+ * `filenames` ("number of 'filenames' must be less than or equal to 50").
+ * Superarlo non tronca la risposta, la fa fallire tutta.
+ */
+export const MAX_THEME_FILES = 50;
+
+/**
  * I file del tema che vale la pena leggere.
  *
  * Il codice di tracciamento si incolla nel layout, ed e' li' che sta quasi
@@ -132,8 +141,15 @@ function stripLiquidComments(content: string): string {
  * aggiungerebbe quasi nulla: le sezioni e i template non sono posti dove un
  * tag di tracciamento globale viene messo.
  */
-export function themeFilesToInspect(filenames: string[]): string[] {
-  return filenames.filter(
-    (name) => /^layout\/.+\.liquid$/i.test(name) || /^snippets\/.+\.liquid$/i.test(name),
-  );
+export function themeFilesToInspect(
+  filenames: string[],
+  max: number = MAX_THEME_FILES,
+): string[] {
+  const layouts = filenames.filter((name) => /^layout\/.+\.liquid$/i.test(name));
+  const snippets = filenames.filter((name) => /^snippets\/.+\.liquid$/i.test(name));
+  // I layout per primi: e' li' che il codice sta quasi sempre, e se il tetto
+  // taglia qualcosa deve tagliare gli snippet. Un tema vero ne ha molti piu' di
+  // cinquanta, e chiederli tutti insieme faceva rifiutare l'intera richiesta —
+  // niente lettura del tema, quindi nessuna segnalazione, in silenzio.
+  return [...layouts, ...snippets].slice(0, max);
 }
