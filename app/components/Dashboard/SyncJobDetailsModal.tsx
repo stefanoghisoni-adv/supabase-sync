@@ -42,12 +42,12 @@ interface SyncJobDetailsResponse {
     removed: number;
     truncated: boolean;
   };
+  // Dei clienti arrivano solo i totali: il dettaglio per singolo cliente non
+  // viene registrato, quindi non c'e' nessun elenco da mostrare.
   customers: {
-    rows: SyncDetailRow[];
     added: number;
     updated: number;
     suspended: number;
-    truncated: boolean;
   };
   customersEnabled: boolean;
 }
@@ -130,11 +130,9 @@ export function SyncJobDetailsModal({
               )}
               {selectedTab === 1 && tabs.includes('customers') && (
                 <CustomersTab
-                  rows={data.customers.rows}
                   added={data.customers.added}
                   updated={data.customers.updated}
                   suspended={data.customers.suspended}
-                  truncated={data.customers.truncated}
                 />
               )}
             </Tabs>
@@ -221,70 +219,37 @@ function ProductsTab({ rows, added, removed, truncated }: ProductsTabProps) {
 }
 
 interface CustomersTabProps {
-  rows: SyncDetailRow[];
   added: number;
   updated: number;
   suspended: number;
-  truncated: boolean;
 }
 
-function CustomersTab({ rows, added, updated, suspended, truncated }: CustomersTabProps) {
+/**
+ * Per i clienti si mostrano i totali, non l'elenco: chi e' cambiato non viene
+ * registrato qui, e il merchant lo ritrova nel proprio database.
+ */
+function CustomersTab({ added, updated, suspended }: CustomersTabProps) {
   const summary = customerSummary(added, updated, suspended);
-  const notice = truncationNotice(truncated);
 
   // Riga di testo e non EmptyState: quel componente pretende un'illustrazione, e
   // senza immagine mostrerebbe il segnaposto di una figura mancante. Qui poi il
   // vuoto non e' un vicolo cieco da illustrare, e' solo una corsa senza novita'.
-  if (rows.length === 0) {
+  if (!summary) {
     return (
       <Text as="p" tone="subdued">
-        Nessun dettaglio registrato per questa sincronizzazione.
+        Nessun cliente modificato in questa sincronizzazione.
       </Text>
     );
   }
 
   return (
-    <BlockStack gap="300">
-      {summary && (
-        <Text as="p" variant="bodyMd">
-          {summary}
-        </Text>
-      )}
-      <IndexTable
-        selectable={false}
-        headings={[
-          { title: 'Azione' },
-          { title: 'Nome' },
-          { title: 'ID Shopify' },
-        ]}
-        itemCount={rows.length}
-      >
-        {rows.map((row, index) => {
-          const badge = detailBadge(row.action);
-          return (
-            <IndexTable.Row id={row.id} key={row.id} position={index}>
-              <IndexTable.Cell>
-                <Badge tone={badge.tone}>{badge.label}</Badge>
-              </IndexTable.Cell>
-              <IndexTable.Cell>
-                <Text as="span" variant="bodyMd">
-                  {row.label}
-                </Text>
-              </IndexTable.Cell>
-              <IndexTable.Cell>
-                <Text as="span" variant="bodySm" tone="subdued">
-                  {row.shopifyId ?? '—'}
-                </Text>
-              </IndexTable.Cell>
-            </IndexTable.Row>
-          );
-        })}
-      </IndexTable>
-      {notice && (
-        <Text as="p" variant="bodySm" tone="subdued">
-          {notice}
-        </Text>
-      )}
+    <BlockStack gap="200">
+      <Text as="p" variant="bodyMd">
+        {summary}
+      </Text>
+      <Text as="p" variant="bodySm" tone="subdued">
+        L&rsquo;elenco dei singoli clienti resta nel tuo database: qui trovi i totali.
+      </Text>
     </BlockStack>
   );
 }

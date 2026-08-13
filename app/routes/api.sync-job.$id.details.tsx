@@ -27,12 +27,15 @@ export interface SyncJobDetailsResponse {
     /** true se rows contiene meno righe di added+removed. */
     truncated: boolean;
   };
+  /**
+   * Dei clienti si restituiscono solo i totali: nessun elenco. Il dettaglio per
+   * singolo cliente non esiste, perche' non viene registrato (vedi `count` in
+   * app/lib/sync/job-events.ts).
+   */
   customers: {
-    rows: SyncDetailRow[];
     added: number;
     updated: number;
     suspended: number;
-    truncated: boolean;
   };
   /** false = il piano non include la sync dei clienti: la tab Clienti va nascosta. */
   customersEnabled: boolean;
@@ -68,6 +71,10 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       // Gli eventi ordinati: prima added, poi removed/updated/suspended, e a parità
       // di azione per createdAt crescente (ordine stabile e leggibile).
       events: {
+        // Solo prodotti: dei clienti non esiste dettaglio da leggere, e le
+        // eventuali righe rimaste da prima della loro rimozione non vanno
+        // comunque mostrate.
+        where: { entity: 'product' },
         orderBy: [{ action: 'asc' }, { createdAt: 'asc' }],
       },
     },
@@ -96,23 +103,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       variantId: e.variantId ? e.variantId.toString() : null,
     }));
 
-  const customerEvents = job.events
-    .filter((e) => e.entity === 'customer')
-    .map((e) => ({
-      id: e.id,
-      action: e.action as 'added' | 'updated' | 'suspended',
-      label: e.label,
-      sublabel: e.sublabel,
-      shopifyId: e.shopifyId ? e.shopifyId.toString() : null,
-      variantId: e.variantId ? e.variantId.toString() : null,
-    }));
-
   // truncated = true se le righe mostrate sono meno del totale vero (dai contatori).
   const productsTruncated =
     productEvents.length < job.productsAdded + job.productsRemoved;
-  const customersTruncated =
-    customerEvents.length <
-    job.customersAdded + job.customersUpdated + job.customersSuspended;
 
   const response: SyncJobDetailsResponse = {
     products: {
@@ -122,11 +115,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       truncated: productsTruncated,
     },
     customers: {
-      rows: customerEvents,
       added: job.customersAdded,
       updated: job.customersUpdated,
       suspended: job.customersSuspended,
-      truncated: customersTruncated,
     },
     customersEnabled,
   };

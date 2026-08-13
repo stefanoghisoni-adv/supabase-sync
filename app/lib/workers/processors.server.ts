@@ -13,7 +13,6 @@ import { filterEligibleProductRows } from '../eligibility/product-eligibility';
 import { sortByCreatedAtAsc } from '../sync/product-order';
 import {
   createEventBuffer,
-  formatCustomerLabel,
   formatProductLabel,
   type SyncEventBuffer,
 } from '../sync/job-events';
@@ -267,12 +266,9 @@ async function syncCustomers(
     // Dopo l'upsert: un upsert fallito lancia, e non ha aggiunto nessuno.
     if (alreadyPresent) {
       for (const customer of optedIn) {
-        events.add({
-          entity: 'customer',
-          action: alreadyPresent.has(customer.id) ? 'updated' : 'added',
-          shopifyId: customer.id,
-          label: formatCustomerLabel(customer),
-        });
+        // Solo il conteggio: dei clienti non si tiene nessuna riga di dettaglio
+        // sul database dell'applicazione (vedi `count` in job-events.ts).
+        events.count('customer', alreadyPresent.has(customer.id) ? 'updated' : 'added');
       }
     }
 
@@ -306,12 +302,7 @@ async function syncCustomers(
 
         for (const customer of revoked) {
           if (!suspendedIds.has(customer.id)) continue;
-          events.add({
-            entity: 'customer',
-            action: 'suspended',
-            shopifyId: customer.id,
-            label: formatCustomerLabel(customer),
-          });
+          events.count('customer', 'suspended');
         }
       }
     }

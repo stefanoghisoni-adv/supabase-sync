@@ -335,13 +335,14 @@ model ProductEligibilitySnapshot {
 model SyncJobEvent {
   id        String   @id @default(uuid())
   syncJobId String   @map("sync_job_id")
-  // 'product' | 'customer'
+  // 'product'. Il valore 'customer' esiste solo su righe storiche: dei clienti
+  // si tiene il solo conteggio, su SyncJob (vedi `count` in app/lib/sync/job-events.ts).
   entity    String
-  // prodotti: 'added' | 'removed' — clienti: 'added' | 'updated' | 'suspended'
+  // 'added' | 'removed'
   action    String
   shopifyId BigInt?  @map("shopify_id")
   variantId BigInt?  @map("variant_id")
-  // Riga principale: titolo del prodotto, oppure nome e cognome del cliente.
+  // Riga principale: titolo del prodotto.
   label     String
   // Riga secondaria: titolo della variante, oppure null.
   sublabel  String?

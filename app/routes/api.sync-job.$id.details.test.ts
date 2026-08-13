@@ -79,11 +79,9 @@ describe('/api/sync-job/:id/details', () => {
         truncated: false,
       },
       customers: {
-        rows: [],
         added: 0,
         updated: 0,
         suspended: 0,
-        truncated: false,
       },
       customersEnabled: true,
     });
@@ -171,8 +169,9 @@ describe('/api/sync-job/:id/details', () => {
     expect(data.products.removed).toBe(5);
   });
 
-  it('calcola truncated correttamente per i clienti', async () => {
-    // 1 evento ma contatori che dicono 3 added + 2 updated + 1 suspended = 6 totali
+  it('dei clienti restituisce i totali e nessun elenco', async () => {
+    // Il dettaglio per singolo cliente non viene registrato: qui si verifica che
+    // nemmeno una riga rimasta da prima possa uscire dall'endpoint.
     findUniqueSyncJob.mockResolvedValue({
       id: 'job-1',
       shopId: 'shop-1',
@@ -198,11 +197,7 @@ describe('/api/sync-job/:id/details', () => {
     const res = await call('job-1');
     const data = await res.json();
 
-    expect(data.customers.truncated).toBe(true);
-    expect(data.customers.rows.length).toBe(1);
-    expect(data.customers.added).toBe(3);
-    expect(data.customers.updated).toBe(2);
-    expect(data.customers.suspended).toBe(1);
+    expect(data.customers).toEqual({ added: 3, updated: 2, suspended: 1 });
   });
 
   it('customersEnabled false quando il piano non ha la sync clienti', async () => {
@@ -224,7 +219,7 @@ describe('/api/sync-job/:id/details', () => {
     expect(data.customersEnabled).toBe(false);
   });
 
-  it('separa correttamente eventi prodotto e clienti', async () => {
+  it('tiene solo gli eventi prodotto, mai quelli sui clienti', async () => {
     findUniqueSyncJob.mockResolvedValue({
       id: 'job-1',
       shopId: 'shop-1',
@@ -294,9 +289,8 @@ describe('/api/sync-job/:id/details', () => {
     expect(data.products.rows).toHaveLength(3);
     expect(data.products.rows.map((r) => r.id)).toEqual(['evt-p1', 'evt-p2', 'evt-p3']);
 
-    // Clienti: 2 eventi (1 added, 1 updated)
-    expect(data.customers.rows).toHaveLength(2);
-    expect(data.customers.rows.map((r) => r.id)).toEqual(['evt-c1', 'evt-c2']);
+    // Clienti: solo i contatori, nessuna riga
+    expect(data.customers).toEqual({ added: 1, updated: 1, suspended: 0 });
   });
 
   it('gestisce shopifyId e variantId null', async () => {

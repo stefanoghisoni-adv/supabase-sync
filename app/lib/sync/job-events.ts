@@ -16,9 +16,13 @@ export type SyncEventAction = 'added' | 'removed' | 'updated' | 'suspended';
 /**
  * Quello che il processor sa al momento in cui l'evento accade. Gli id arrivano
  * come number (e' cosi' che Shopify li restituisce) e vengono normalizzati qui.
+ *
+ * L'entita' e' `'product'` e basta, e non e' una dimenticanza: dei clienti si
+ * tiene solo il conteggio (vedi `count`), quindi una riga di dettaglio per un
+ * cliente non deve poter essere nemmeno scritta. Qui il compilatore la ferma.
  */
 export interface SyncEventDraft {
-  entity: SyncEventEntity;
+  entity: 'product';
   action: SyncEventAction;
   shopifyId?: number | bigint | null;
   variantId?: number | bigint | null;
@@ -61,6 +65,21 @@ export const MAX_JOBS_WITH_DETAIL = 20;
 export interface SyncEventBuffer {
   /** Registra un evento: conta sempre, salva finche' c'e' spazio. */
   add(draft: SyncEventDraft): void;
+  /**
+   * Registra soltanto il conteggio, senza nessuna riga di dettaglio.
+   *
+   * E' la via dei clienti. Il registro delle sincronizzazioni vive sul database
+   * dell'applicazione, e li' i dati dei clienti del merchant non devono
+   * arrivare: ne' il nome — per Shopify dato protetto di livello 2 — ne'
+   * l'identificativo Shopify, che a una persona resta comunque riferibile.
+   * L'informativa dichiara che quei dati "vivono nel progetto database del
+   * merchant" e il DPA elenca fra i dati trattati da noi solo configurazione,
+   * credenziali e registri: una riga per cliente contraddirebbe entrambi.
+   *
+   * Il merchant perde un dettaglio — sa quanti clienti sono cambiati, non chi —
+   * e lo ritrova nel proprio database, che e' dove abbiamo promesso che stesse.
+   */
+  count(entity: SyncEventEntity, action: SyncEventAction): void;
   /** Assorbe un altro raccoglitore (contatori sommati, righe accodate). */
   absorb(other: SyncEventBuffer): void;
   /** Le righe tenute finora, senza svuotare. */
@@ -112,15 +131,15 @@ export function createEventBuffer(
   // deve continuare a valere sull'intera corsa, non ripartire da zero.
   const kept: Record<SyncEventEntity, number> = { product: 0, customer: 0 };
 
-  function count(row: SyncEventRow): void {
-    if (row.entity === 'product') {
-      if (row.action === 'added') counters.productsAdded++;
-      else if (row.action === 'removed') counters.productsRemoved++;
+  function tally(entity: SyncEventEntity, action: SyncEventAction): void {
+    if (entity === 'product') {
+      if (action === 'added') counters.productsAdded++;
+      else if (action === 'removed') counters.productsRemoved++;
       return;
     }
-    if (row.action === 'added') counters.customersAdded++;
-    else if (row.action === 'updated') counters.customersUpdated++;
-    else if (row.action === 'suspended') counters.customersSuspended++;
+    if (action === 'added') counters.customersAdded++;
+    else if (action === 'updated') counters.customersUpdated++;
+    else if (action === 'suspended') counters.customersSuspended++;
   }
 
   function keep(row: SyncEventRow): void {
@@ -132,8 +151,11 @@ export function createEventBuffer(
   return {
     add(draft) {
       const row = toRow(draft);
-      count(row);
+      tally(row.entity, row.action);
       keep(row);
+    },
+    count(entity, action) {
+      tally(entity, action);
     },
     absorb(other) {
       const incoming = other.counters();
@@ -155,24 +177,6 @@ export function createEventBuffer(
       return { ...counters };
     },
   };
-}
-
-/**
- * Etichetta di un cliente: nome e cognome, mai l'indirizzo email. Il dettaglio
- * vive nel database dell'app, non in quello del merchant: duplicarci gli indirizzi
- * dei suoi clienti sarebbe una copia che nessuno ci ha chiesto di tenere.
- */
-export function formatCustomerLabel(customer: {
-  id: number;
-  first_name?: string | null;
-  last_name?: string | null;
-}): string {
-  const name = [customer.first_name, customer.last_name]
-    .map((part) => part?.trim())
-    .filter((part): part is string => Boolean(part))
-    .join(' ');
-
-  return name || `Cliente ${customer.id}`;
 }
 
 /**

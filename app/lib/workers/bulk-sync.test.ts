@@ -924,7 +924,7 @@ describe('Initial bulk sync processor', () => {
     expect(prisma.syncJobEvent.deleteMany).toHaveBeenCalled();
   });
 
-  it('registra il dettaglio dei clienti: aggiunti, aggiornati e sospesi davvero', async () => {
+  it('conta i clienti aggiunti, aggiornati e sospesi senza scriverne il dettaglio', async () => {
     const mockShop = {
       id: 'shop-1',
       shopDomain: 'test-shop.myshopify.com',
@@ -980,14 +980,13 @@ describe('Initial bulk sync processor', () => {
 
     await processInitialBulkSync('shop-1', { updateProgress: vi.fn() } as any);
 
-    const written = (vi.mocked(prisma.syncJobEvent.createMany).mock.calls[0][0] as any).data as any[];
-    expect(written).toEqual([
-      { syncJobId: 'job-1', entity: 'customer', action: 'updated', shopifyId: 1n, variantId: null, label: 'Mario Rossi', sublabel: null },
-      { syncJobId: 'job-1', entity: 'customer', action: 'added', shopifyId: 3n, variantId: null, label: 'Anna', sublabel: null },
-      // Il 4 ha revocato ma non era mai stato sincronizzato: non c'è nulla da sospendere.
-      { syncJobId: 'job-1', entity: 'customer', action: 'suspended', shopifyId: 2n, variantId: null, label: 'Cliente 2', sublabel: null },
-    ]);
+    // Nessuna riga di dettaglio: dei clienti restano solo i contatori. Sul
+    // database dell'applicazione non deve finire chi sono, ne' per nome ne' per
+    // identificativo Shopify.
+    expect(prisma.syncJobEvent.createMany).not.toHaveBeenCalled();
 
+    // I contatori invece sono quelli veri: il 4 ha revocato ma non era mai stato
+    // sincronizzato, quindi non c'era nulla da sospendere.
     const completedCall = vi.mocked(prisma.syncJob.update).mock.calls.find(
       (call: any) => call[0].data?.status === 'completed',
     );

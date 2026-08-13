@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
   createEventBuffer,
-  formatCustomerLabel,
   formatProductLabel,
   MAX_EVENTS_PER_ENTITY,
 } from './job-events';
@@ -17,12 +16,6 @@ describe('createEventBuffer', () => {
       label: 'Maglietta',
       sublabel: 'Rossa / M',
     });
-    buffer.add({
-      entity: 'customer',
-      action: 'added',
-      shopifyId: 7,
-      label: 'Mario Rossi',
-    });
 
     expect(buffer.pending()).toEqual([
       {
@@ -33,15 +26,21 @@ describe('createEventBuffer', () => {
         label: 'Maglietta',
         sublabel: 'Rossa / M',
       },
-      {
-        entity: 'customer',
-        action: 'added',
-        shopifyId: 7n,
-        variantId: null,
-        label: 'Mario Rossi',
-        sublabel: null,
-      },
     ]);
+  });
+
+  it('dei clienti tiene il conto e nient\'altro', () => {
+    // La riga di dettaglio di un cliente non deve esistere sul database
+    // dell'applicazione: ne' il nome, ne' l'identificativo Shopify. Il conteggio
+    // basta a dire al merchant quanti clienti sono cambiati.
+    const buffer = createEventBuffer();
+    buffer.count('customer', 'added');
+    buffer.count('customer', 'added');
+    buffer.count('customer', 'suspended');
+
+    expect(buffer.pending()).toEqual([]);
+    expect(buffer.counters().customersAdded).toBe(2);
+    expect(buffer.counters().customersSuspended).toBe(1);
   });
 
   it('conta ogni categoria nella sua casella', () => {
@@ -49,9 +48,9 @@ describe('createEventBuffer', () => {
     buffer.add({ entity: 'product', action: 'added', label: 'A' });
     buffer.add({ entity: 'product', action: 'removed', label: 'B' });
     buffer.add({ entity: 'product', action: 'removed', label: 'C' });
-    buffer.add({ entity: 'customer', action: 'added', label: 'D' });
-    buffer.add({ entity: 'customer', action: 'updated', label: 'E' });
-    buffer.add({ entity: 'customer', action: 'suspended', label: 'F' });
+    buffer.count('customer', 'added');
+    buffer.count('customer', 'updated');
+    buffer.count('customer', 'suspended');
 
     expect(buffer.counters()).toEqual({
       productsAdded: 1,
@@ -75,27 +74,29 @@ describe('createEventBuffer', () => {
     expect(buffer.counters().productsAdded).toBe(10);
   });
 
-  it('il tetto vale per categoria, non sul totale', () => {
+  it('il tetto non tocca i conteggi dei clienti', () => {
+    // I clienti non occupano righe: il tetto vale sui prodotti, il loro
+    // conteggio corre a parte e resta intero.
     const buffer = createEventBuffer(2);
     buffer.add({ entity: 'product', action: 'added', label: 'P1' });
     buffer.add({ entity: 'product', action: 'added', label: 'P2' });
     buffer.add({ entity: 'product', action: 'added', label: 'P3' });
-    buffer.add({ entity: 'customer', action: 'added', label: 'C1' });
-    buffer.add({ entity: 'customer', action: 'added', label: 'C2' });
+    buffer.count('customer', 'added');
+    buffer.count('customer', 'added');
 
-    expect(buffer.pending().map((row) => row.label)).toEqual(['P1', 'P2', 'C1', 'C2']);
+    expect(buffer.pending().map((row) => row.label)).toEqual(['P1', 'P2']);
     expect(buffer.counters().productsAdded).toBe(3);
     expect(buffer.counters().customersAdded).toBe(2);
   });
 
-  it('il tetto di default è 500 righe per categoria', () => {
+  it('il tetto di default è 500 righe', () => {
     const buffer = createEventBuffer();
     for (let i = 0; i < MAX_EVENTS_PER_ENTITY + 25; i++) {
-      buffer.add({ entity: 'customer', action: 'added', label: `C${i}` });
+      buffer.add({ entity: 'product', action: 'added', label: `P${i}` });
     }
 
     expect(buffer.pending()).toHaveLength(MAX_EVENTS_PER_ENTITY);
-    expect(buffer.counters().customersAdded).toBe(MAX_EVENTS_PER_ENTITY + 25);
+    expect(buffer.counters().productsAdded).toBe(MAX_EVENTS_PER_ENTITY + 25);
   });
 
   it('drain svuota le righe ma non azzera contatori né tetto', () => {
@@ -118,16 +119,16 @@ describe('createEventBuffer', () => {
     products.add({ entity: 'product', action: 'added', label: 'P1' });
 
     const customers = createEventBuffer(1);
-    customers.add({ entity: 'customer', action: 'added', label: 'C1' });
-    customers.add({ entity: 'customer', action: 'added', label: 'C2' });
+    customers.count('customer', 'added');
+    customers.count('customer', 'added');
 
     products.absorb(customers);
 
-    expect(products.pending().map((row) => row.label)).toEqual(['P1', 'C1']);
+    expect(products.pending().map((row) => row.label)).toEqual(['P1']);
     expect(products.counters()).toEqual({
       productsAdded: 1,
       productsRemoved: 0,
-      // Due aggiunte contate, una sola riga conservata dall'altro raccoglitore.
+      // Due aggiunte contate, nessuna riga: i clienti non ne hanno.
       customersAdded: 2,
       customersUpdated: 0,
       customersSuspended: 0,
@@ -139,24 +140,6 @@ describe('createEventBuffer', () => {
     buffer.add({ entity: 'product', action: 'added', shopifyId: 1.5, label: 'P' });
 
     expect(buffer.pending()[0].shopifyId).toBeNull();
-  });
-});
-
-describe('formatCustomerLabel', () => {
-  it('usa nome e cognome, mai l\'email', () => {
-    expect(
-      formatCustomerLabel({ id: 1, first_name: 'Mario', last_name: 'Rossi' }),
-    ).toBe('Mario Rossi');
-  });
-
-  it('si accontenta di uno dei due', () => {
-    expect(formatCustomerLabel({ id: 1, first_name: 'Mario', last_name: null })).toBe('Mario');
-    expect(formatCustomerLabel({ id: 1, first_name: '  ', last_name: 'Rossi' })).toBe('Rossi');
-  });
-
-  it('senza nome né cognome resta identificabile dall\'id', () => {
-    expect(formatCustomerLabel({ id: 99, first_name: null, last_name: '' })).toBe('Cliente 99');
-    expect(formatCustomerLabel({ id: 99 })).toBe('Cliente 99');
   });
 });
 
