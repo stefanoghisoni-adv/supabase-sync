@@ -67,6 +67,7 @@ export default function Logs() {
 
   return (
     <Page
+      fullWidth
       title="Logs"
       backAction={{ url: '/' }}
       secondaryActions={[

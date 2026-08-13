@@ -214,7 +214,7 @@ export default function Plan() {
   // Nessuna card e nessun prezzo, cosi' non si suggerisce un upgrade che non serve.
   if (blocked) {
     return (
-      <Page title="Piano" backAction={{ url: '/', content: 'Dashboard' }}>
+      <Page fullWidth title="Piano" backAction={{ url: '/', content: 'Dashboard' }}>
         <Banner tone="critical" title="Non hai accesso a questa sezione">
           <Text as="p">
             Il tuo piano è senza limiti e non prevede rinnovi: non c'è nessun
@@ -228,6 +228,7 @@ export default function Plan() {
 
   return (
     <Page
+      fullWidth
       title="Piano"
       backAction={{ url: '/', content: 'Dashboard' }}
       secondaryActions={[

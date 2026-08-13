@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFetcher, useRevalidator } from '@remix-run/react';
 import { BlockStack, Button, Banner, InlineStack, Spinner, Text } from '@shopify/polaris';
 
@@ -39,6 +39,11 @@ export function SupabaseAccountConnect({
   // True se l'ultimo tentativo e' fallito (finestra chiusa senza confermare
   // l'integrazione, o errore): guida il badge "Fallito".
   const [connectFailed, setConnectFailed] = useState(false);
+  // L'autorizzazione c'e', ma la pagina non lo sa ancora: il dato del passo
+  // arriva dal server, e fra la conferma e il ricaricamento passa un istante.
+  // Senza questo, in quell'istante il passo tornava "Non collegato" — un
+  // lampo che dice il contrario di quel che e' appena successo.
+  const [confirmed, setConfirmed] = useState(false);
 
   // Ricezione esito dalla finestra di accesso (origine validata).
   useEffect(() => {
@@ -52,6 +57,9 @@ export function SupabaseAccountConnect({
       if (data.ok) {
         setOauthError(null);
         setConnectFailed(false);
+        // Il passo resta "In corso" finche' il server non conferma: e' vero, e
+        // non fa lampeggiare "Non collegato" a collegamento appena riuscito.
+        setConfirmed(true);
         // Lo stato del passo lo dice il server: ricaricandolo il primo passo
         // risulta concluso e il secondo si sblocca da se'.
         revalidator.revalidate();
@@ -146,6 +154,7 @@ export function SupabaseAccountConnect({
       setPopupRef(null);
       setOauthError(null);
       setConnectFailed(false);
+      setConfirmed(true);
       popupRef?.close();
       // Lo stato del passo lo dice il server: ricaricandolo il primo passo
       // risulta concluso e il secondo si sblocca da se'.
@@ -165,9 +174,23 @@ export function SupabaseAccountConnect({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusFetcher.state, statusFetcher.data]);
 
+  // Rete di sicurezza: se il ricaricamento finisce e l'accesso ancora non
+  // risulta, il passo non deve restare su "In corso" per sempre. Succede solo
+  // se il server dice il contrario di quanto appena confermato, ma un badge
+  // bloccato sarebbe peggio del lampo che si e' tolto.
+  const wasRevalidating = useRef(false);
+  useEffect(() => {
+    const finishedReload = wasRevalidating.current && revalidator.state === 'idle';
+    wasRevalidating.current = revalidator.state !== 'idle';
+    if (confirmed && finishedReload && !connected) {
+      setConfirmed(false);
+    }
+  }, [revalidator.state, confirmed, connected]);
+
   const startConnect = useCallback(() => {
     setOauthError(null);
     setConnectFailed(false);
+    setConfirmed(false);
     // Finestra con un nome: se e' gia' aperta la si riusa invece di aprirne una
     // seconda. E' quello che serve a "Riapri la pagina di autorizzazione", che
     // riporta li' chi nel frattempo e' finito a creare account o organizzazione.
@@ -199,9 +222,13 @@ export function SupabaseAccountConnect({
   // mostrerebbe di nuovo la frase breve.
   const emailPending = !accountFetcher.data;
 
+  // `confirmed` vale quanto `connecting`: fra la conferma e il ricaricamento il
+  // collegamento e' in corso a tutti gli effetti, e va detto cosi'.
+  const pending = connecting || confirmed;
+
   const status: SupabaseConnectStatus = connectFailed
     ? 'failed'
-    : connecting
+    : pending
       ? 'in_progress'
       : 'idle';
   useEffect(() => {
@@ -278,8 +305,8 @@ export function SupabaseAccountConnect({
         <Button
           variant="primary"
           onClick={startConnect}
-          loading={connecting}
-          disabled={disabled || connecting}
+          loading={pending}
+          disabled={disabled || pending}
         >
           {connectFailed ? 'Ho creato il database' : 'Collega Supabase'}
         </Button>

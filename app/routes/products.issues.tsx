@@ -460,6 +460,7 @@ export default function ProblemProducts() {
 
   return (
     <Page
+      fullWidth
       title="Prodotti non idonei"
       backAction={{ url: '/' }}
       primaryAction={{

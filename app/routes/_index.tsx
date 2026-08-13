@@ -755,6 +755,7 @@ export default function Dashboard() {
 
   return (
     <Page
+      fullWidth
       title="Dashboard"
       secondaryActions={[
         {
