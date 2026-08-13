@@ -424,20 +424,27 @@ export default function Dashboard() {
     useLoaderData<typeof loader>();
   const blocked = authorization !== 'ENABLED';
 
-  // Altre fonti di eventi gia' attive sul negozio. Si chiede una volta sola, a
-  // pagina aperta: e' un controllo di configurazione, non un dato che cambia
-  // mentre il merchant guarda.
+  // Altre fonti di eventi gia' attive sul negozio. Si chiede una volta sola: e'
+  // un controllo di configurazione, non un dato che cambia mentre il merchant
+  // guarda.
+  //
+  // E si chiede solo a database collegato. Prima di quel momento il controllo
+  // e' il terzo passo, e un passo ancora bloccato non deve aver gia' fatto il
+  // proprio lavoro: si aprirebbe con l'esito gia' pronto, senza che nessuno
+  // abbia visto controllare niente. In piu' sono due chiamate a Shopify —
+  // canali e tema — che chi si ferma al primo passo non ha motivo di pagare.
   const conflictsFetcher = useFetcher<{
     findings: TrackingFinding[];
     adminBase?: string;
     themeId?: number | null;
   }>();
   useEffect(() => {
+    if (!supabaseConnected) return;
     if (conflictsFetcher.state === 'idle' && !conflictsFetcher.data) {
       conflictsFetcher.load('/api/tracking/conflicts');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [supabaseConnected]);
 
   // Pulsante-link Impostazioni: mentre Remix carica la rotta di destinazione
   // mostriamo lo spinner e disabilitiamo il pulsante, così un clic su un DB
@@ -674,7 +681,7 @@ export default function Dashboard() {
   // chiude quando il controllo e' finito, non quando il merchant ha fatto
   // qualcosa. E' un'informazione, non un compito — e per un canale collegato al
   // solo catalogo non c'e' niente da fare.
-  const trackingChecked = conflictsFetcher.data != null;
+  const trackingChecked = supabaseConnected && conflictsFetcher.data != null;
 
   // Il piano e' deciso quando c'e' una scelta alle spalle e la sincronizzazione
   // di questa connessione e' arrivata in fondo. Le due cose contano a parte:
@@ -867,7 +874,6 @@ export default function Dashboard() {
           findings={conflictsFetcher.data?.findings ?? []}
           adminBase={conflictsFetcher.data?.adminBase}
           themeId={conflictsFetcher.data?.themeId}
-          onDismissed={() => conflictsFetcher.load('/api/tracking/conflicts')}
         />
       ),
     },
@@ -1035,9 +1041,6 @@ export default function Dashboard() {
             findings={conflictsFetcher.data?.findings ?? []}
             adminBase={conflictsFetcher.data?.adminBase}
             themeId={conflictsFetcher.data?.themeId}
-            // Rileggere subito: la fonte messa a tacere deve sparire dall'elenco
-            // senza aspettare la prossima apertura.
-            onDismissed={() => conflictsFetcher.load('/api/tracking/conflicts')}
           />
         )}
 

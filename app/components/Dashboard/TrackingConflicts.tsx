@@ -28,8 +28,6 @@ export interface TrackingConflictsProps {
   adminBase?: string;
   /** Id del tema pubblicato: senza, il collegamento all'editor non si costruisce. */
   themeId?: number | null;
-  /** Ricarica l'elenco dopo che una fonte e' stata messa a tacere. */
-  onDismissed?: () => void;
   /**
    * Come si presenta. `banner` e' l'avviso giallo della dashboard a
    * configurazione conclusa; `plain` e' lo stesso contenuto senza cornice, per
@@ -65,13 +63,18 @@ export function TrackingConflicts({
   findings,
   adminBase,
   themeId,
-  onDismissed,
   variant = 'banner',
 }: TrackingConflictsProps) {
   // Stato per riga, non uno solo per la tabella: le righe sono indipendenti, e
   // dichiarare Meta innocuo mentre si dichiara anche Google deve poter avvenire
   // insieme, con ciascuna riga che mostra la propria attesa.
   const [busy, setBusy] = useState<Record<string, 'dismiss' | 'leave'>>({});
+  // Righe che il merchant ha appena dichiarato innocue. Restano dov'erano, con
+  // una riga di testo al posto dei pulsanti: farle sparire sotto il dito
+  // toglieva la conferma di quel che era appena successo, e lasciava il dubbio
+  // di aver premuto l'altro pulsante. Alla riapertura non ci saranno piu' —
+  // quella dichiarazione e' registrata sul server e vale da li' in poi.
+  const [declared, setDeclared] = useState<Record<string, true>>({});
 
   const rowKey = (finding: TrackingFinding) => `${finding.kind}-${finding.name}`;
 
@@ -89,11 +92,14 @@ export function TrackingConflicts({
       body.set('name', finding.name);
 
       try {
-        await fetch('/api/tracking/dismiss', { method: 'POST', body });
-        onDismissed?.();
+        const response = await fetch('/api/tracking/dismiss', { method: 'POST', body });
+        // Solo se il server l'ha registrata: una riga che si dichiara a posto
+        // mentre la richiesta e' fallita tornerebbe alla riapertura, e nel
+        // frattempo avrebbe detto il contrario di cio' che risulta.
+        if (response.ok) setDeclared((current) => ({ ...current, [key]: true }));
       } finally {
-        // La riga sparisce dall'elenco appena la rilettura arriva; se invece la
-        // richiesta e' fallita, sbloccarla e' l'unico modo per riprovare.
+        // Sbloccare comunque: se la richiesta e' fallita, e' l'unico modo per
+        // riprovare.
         setBusy((current) => {
           const next = { ...current };
           delete next[key];
@@ -101,7 +107,7 @@ export function TrackingConflicts({
         });
       }
     },
-    [onDismissed],
+    [],
   );
 
   // Dove porta il pulsante di destra. Non esegue niente: accompagna il merchant
@@ -184,6 +190,13 @@ export function TrackingConflicts({
                 </InlineStack>
                 </Box>
 
+                {declared[key] ? (
+                  <Text as="span" tone="subdued">
+                    {finding.kind === 'channel'
+                      ? "Quest'app non esegue attività di tracciamento"
+                      : 'Questo codice non esegue attività di tracciamento'}
+                  </Text>
+                ) : (
                 <InlineStack gap="200">
                   <Button
                     onClick={() => dismiss(finding)}
@@ -209,6 +222,7 @@ export function TrackingConflicts({
                     {finding.kind === 'channel' ? 'Disinstalla' : 'Rimuovi snippet'}
                   </Button>
                 </InlineStack>
+                )}
               </InlineStack>
             );
           })}
