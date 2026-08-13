@@ -1,38 +1,116 @@
 import { describe, it, expect } from 'vitest';
-import { resolveStepStates } from './stepper-state';
+import { allStepsComplete, resolveStepStates, type StepInput } from './stepper-state';
+
+function input(overrides: Partial<StepInput> = {}): StepInput {
+  return {
+    accountConnected: false,
+    databaseConnected: false,
+    trackingChecked: false,
+    planConfirmed: false,
+    serverSideAnswered: false,
+    ...overrides,
+  };
+}
 
 describe('resolveStepStates', () => {
   it('niente di fatto: si parte dall accesso, il resto e bloccato', () => {
-    expect(resolveStepStates(false, false)).toEqual({
+    expect(resolveStepStates(input())).toEqual({
       connectAccount: 'active',
       connectDatabase: 'locked',
-      sync: 'locked',
+      trackingCheck: 'locked',
+      plan: 'locked',
+      serverSide: 'locked',
     });
   });
 
-  it('account collegato: tocca al database, la sync resta bloccata', () => {
-    expect(resolveStepStates(true, false)).toEqual({
+  it('account collegato: tocca al database, il resto resta bloccato', () => {
+    expect(resolveStepStates(input({ accountConnected: true }))).toEqual({
       connectAccount: 'complete',
       connectDatabase: 'active',
-      sync: 'locked',
+      trackingCheck: 'locked',
+      plan: 'locked',
+      serverSide: 'locked',
     });
   });
 
-  it('database collegato: primi due conclusi, si puo sincronizzare', () => {
-    expect(resolveStepStates(true, true)).toEqual({
+  it('database collegato: si controlla cosa gia trasmette dati', () => {
+    expect(
+      resolveStepStates(input({ accountConnected: true, databaseConnected: true })),
+    ).toEqual({
       connectAccount: 'complete',
       connectDatabase: 'complete',
-      sync: 'active',
+      trackingCheck: 'active',
+      plan: 'locked',
+      serverSide: 'locked',
+    });
+  });
+
+  it('controllo fatto: tocca al piano', () => {
+    expect(
+      resolveStepStates(
+        input({ accountConnected: true, databaseConnected: true, trackingChecked: true }),
+      ),
+    ).toEqual({
+      connectAccount: 'complete',
+      connectDatabase: 'complete',
+      trackingCheck: 'complete',
+      plan: 'active',
+      serverSide: 'locked',
+    });
+  });
+
+  it('piano confermato: resta la domanda sull infrastruttura', () => {
+    expect(
+      resolveStepStates(
+        input({
+          accountConnected: true,
+          databaseConnected: true,
+          trackingChecked: true,
+          planConfirmed: true,
+        }),
+      ),
+    ).toEqual({
+      connectAccount: 'complete',
+      connectDatabase: 'complete',
+      trackingCheck: 'complete',
+      plan: 'complete',
+      serverSide: 'active',
     });
   });
 
   it('database collegato senza account: vale il passo piu avanti', () => {
     // Non dovrebbe capitare, ma se capita e' meglio non far sembrare il flusso
     // tornato indietro di un passo.
-    expect(resolveStepStates(false, true)).toEqual({
-      connectAccount: 'complete',
-      connectDatabase: 'complete',
-      sync: 'active',
-    });
+    const steps = resolveStepStates(input({ databaseConnected: true }));
+    expect(steps.connectAccount).toBe('complete');
+    expect(steps.connectDatabase).toBe('complete');
+  });
+
+  it('un passo saltato non ne sblocca uno successivo', () => {
+    // Il piano risulta confermato ma il controllo no: puo' succedere a un
+    // negozio che aveva gia' un piano attivo. Il passo che manca resta quello
+    // aperto, e quelli dopo non si aprono al posto suo.
+    const steps = resolveStepStates(
+      input({ accountConnected: true, databaseConnected: true, planConfirmed: true }),
+    );
+    expect(steps.trackingCheck).toBe('active');
+    expect(steps.plan).toBe('complete');
+    expect(steps.serverSide).toBe('locked');
+  });
+});
+
+describe('allStepsComplete', () => {
+  it('vero solo quando non resta niente da fare', () => {
+    const done = resolveStepStates(
+      input({
+        accountConnected: true,
+        databaseConnected: true,
+        trackingChecked: true,
+        planConfirmed: true,
+        serverSideAnswered: true,
+      }),
+    );
+    expect(allStepsComplete(done)).toBe(true);
+    expect(allStepsComplete(resolveStepStates(input()))).toBe(false);
   });
 });

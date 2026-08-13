@@ -30,6 +30,13 @@ export interface TrackingConflictsProps {
   themeId?: number | null;
   /** Ricarica l'elenco dopo che una fonte e' stata messa a tacere. */
   onDismissed?: () => void;
+  /**
+   * Come si presenta. `banner` e' l'avviso giallo della dashboard a
+   * configurazione conclusa; `plain` e' lo stesso contenuto senza cornice, per
+   * quando vive gia' dentro il riquadro di un passo — un avviso dentro una card
+   * sarebbe una cornice dentro l'altra.
+   */
+  variant?: 'banner' | 'plain';
 }
 
 /**
@@ -59,6 +66,7 @@ export function TrackingConflicts({
   adminBase,
   themeId,
   onDismissed,
+  variant = 'banner',
 }: TrackingConflictsProps) {
   // Stato per riga, non uno solo per la tabella: le righe sono indipendenti, e
   // dichiarare Meta innocuo mentre si dichiara anche Google deve poter avvenire
@@ -118,8 +126,7 @@ export function TrackingConflicts({
   // faceva comparire "Si e' verificato un errore" al posto della dashboard.
   if (findings.length === 0) return null;
 
-  return (
-    <Banner tone="warning" title="Altre fonti di eventi su questo negozio">
+  const content = (
       <BlockStack gap="300">
         <Text as="p">
           Ogni conversione dovrebbe essere inviata una volta sola. Se una di queste
@@ -213,6 +220,13 @@ export function TrackingConflicts({
           controllarli insieme a questi.
         </Text>
       </BlockStack>
+  );
+
+  if (variant === 'plain') return content;
+
+  return (
+    <Banner tone="warning" title="Altre fonti di eventi su questo negozio">
+      {content}
     </Banner>
   );
 }

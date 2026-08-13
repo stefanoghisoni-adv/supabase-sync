@@ -25,7 +25,7 @@ import { ProductsCard } from '~/components/Dashboard/ProductsCard';
 import { CustomersCard } from '~/components/Dashboard/CustomersCard';
 import { Stepper, type StepperItem } from '~/components/Dashboard/Stepper';
 import { EligibilityChart } from '~/components/Dashboard/EligibilityChart';
-import { resolveStepStates } from '~/components/Dashboard/stepper-state';
+import { allStepsComplete, resolveStepStates } from '~/components/Dashboard/stepper-state';
 import { SupabaseAccountConnect } from '~/components/Dashboard/SupabaseAccountConnect';
 import { SupabaseProjectConnect } from '~/components/Dashboard/SupabaseProjectConnect';
 import { prisma } from '~/db.server';
@@ -62,6 +62,13 @@ import { buildPlanCards } from '~/components/Billing/plan-catalog';
 import { canAccessPlanTab } from '~/components/Billing/plan-access';
 import type { SubscribeResponse } from '~/routes/billing.subscribe';
 import { PlanStep } from '~/components/Dashboard/PlanStep';
+import { TrackingCheckStep } from '~/components/Dashboard/TrackingCheckStep';
+import { ServerSideStep } from '~/components/Dashboard/ServerSideStep';
+import {
+  defaultSelection,
+  isServerSideAnswer,
+  type ServerSideAnswer,
+} from '~/components/Dashboard/tracking-platforms';
 import {
   planChoiceOptions,
   planSummary,
@@ -109,7 +116,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     // il loader costa due round-trip in profondità invece di tre. Su Vercel il
     // DB è remoto, quindi ogni round-trip risparmiato è latenza in meno sul TTFB
     // — che è ciò che domina l'LCP di questa pagina.
-    const [plans, recentJobs, customersTableJob, oauthToken, syncRuns, partnerPrices] = await Promise.all([
+    const [plans, recentJobs, customersTableJob, oauthToken, syncRuns, partnerPrices, trackingSetup] = await Promise.all([
       // Tutti i piani, non solo quello in uso: quando i clienti restano fuori
       // serve anche sapere quale piano li rimetterebbe dentro, e leggerli tutti
       // costa come leggerne uno (la tabella e' di poche righe).
@@ -149,6 +156,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       shop.partnerName
         ? prisma.partnerPlanPrice.findMany({ where: { partnerName: shop.partnerName } })
         : Promise.resolve([]),
+      prisma.trackingSetup.findUnique({ where: { shopId: shop.id } }),
     ]);
 
     const plan = plans.find((p) => samePlanName(p.planName, shop.currentPlan)) ?? null;
@@ -261,6 +269,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
       // scrive l'attivazione, gratuita o a pagamento che sia. Al terzo passo
       // serve a sapere se chiedere una scelta o una conferma.
       planChosen: shop.planStartedAt !== null,
+      // Risposta gia' data sull'infrastruttura server side: chiude l'ultimo
+      // passo, e ricomparire dopo che si e' risposto sarebbe una domanda a cui
+      // il merchant ha gia' risposto.
+      serverSideAnswer: trackingSetup?.answer ?? null,
+      serverSidePlatforms: trackingSetup?.platforms ?? [],
       // I piani interni assegnati dall'owner non si comprano e non si cambiano:
       // per quei negozi il terzo passo non ha nessuna scelta da proporre.
       planPickable: canAccessPlanTab(shop.currentPlan),
@@ -407,7 +420,7 @@ interface ProductHistoryResponse {
 }
 
 export default function Dashboard() {
-  const { shop, plan, supabaseConnected, supabaseAccountConnected, customersEnabled, authorization, syncState, planChanged, currentMaxProducts, previousMaxProducts, previousCustomersEnabled, customersTableCreated, customersUpgradePlan, trackingAuthorization, schemaUpdatePending, planOptions, sync, recentRuns, planChosen, planPickable, planCards, discountIntervals } =
+  const { shop, plan, supabaseConnected, supabaseAccountConnected, customersEnabled, authorization, syncState, planChanged, currentMaxProducts, previousMaxProducts, previousCustomersEnabled, customersTableCreated, customersUpgradePlan, trackingAuthorization, schemaUpdatePending, planOptions, sync, recentRuns, planChosen, planPickable, planCards, discountIntervals, serverSideAnswer, serverSidePlatforms } =
     useLoaderData<typeof loader>();
   const blocked = authorization !== 'ENABLED';
 
@@ -565,6 +578,45 @@ export default function Dashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subscribeFetcher.data]);
 
+  // Quinto passo: le piattaforme spuntate e la risposta sull'infrastruttura.
+  // Le spunte partono da quelle che quasi ogni negozio usa, oppure da quelle
+  // gia' indicate se la risposta e' stata data e si sta solo rileggendo.
+  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>(() =>
+    serverSidePlatforms.length > 0 ? serverSidePlatforms : defaultSelection(),
+  );
+  const [answeringServerSide, setAnsweringServerSide] = useState<ServerSideAnswer | null>(
+    null,
+  );
+  const [serverSideError, setServerSideError] = useState<string | null>(null);
+
+  const answerServerSide = useCallback(
+    async (answer: ServerSideAnswer) => {
+      setServerSideError(null);
+      setAnsweringServerSide(answer);
+      try {
+        const response = await fetch('/api/tracking/setup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ answer, platforms: selectedPlatforms }),
+        });
+        const data = (await response.json()) as { ok?: boolean; error?: string };
+        if (!data.ok) {
+          setServerSideError(data.error ?? 'Non è stato possibile registrare la risposta.');
+          return;
+        }
+        // La risposta la dice il server: ricaricandola il passo risulta chiuso e
+        // la configurazione finita.
+        revalidator.revalidate();
+      } catch {
+        setServerSideError('Non è stato possibile registrare la risposta. Riprova.');
+      } finally {
+        setAnsweringServerSide(null);
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [selectedPlatforms],
+  );
+
   // Ritorno dall'approvazione dell'addebito: il piano ora c'e', e la
   // sincronizzazione parte da sola. E' la promessa del pulsante che ha avviato
   // l'acquisto — "Conferma e sincronizza" — mantenuta dall'altra parte del giro.
@@ -618,25 +670,33 @@ export default function Dashboard() {
       ? suggestPlanForProducts(planOptions, shop.currentPlan, totalProducts)
       : null;
 
-  const steps = resolveStepStates(supabaseAccountConnected, supabaseConnected);
+  // Il controllo delle altre fonti di eventi ha dato una risposta: il passo si
+  // chiude quando il controllo e' finito, non quando il merchant ha fatto
+  // qualcosa. E' un'informazione, non un compito — e per un canale collegato al
+  // solo catalogo non c'e' niente da fare.
+  const trackingChecked = conflictsFetcher.data != null;
 
-  // I tre passi hanno finito: account collegato, database collegato, piano
-  // deciso e prima sincronizzazione fatta. Da qui in poi lo stepper non ha piu'
-  // niente da chiedere, e continuare a mostrarlo significa tenere spazio
-  // occupato da tre caselle tutte spuntate. Sparisce, e quel che di utile
-  // conteneva — account, database, disconnessione — passa nella card
-  // Connessione.
-  //
-  // Il piano conta a parte dalla sincronizzazione: ora che questa parte da sola
-  // al collegamento del database, puo' concludersi prima che qualcuno abbia
-  // scelto un piano, e i passi sparirebbero portandosi via quella scelta. Chi
-  // ha un piano assegnato dall'owner non ha invece niente da scegliere, e per
-  // lui la questione e' chiusa in partenza.
-  const setupComplete =
-    supabaseAccountConnected &&
-    supabaseConnected &&
-    syncCompleted &&
-    (planChosen || !planPickable);
+  // Il piano e' deciso quando c'e' una scelta alle spalle e la sincronizzazione
+  // di questa connessione e' arrivata in fondo. Le due cose contano a parte:
+  // ora che la sincronizzazione parte da sola al collegamento del database, puo'
+  // concludersi prima che qualcuno abbia scelto un piano, e il passo sparirebbe
+  // portandosi via quella scelta. Chi ha un piano assegnato dall'owner non ha
+  // invece niente da scegliere, e per lui la questione e' chiusa in partenza.
+  const planConfirmed = syncCompleted && (planChosen || !planPickable);
+
+  const steps = resolveStepStates({
+    accountConnected: supabaseAccountConnected,
+    databaseConnected: supabaseConnected,
+    trackingChecked,
+    planConfirmed,
+    serverSideAnswered: serverSideAnswer !== null,
+  });
+
+  // Tutti e cinque conclusi: la configurazione non ha piu' niente da chiedere.
+  // Da qui in poi lo stepper sparisce — continuare a mostrarlo significa tenere
+  // spazio occupato da caselle tutte spuntate — e quel che di utile conteneva,
+  // account e database e disconnessione, passa nella card Connessione.
+  const setupComplete = allStepsComplete(steps);
 
   const planBanner = planChangeBanner({
     planChanged,
@@ -796,6 +856,22 @@ export default function Dashboard() {
       ),
     },
     {
+      id: 'tracking-check',
+      title: 'Controllo tracciamenti',
+      state: steps.trackingCheck,
+      completeLabel: 'Controllato',
+      lockedHint: 'Collega un database per controllare cosa trasmette già dati.',
+      content: (
+        <TrackingCheckStep
+          loading={!trackingChecked}
+          findings={conflictsFetcher.data?.findings ?? []}
+          adminBase={conflictsFetcher.data?.adminBase}
+          themeId={conflictsFetcher.data?.themeId}
+          onDismissed={() => conflictsFetcher.load('/api/tracking/conflicts')}
+        />
+      ),
+    },
+    {
       id: 'plan',
       // Il piano, non la sincronizzazione: e' il piano a stabilire quanti
       // prodotti entrano e ogni quanto si aggiornano, quindi e' li' che si
@@ -803,10 +879,10 @@ export default function Dashboard() {
       // suo — dopo il collegamento del database non c'e' piu' niente da premere
       // per farla iniziare.
       title: planChosen ? 'Conferma il piano' : 'Scegli il piano',
-      state: steps.sync,
+      state: steps.plan,
       // A sync completata: nessun badge sullo step (né "In corso" né altro).
       hideBadge: syncCompleted,
-      lockedHint: 'Collega un database per scegliere il piano.',
+      lockedHint: 'Finisci il controllo dei tracciamenti per scegliere il piano.',
       content: (
         <PlanStep
           options={planChoiceOptions(planCards, discountIntervals)}
@@ -872,6 +948,30 @@ export default function Dashboard() {
         </PlanStep>
       ),
     },
+    {
+      id: 'server-side',
+      title: 'Hai già un tracciamento full server side?',
+      state: steps.serverSide,
+      completeLabel: 'Risposto',
+      lockedHint: 'Conferma il piano per rispondere a questa domanda.',
+      // Beta dichiarata: e' l'unico passo che non configura niente dell'app, e
+      // vale la pena dirlo invece di lasciarlo intuire.
+      badge:
+        steps.serverSide === 'complete'
+          ? { tone: 'success' as const, label: 'Risposto' }
+          : { tone: 'new' as const, label: 'Beta' },
+      content: (
+        <ServerSideStep
+          selected={selectedPlatforms}
+          onSelectedChange={setSelectedPlatforms}
+          onAnswer={answerServerSide}
+          submitting={answeringServerSide}
+          disabled={blocked}
+          answered={isServerSideAnswer(serverSideAnswer) ? serverSideAnswer : null}
+          error={serverSideError}
+        />
+      ),
+    },
   ];
 
   return (
@@ -927,15 +1027,19 @@ export default function Dashboard() {
         ))}
 
         {/* Chi altro sta gia' inviando eventi. Non compare se non c'e' niente
-            da segnalare. */}
-        <TrackingConflicts
-          findings={conflictsFetcher.data?.findings ?? []}
-          adminBase={conflictsFetcher.data?.adminBase}
-          themeId={conflictsFetcher.data?.themeId}
-          // Rileggere subito: la fonte messa a tacere deve sparire dall'elenco
-          // senza aspettare la prossima apertura.
-          onDismissed={() => conflictsFetcher.load('/api/tracking/conflicts')}
-        />
+            da segnalare — e durante la configurazione non compare affatto:
+            li' e' il terzo passo, non un avviso in cima. La stessa cosa detta
+            in due punti della stessa pagina si legge come due problemi. */}
+        {setupComplete && (
+          <TrackingConflicts
+            findings={conflictsFetcher.data?.findings ?? []}
+            adminBase={conflictsFetcher.data?.adminBase}
+            themeId={conflictsFetcher.data?.themeId}
+            // Rileggere subito: la fonte messa a tacere deve sparire dall'elenco
+            // senza aspettare la prossima apertura.
+            onDismissed={() => conflictsFetcher.load('/api/tracking/conflicts')}
+          />
+        )}
 
         {/* Tabelle da allineare: non si chiude finche' l'aggiornamento non e'
             andato a buon fine. Di norma succede da solo e il banner nemmeno si

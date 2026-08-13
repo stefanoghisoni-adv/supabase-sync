@@ -100,9 +100,28 @@ model Shop {
   eligibilitySnapshots ProductEligibilitySnapshot[]
   customerDataAccessLogs CustomerDataAccessLog[]
   dismissedTrackingSources DismissedTrackingSource[]
+  trackingSetup     TrackingSetup?
 
   @@index([shopDomain])
   @@map("shops")
+}
+
+/// Cosa il merchant ha risposto sull'infrastruttura server side, e per quali
+/// piattaforme raccoglie dati.
+///
+/// Una riga per negozio: e' una risposta, non uno storico. Se cambia idea si
+/// riscrive, perche' quella che conta e' l'ultima.
+model TrackingSetup {
+  shopId     String   @id @map("shop_id")
+  /// 'needs' = ha chiesto un'infrastruttura, 'has' = dichiara di averla gia'.
+  answer     String
+  /// Le piattaforme spuntate al momento della risposta, per nome.
+  platforms  String[]
+  answeredAt DateTime @default(now()) @map("answered_at")
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@map("tracking_setups")
 }
 
 // Stati di autorizzazione di un negozio. Il tipo Postgres si chiama
