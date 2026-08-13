@@ -15,12 +15,20 @@ import { samePlanName } from '~/lib/billing/plan-name';
 export async function loader({ request }: LoaderFunctionArgs) {
   const { session } = await authenticate.admin(request);
 
-  const shop = await prisma.shop.findUnique({ where: { shopDomain: session.shop } });
-  if (!shop) return json({ currentPlan: null, plans: [] });
+  const shop = await prisma.shop.findUnique({
+    where: { shopDomain: session.shop },
+    include: { supabaseConfig: true },
+  });
+  if (!shop) return json({ connected: false, currentPlan: null, plans: [] });
 
   const plans = await prisma.plan.findMany();
 
   return json({
+    // Il tetto prodotti parla di una sincronizzazione che senza database non
+    // esiste: chi mostra l'avviso deve poter tacere finche' il collegamento non
+    // c'e'. La regola sta qui e non nelle tre pagine che lo ospitano, cosi' non
+    // puo' valere in una e non nelle altre.
+    connected: !!shop.supabaseConfig?.connectionVerifiedAt,
     currentPlanName: shop.currentPlan,
     plans: plans.map((p) => ({
       planName: p.planName,

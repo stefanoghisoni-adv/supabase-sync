@@ -30,6 +30,8 @@ export interface ProductOverflowBannerProps {
 }
 
 interface LimitsResponse {
+  /** false = nessun database collegato: non c'e' nessuna sincronizzazione di cui avvisare. */
+  connected?: boolean;
   currentPlanName?: string | null;
   currentPlan?: PlanForSuggestion | null;
   plans?: PlanForSuggestion[];
@@ -92,6 +94,10 @@ export function ProductOverflowBanner({ disabled }: ProductOverflowBannerProps) 
     window.top?.location.replace(confirmationUrl);
   }
 
+  // Senza database collegato l'avviso non ha oggetto: nessun prodotto sta
+  // restando fuori, perche' non ne sta entrando nessuno. Vale su tutte e tre le
+  // pagine che lo mostrano.
+  if (limits.data?.connected === false) return null;
   if (!suggestedPlan || !currentPlan || totalProducts == null) return null;
 
   const nextLabel = planLabel(suggestedPlan.planName);

@@ -942,12 +942,16 @@ export default function Dashboard() {
             vede. */}
         {schemaUpdatePending && <SchemaUpdateBanner />}
 
-        {/* Catalogo piu' grande del tetto: dice quanti restano fuori e propone
-            il piano che li contiene tutti. */}
-        <ProductOverflowBanner disabled={blocked} />
+        {/* I due avvisi sulla sincronizzazione — piano cambiato e tetto prodotti
+            raggiunto — parlano di una sincronizzazione che senza database non
+            esiste. A collegamento assente (mai fatto, oppure appena sciolto)
+            non hanno niente da avvisare: resta il solo esito dell'ultima
+            azione, che invece va letto.
 
-
-        {showPlanBanner && banner && (
+            L'ordine fra i due non e' indifferente: il piano e' la causa, il
+            tetto raggiunto una delle sue conseguenze, e la causa si legge
+            prima. */}
+        {supabaseConnected && showPlanBanner && banner && (
           <Banner
             tone={banner.value.tone}
             title={banner.value.title}
@@ -976,6 +980,10 @@ export default function Dashboard() {
             </BlockStack>
           </Banner>
         )}
+
+        {/* Catalogo piu' grande del tetto: dice quanti restano fuori e propone
+            il piano che li contiene tutti. */}
+        {supabaseConnected && <ProductOverflowBanner disabled={blocked} />}
 
         </BlockStack>
 
