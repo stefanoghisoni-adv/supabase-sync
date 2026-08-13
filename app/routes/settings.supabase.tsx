@@ -18,7 +18,7 @@ import { DatabaseCard } from '~/components/Dashboard/DatabaseCard';
 import { firstPlanWithCustomersSync } from '~/components/Dashboard/account-format';
 import { samePlanName } from '~/lib/billing/plan-name';
 import { syncIsActive } from '~/lib/sync/sync-active';
-import { nextSyncAt } from '~/lib/sync/next-sync';
+import { loadSyncTiming } from '~/lib/sync/sync-timing.server';
 import { SyncCard } from '~/components/Dashboard/SyncCard';
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -64,24 +64,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   // Cadenza del piano e ultima corsa completata: la sincronizzazione e' una
   // delle cose che il merchant viene a controllare qui, e finora la pagina non
-  // ne diceva niente.
-  const lastCheck = shop
-    ? await prisma.syncJob.findFirst({
-        where: { shopId: shop.id, jobType: 'periodic_check', status: 'completed' },
-        orderBy: { completedAt: 'desc' },
-        select: { completedAt: true },
-      })
-    : null;
+  // ne diceva niente. Le date le calcola loadSyncTiming, che le determina allo
+  // stesso modo anche per la dashboard.
+  const frequencyHours = plan?.maxSyncFrequencyHours ?? null;
+  const timing = shop
+    ? await loadSyncTiming(shop.id, frequencyHours)
+    : { lastSync: null, nextSync: null };
 
   const sync = {
-    frequencyHours: plan?.maxSyncFrequencyHours ?? null,
-    lastSync: lastCheck?.completedAt?.toISOString() ?? null,
-    nextSync:
-      nextSyncAt(
-        lastCheck?.completedAt ?? null,
-        plan?.maxSyncFrequencyHours ?? null,
-        new Date(),
-      )?.toISOString() ?? null,
+    frequencyHours,
+    ...timing,
     timeZone: shop?.ianaTimezone ?? null,
   };
 

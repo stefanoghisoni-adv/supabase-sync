@@ -50,6 +50,10 @@ import {
   triggerShopProfileRefresh,
 } from '~/lib/shop/refresh-shop-profile.server';
 import { useNavLoading } from '~/components/Dashboard/nav-loading';
+import { SyncCard } from '~/components/Dashboard/SyncCard';
+import { ConnectionCard } from '~/components/Dashboard/ConnectionCard';
+import { RecentRunsCard } from '~/components/Dashboard/RecentRunsCard';
+import { loadSyncRuns, syncTimingFrom } from '~/lib/sync/sync-timing.server';
 
 // Solo per questo store mostriamo il messaggio d'errore reale (utile in debug),
 // invece del generico "Errore interno": gli altri merchant non devono vedere
@@ -92,7 +96,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     // il loader costa due round-trip in profondità invece di tre. Su Vercel il
     // DB è remoto, quindi ogni round-trip risparmiato è latenza in meno sul TTFB
     // — che è ciò che domina l'LCP di questa pagina.
-    const [plans, recentJobs, customersTableJob, oauthToken] = await Promise.all([
+    const [plans, recentJobs, customersTableJob, oauthToken, syncRuns] = await Promise.all([
       // Tutti i piani, non solo quello in uso: quando i clienti restano fuori
       // serve anche sapere quale piano li rimetterebbe dentro, e leggerli tutti
       // costa come leggerne uno (la tabella e' di poche righe).
@@ -123,6 +127,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
         where: { shopId: shop.id },
         select: { id: true },
       }),
+      // Ultima corsa completata e ultima periodica: da qui escono "Ultima" e
+      // "Prossima" della card Sincronizzazione. Non dipendono dal piano, quindi
+      // viaggiano con le altre invece di costare un round-trip proprio.
+      loadSyncRuns(shop.id),
     ]);
 
     const plan = plans.find((p) => samePlanName(p.planName, shop.currentPlan)) ?? null;
@@ -231,6 +239,20 @@ export async function loader({ request }: LoaderFunctionArgs) {
             shop.currentPlan,
           ),
       customersTableCreated: customersTableJob !== null,
+      // Cadenza e date della sincronizzazione: la dashboard e' il posto dove il
+      // merchant le cerca, e finora stavano solo in Impostazioni.
+      sync: {
+        frequencyHours: plan?.maxSyncFrequencyHours ?? null,
+        ...syncTimingFrom(syncRuns, plan?.maxSyncFrequencyHours ?? null),
+      },
+      // Le ultime corse, per la card accanto al grafico: quel che serve a
+      // scriverne una riga, non il job intero.
+      recentRuns: recentJobs.slice(0, 6).map((job) => ({
+        id: job.id,
+        jobType: job.jobType,
+        status: job.status,
+        startedAt: job.startedAt.toISOString(),
+      })),
       // Listino completo: serve al banner che propone il piano giusto a chi ha
       // piu' prodotti di quanti il suo ne sincronizzi. Sono poche righe e le
       // abbiamo gia' in memoria: passarle costa meno di una seconda richiesta.
@@ -339,7 +361,7 @@ interface ProductHistoryResponse {
 }
 
 export default function Dashboard() {
-  const { shop, plan, supabaseConnected, supabaseAccountConnected, customersEnabled, authorization, syncState, planChanged, currentMaxProducts, previousMaxProducts, previousCustomersEnabled, customersTableCreated, customersUpgradePlan, trackingAuthorization, schemaUpdatePending, planOptions } =
+  const { shop, plan, supabaseConnected, supabaseAccountConnected, customersEnabled, authorization, syncState, planChanged, currentMaxProducts, previousMaxProducts, previousCustomersEnabled, customersTableCreated, customersUpgradePlan, trackingAuthorization, schemaUpdatePending, planOptions, sync, recentRuns } =
     useLoaderData<typeof loader>();
   const blocked = authorization !== 'ENABLED';
 
@@ -495,6 +517,14 @@ export default function Dashboard() {
       : null;
 
   const steps = resolveStepStates(supabaseAccountConnected, supabaseConnected);
+
+  // I tre passi hanno finito: account collegato, database collegato, prima
+  // sincronizzazione fatta. Da qui in poi lo stepper non ha piu' niente da
+  // chiedere, e continuare a mostrarlo significa tenere meta' pagina occupata
+  // da tre caselle tutte spuntate. Sparisce, e quel che di utile conteneva —
+  // account, database, disconnessione — passa nella card Connessione.
+  const setupComplete =
+    supabaseAccountConnected && supabaseConnected && syncCompleted;
 
   const planBanner = planChangeBanner({
     planChanged,
@@ -858,7 +888,11 @@ export default function Dashboard() {
 
         </BlockStack>
 
-        <InlineGrid columns={{ xs: 1, md: 2 }} gap="400">
+        {/* Le card di stato. A setup concluso diventano quattro e prendono
+            tutta la riga; finche' c'e' da collegare restano due, perche' le
+            altre due direbbero "non collegato" accanto allo stepper che sta
+            gia' chiedendo di collegarsi. */}
+        <InlineGrid columns={setupComplete ? { xs: 1, sm: 2, xl: 4 } : { xs: 1, md: 2 }} gap="400">
           <ProductsCard
             readyCount={readiness?.readyCount ?? 0}
             problemCount={readiness?.problemCount ?? 0}
@@ -872,20 +906,61 @@ export default function Dashboard() {
             optOut={customerStats?.optOut ?? 0}
             loading={customerStatsLoading}
           />
+          {setupComplete && (
+            <>
+              <SyncCard
+                frequencyHours={sync.frequencyHours}
+                lastSync={sync.lastSync}
+                nextSync={sync.nextSync}
+                timeZone={shop.ianaTimezone}
+              />
+              <ConnectionCard>
+                {/* Gli stessi componenti dei passi: a collegamento fatto si
+                    riducono all'account, al nome del database e al pulsante per
+                    staccarlo, con la conferma di sempre. */}
+                <SupabaseAccountConnect connected disabled={blocked} />
+                <SupabaseProjectConnect
+                  connected
+                  projectName={shop.supabaseConfig?.supabaseProjectRef ?? undefined}
+                  projectUrl={shop.supabaseConfig?.supabaseUrl ?? undefined}
+                  disabled={blocked}
+                  authorization={authorization}
+                  onDisconnected={setDisconnectDone}
+                />
+              </ConnectionCard>
+            </>
+          )}
         </InlineGrid>
 
-        {/* Lo Stepper resta a meta' larghezza a sinistra: il log e' passato alla
-            tab dedicata "Logs". */}
-        <InlineGrid columns={{ xs: 1, md: 2 }} gap="400">
-          <Stepper steps={stepperItems} />
-          <EligibilityChart
-            points={historyFetcher.data?.points ?? []}
-            monthLabel={historyFetcher.data?.monthLabel}
-            monthStart={historyFetcher.data?.monthStart}
-            planLimit={historyFetcher.data?.planLimit ?? null}
-            loading={!historyFetcher.data}
-          />
-        </InlineGrid>
+        {/* Finita la configurazione, il grafico prende i due terzi e accanto
+            gli sta il registro in breve. Prima invece la meta' sinistra e' dei
+            tre passi, che sono la cosa da fare. */}
+        {setupComplete ? (
+          <InlineGrid
+            columns={{ xs: 1, lg: 'minmax(0, 2fr) minmax(0, 1fr)' }}
+            gap="400"
+          >
+            <EligibilityChart
+              points={historyFetcher.data?.points ?? []}
+              monthLabel={historyFetcher.data?.monthLabel}
+              monthStart={historyFetcher.data?.monthStart}
+              planLimit={historyFetcher.data?.planLimit ?? null}
+              loading={!historyFetcher.data}
+            />
+            <RecentRunsCard runs={recentRuns} timeZone={shop.ianaTimezone} />
+          </InlineGrid>
+        ) : (
+          <InlineGrid columns={{ xs: 1, md: 2 }} gap="400">
+            <Stepper steps={stepperItems} />
+            <EligibilityChart
+              points={historyFetcher.data?.points ?? []}
+              monthLabel={historyFetcher.data?.monthLabel}
+              monthStart={historyFetcher.data?.monthStart}
+              planLimit={historyFetcher.data?.planLimit ?? null}
+              loading={!historyFetcher.data}
+            />
+          </InlineGrid>
+        )}
 
         {/* Respiro in fondo: senza, il bordo dell'ultima card tocca il fondo dell'iframe. */}
         <Box paddingBlockEnd="800" />
