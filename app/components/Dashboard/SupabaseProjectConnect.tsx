@@ -445,7 +445,12 @@ export function SupabaseProjectConnect({
         </Banner>
       )}
 
-      {projectsLoaded && projects && projects.length > 0 && (
+      {/* La scelta fra i database esistenti sparisce mentre se ne sta creando
+          uno nuovo: sono due strade alternative, e chi ha appena premuto "Crea"
+          non ha piu' niente da scegliere li' dentro. Compariva perche' la
+          condizione guardava solo quanti progetti esistono — e un progetto,
+          appena creato, esiste. Si torna alla scelta con "Annulla". */}
+      {projectsLoaded && projects && projects.length > 0 && !showCreate && (
         // 65% e non meta': i nomi dei progetti Supabase sono lunghi e a meta'
         // riga finivano troncati proprio dove il merchant deve distinguerli.
         <Box maxWidth="65%">
