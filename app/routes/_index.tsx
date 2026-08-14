@@ -1134,17 +1134,14 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Prima del collegamento non c'e' niente da mostrare: nessun numero,
-            nessun grafico. I dati arrivano dal database del merchant, e finche'
-            non ce n'e' uno quelle card direbbero zero — che non e' un dato, e'
-            l'assenza di un dato. */}
-        {supabaseConnected && (
+        {/* La dashboard vera compare a configurazione conclusa, non un passo
+            prima. Fino a quel momento c'e' una cosa da fare per volta, ed e'
+            nello stepper: card e grafico sotto ai passi ancora aperti si
+            leggono come se il lavoro fosse gia' finito, mentre non lo e'. */}
+        {setupComplete && (
           <>
-        {/* Le card di stato. A setup concluso diventano quattro e prendono
-            tutta la riga; finche' c'e' da collegare restano due, perche' le
-            altre due direbbero "non collegato" accanto allo stepper che sta
-            gia' chiedendo di collegarsi. */}
-        <InlineGrid columns={setupComplete ? { xs: 1, sm: 2, xl: 4 } : { xs: 1, md: 2 }} gap="400">
+        {/* Le quattro card di stato, su tutta la riga. */}
+        <InlineGrid columns={{ xs: 1, sm: 2, xl: 4 }} gap="400">
           <ProductsCard
             readyCount={readiness?.readyCount ?? 0}
             problemCount={readiness?.problemCount ?? 0}
@@ -1158,36 +1155,30 @@ export default function Dashboard() {
             optOut={customerStats?.optOut ?? 0}
             loading={customerStatsLoading}
           />
-          {setupComplete && (
-            <>
-              <SyncCard
-                frequencyHours={sync.frequencyHours}
-                lastSync={sync.lastSync}
-                nextSync={sync.nextSync}
-                timeZone={shop.ianaTimezone}
-              />
-              <ConnectionCard>
-                {/* Gli stessi componenti dei passi: a collegamento fatto si
-                    riducono all'account, al nome del database e al pulsante per
-                    staccarlo, con la conferma di sempre. */}
-                <SupabaseAccountConnect connected disabled={blocked} />
-                <SupabaseProjectConnect
-                  connected
-                  projectName={shop.supabaseConfig?.supabaseProjectRef ?? undefined}
-                  projectUrl={shop.supabaseConfig?.supabaseUrl ?? undefined}
-                  disabled={blocked}
-                  authorization={authorization}
-                  onDisconnected={setDisconnectDone}
-                />
-              </ConnectionCard>
-            </>
-          )}
+          <SyncCard
+            frequencyHours={sync.frequencyHours}
+            lastSync={sync.lastSync}
+            nextSync={sync.nextSync}
+            timeZone={shop.ianaTimezone}
+          />
+          <ConnectionCard>
+            {/* Gli stessi componenti dei passi: a collegamento fatto si
+                riducono all'account, al nome del database e ai pulsanti per
+                cambiarlo o staccarlo, con la conferma di sempre. */}
+            <SupabaseAccountConnect connected disabled={blocked} />
+            <SupabaseProjectConnect
+              connected
+              projectName={shop.supabaseConfig?.supabaseProjectRef ?? undefined}
+              projectUrl={shop.supabaseConfig?.supabaseUrl ?? undefined}
+              disabled={blocked}
+              authorization={authorization}
+              onDisconnected={setDisconnectDone}
+            />
+          </ConnectionCard>
         </InlineGrid>
 
         {/* Il grafico prende i due terzi e accanto gli sta il registro in
-            breve: la sincronizzazione parte da sola al collegamento, quindi
-            qualcosa da mostrare c'e' gia' prima che la configurazione sia
-            chiusa. */}
+            breve. */}
         <InlineGrid
           columns={{ xs: 1, lg: 'minmax(0, 2fr) minmax(0, 1fr)' }}
           gap="400"

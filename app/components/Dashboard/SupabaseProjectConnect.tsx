@@ -84,6 +84,10 @@ export function SupabaseProjectConnect({
   }>();
 
   const [showCreate, setShowCreate] = useState(false);
+  // Il merchant ha un database collegato ma vuole sceglierne un altro. Finche'
+  // non ne conferma uno resta collegato a quello di prima: cambiare non e'
+  // scollegare, e nessun dato si muove finche' la scelta non e' fatta.
+  const [changing, setChanging] = useState(false);
   const [newName, setNewName] = useState('');
   const [region, setRegion] = useState('eu-central-1');
   // Limiti di progetto del piano Supabase: alimenta il loader sul pulsante di
@@ -305,7 +309,7 @@ export function SupabaseProjectConnect({
   }, [createFetcher, newName, region]);
 
   // STATO: database collegato
-  if (connected) {
+  if (connected && !changing) {
     return (
       <BlockStack gap="300">
         {authorization === 'DISABLED' ? (
@@ -319,6 +323,13 @@ export function SupabaseProjectConnect({
           </Text>
         )}
         <InlineStack gap="200">
+          {/* Cambiare database non e' scollegarsi: si torna alla scelta, e
+              quello di adesso resta collegato finche' non se ne conferma un
+              altro. Per questo il comando sta a sinistra e in tono normale —
+              accanto a una disconnessione, che invece e' definitiva. */}
+          <Button onClick={() => setChanging(true)} disabled={disabled || disconnecting}>
+            Cambia database
+          </Button>
           <Button
             tone="critical"
             onClick={() => setShowDisconnect(true)}
@@ -532,14 +543,22 @@ export function SupabaseProjectConnect({
               Crea nuovo database
             </Button>
           )}
-          <Button
-            tone="critical"
-            onClick={() => disconnect(false)}
-            loading={disconnecting}
-            disabled={disabled || disconnecting}
-          >
-            Disconnetti
-          </Button>
+          {/* Chi sta cambiando database e' gia' collegato: qui non ha niente da
+              scollegare, ha solo da poter tornare indietro. */}
+          {changing ? (
+            <Button onClick={() => setChanging(false)} disabled={disabled}>
+              Annulla
+            </Button>
+          ) : (
+            <Button
+              tone="critical"
+              onClick={() => disconnect(false)}
+              loading={disconnecting}
+              disabled={disabled || disconnecting}
+            >
+              Disconnetti
+            </Button>
+          )}
         </InlineStack>
       )}
 
