@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import type { PlanCard } from '~/components/Billing/plan-catalog';
 import {
   planPriceLabel,
+  planSavingBadge,
   preselectedPlan,
   recommendedPlan,
   yearlySaving,
@@ -61,6 +62,29 @@ describe('yearlySaving', () => {
     // sarebbe falso.
     expect(yearlySaving([card({ priceMonthly: 10, priceYearly: 120 })])).toBeNull();
     expect(yearlySaving([card({ priceMonthly: 0, priceYearly: 0 })])).toBeNull();
+  });
+});
+
+describe('planSavingBadge', () => {
+  it('scrive quanto si risparmia in un anno, centesimi compresi', () => {
+    // 29x12 - 290 = 58. I centesimi si scrivono sempre: e' denaro, e "€ 58"
+    // accanto a "€ 58,50" sembrerebbe un arrotondamento.
+    expect(planSavingBadge(card())).toBe('Risparmi € 58,00');
+  });
+
+  it('conta sul prezzo riservato, che e quello che il negozio paga', () => {
+    expect(planSavingBadge(card({ partnerMonthly: 24, partnerYearly: 240 }))).toBe(
+      'Risparmi € 48,00',
+    );
+  });
+
+  it('sul gratuito non c e nessun badge', () => {
+    expect(planSavingBadge(card({ priceMonthly: 0, priceYearly: 0 }))).toBeNull();
+  });
+
+  it('se l annuale non conviene, non lo si annuncia', () => {
+    expect(planSavingBadge(card({ priceMonthly: 10, priceYearly: 120 }))).toBeNull();
+    expect(planSavingBadge(card({ priceMonthly: 10, priceYearly: 130 }))).toBeNull();
   });
 });
 

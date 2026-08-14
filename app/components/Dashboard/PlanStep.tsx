@@ -15,7 +15,7 @@ import type { PlanCard } from '~/components/Billing/plan-catalog';
 import { formatPrice } from '~/components/Billing/plan-catalog';
 import { PlanFeatureList } from '~/components/Billing/PlanFeatureList';
 import type { BillingInterval } from '~/lib/billing/partner-pricing';
-import { planPriceLabel, yearlySaving } from './plan-step';
+import { planPriceLabel, planSavingBadge, yearlySaving } from './plan-step';
 
 export interface PlanStepProps {
   /** Le card fra cui scegliere. Vuoto = nessuna scelta da fare. */
@@ -163,9 +163,20 @@ export function PlanStep({
                           )}
                         </InlineStack>
 
-                        <Text as="p" variant="headingLg">
-                          {planPriceLabel(card, discountIntervals, interval)}
-                        </Text>
+                        <BlockStack gap="150">
+                          <Text as="p" variant="headingLg">
+                            {planPriceLabel(card, discountIntervals, interval)}
+                          </Text>
+                          {/* Quanto fa risparmiare l'annuale su questo piano,
+                              sotto il prezzo a cui si riferisce. Nasce dal
+                              testo: dove non c'e' risparmio — il gratuito — il
+                              badge non esiste, invece di comparire vuoto. */}
+                          {planSavingBadge(card) && (
+                            <InlineStack>
+                              <Badge tone="info">{planSavingBadge(card) as string}</Badge>
+                            </InlineStack>
+                          )}
+                        </BlockStack>
 
                         <PlanFeatureList features={card.features} />
                       </BlockStack>

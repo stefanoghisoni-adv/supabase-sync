@@ -1,7 +1,11 @@
 import type { PlanCard } from '~/components/Billing/plan-catalog';
 import { formatPrice } from '~/components/Billing/plan-catalog';
 import { isSelectablePlan } from '~/components/Billing/plan-access';
-import { effectivePrice, type BillingInterval } from '~/lib/billing/partner-pricing';
+import {
+  effectivePrice,
+  formatAmount,
+  type BillingInterval,
+} from '~/lib/billing/partner-pricing';
 import { samePlanName } from '~/lib/billing/plan-name';
 
 /**
@@ -95,4 +99,28 @@ export function recommendedPlan(
   });
 
   return (fits ?? byPrice[byPrice.length - 1]).name;
+}
+
+/**
+ * Quanto fa risparmiare l'annuale su QUESTO piano, in un anno.
+ *
+ * Il conto e' sul prezzo che il negozio paga davvero — quello riservato, se ce
+ * l'ha — perche' e' su quello che il risparmio si realizza.
+ *
+ * `null` quando non c'e' niente da risparmiare: il gratuito non fa risparmiare
+ * nulla per costruzione, e un piano il cui annuale non conviene non deve
+ * portare un'etichetta che dice il contrario.
+ */
+export function planYearlySaving(card: PlanCard): number | null {
+  const monthly = card.partnerMonthly ?? card.priceMonthly;
+  const yearly = card.partnerYearly ?? card.priceYearly;
+  if (!(monthly > 0) || !(yearly > 0)) return null;
+  const saving = monthly * 12 - yearly;
+  return saving > 0 ? saving : null;
+}
+
+/** "Risparmi € 58,00", o niente se non c'e' un risparmio da annunciare. */
+export function planSavingBadge(card: PlanCard): string | null {
+  const saving = planYearlySaving(card);
+  return saving == null ? null : `Risparmi € ${formatAmount(saving)}`;
 }
