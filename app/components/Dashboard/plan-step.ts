@@ -1,5 +1,6 @@
 import type { PlanCard } from '~/components/Billing/plan-catalog';
 import { formatPrice } from '~/components/Billing/plan-catalog';
+import { isSelectablePlan } from '~/components/Billing/plan-access';
 import { effectivePrice } from '~/lib/billing/partner-pricing';
 import { samePlanName } from '~/lib/billing/plan-name';
 
@@ -11,49 +12,11 @@ import { samePlanName } from '~/lib/billing/plan-name';
  * passo deve far scegliere in dieci secondi, non spiegare il listino.
  */
 
-export interface PlanChoiceOption {
-  /** Nome del piano com'e' scritto nel listino: e' anche il valore inviato. */
-  value: string;
-  /** "Pro — € 29/mese", "Free — Gratis". */
-  label: string;
-  /** Le tre cose che distinguono davvero un piano dall'altro. */
-  helpText: string;
-}
-
-/** Le sole voci che cambiano fra un piano e l'altro: il resto e' uguale ovunque. */
-const DISTINGUISHING_FEATURES = new Set(['products', 'sync', 'customers']);
-
-/**
- * Cosa include un piano, in una riga.
- *
- * Le voci non incluse restano fuori: in un elenco di una riga una X non si vede,
- * e "Sync clienti" scritto accanto a un piano che non li sincronizza si legge
- * come una promessa.
- */
-export function planSummary(card: Pick<PlanCard, 'features'> | null | undefined): string {
-  if (!card) return '';
-  return card.features
-    .filter((feature) => DISTINGUISHING_FEATURES.has(feature.key) && feature.included)
-    .map((feature) => feature.label)
-    .join(' · ');
-}
-
 /** "€ 29/mese", oppure "Gratis" quando non c'e' niente da pagare. */
 export function planPriceLabel(card: PlanCard, discountIntervals: number | null): string {
   const price = effectivePrice(card.priceMonthly, card.partnerMonthly, discountIntervals);
   if (!(price.payablePrice > 0)) return 'Gratis';
   return `€ ${formatPrice(price.payablePrice)}/mese`;
-}
-
-export function planChoiceOptions(
-  cards: PlanCard[],
-  discountIntervals: number | null,
-): PlanChoiceOption[] {
-  return cards.map((card) => ({
-    value: card.name,
-    label: `${card.name} — ${planPriceLabel(card, discountIntervals)}`,
-    helpText: planSummary(card),
-  }));
 }
 
 /**
@@ -71,4 +34,38 @@ export function preselectedPlan(
 ): string {
   const current = cards.find((card) => samePlanName(card.name, currentPlan));
   return current?.name ?? '';
+}
+
+/**
+ * Il piano consigliato a questo negozio: il piu' economico che contenga tutto
+ * il catalogo.
+ *
+ * Non e' il "consigliato" del listino, che e' lo stesso per tutti: qui la
+ * raccomandazione nasce dai prodotti che il negozio ha davvero. Il conto si fa
+ * sui prodotti TOTALI e non sui soli idonei — un prodotto oggi senza costo
+ * diventa idoneo appena il merchant lo compila, e a quel punto un piano scelto
+ * sugli idonei di oggi lo taglierebbe fuori.
+ *
+ * Se nessuno li contiene tutti si consiglia il piu' capiente: e' il meglio che
+ * il listino possa fare, e tacere lascerebbe senza indicazione proprio il
+ * negozio piu' grande.
+ */
+export function recommendedPlan(
+  cards: PlanCard[],
+  totalProducts: number | null,
+  maxProductsByName: Record<string, number | null>,
+): string | null {
+  const selectable = cards.filter((card) => isSelectablePlan(card.name));
+  if (selectable.length === 0 || totalProducts == null) return null;
+
+  const byPrice = [...selectable].sort(
+    (a, b) => a.priceMonthly - b.priceMonthly || a.name.localeCompare(b.name),
+  );
+
+  const fits = byPrice.find((card) => {
+    const max = maxProductsByName[card.name];
+    return max == null || max >= totalProducts;
+  });
+
+  return (fits ?? byPrice[byPrice.length - 1]).name;
 }

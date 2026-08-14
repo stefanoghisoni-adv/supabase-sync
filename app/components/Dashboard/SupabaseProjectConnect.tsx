@@ -129,15 +129,21 @@ export function SupabaseProjectConnect({
   const [provisioning, setProvisioning] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
-  // L'elenco dei progetti si carica appena il passo e' raggiungibile: chi e' qui
-  // ha gia' dato il consenso, quindi non c'e' altro da chiedergli.
+  // La schermata di scelta e' a video: o perche' non c'e' ancora un database, o
+  // perche' se ne sta cambiando uno. E' l'unica condizione che conta — dalla
+  // sola `connected` l'elenco non veniva mai chiesto a chi premeva "Cambia
+  // database", e il riquadro restava a caricare per sempre.
+  const choosing = !connected || changing;
+
+  // L'elenco dei progetti si carica appena la scelta e' a video: chi e' qui ha
+  // gia' dato il consenso, quindi non c'e' altro da chiedergli.
   useEffect(() => {
-    if (connected) return;
+    if (!choosing) return;
     if (projectsFetcher.state === 'idle' && !projectsFetcher.data) {
       projectsFetcher.load('/api/supabase/projects');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [connected]);
+  }, [choosing]);
 
   useEffect(() => {
     if (!showCreate || regionsFetcher.data || regionsFetcher.state === 'loading') return;
@@ -309,7 +315,7 @@ export function SupabaseProjectConnect({
   }, [createFetcher, newName, region]);
 
   // STATO: database collegato
-  if (connected && !changing) {
+  if (!choosing) {
     return (
       <BlockStack gap="300">
         {authorization === 'DISABLED' ? (

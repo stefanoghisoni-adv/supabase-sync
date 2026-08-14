@@ -1,11 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { PlanCard } from '~/components/Billing/plan-catalog';
-import {
-  planChoiceOptions,
-  planPriceLabel,
-  planSummary,
-  preselectedPlan,
-} from './plan-step';
+import { planPriceLabel, preselectedPlan, recommendedPlan } from './plan-step';
 
 function card(overrides: Partial<PlanCard> = {}): PlanCard {
   return {
@@ -27,28 +22,6 @@ function card(overrides: Partial<PlanCard> = {}): PlanCard {
   };
 }
 
-describe('planSummary', () => {
-  it('tiene solo cio che distingue un piano dall\'altro', () => {
-    // Il supporto via email c'e' su tutti i piani: ripeterlo su ognuno non
-    // aiuta a scegliere.
-    expect(planSummary(card())).toBe(
-      'Fino a 5.000 prodotti · Sync ogni 6 ore · Fino a 10.000 clienti',
-    );
-  });
-
-  it('non annuncia cio che il piano non include', () => {
-    const free = card({
-      features: [
-        { key: 'products', label: 'Fino a 100 prodotti', included: true },
-        { key: 'sync', label: 'Sync ogni 7 giorni', included: true },
-        { key: 'customers', label: 'Sync clienti', included: false },
-      ],
-    });
-
-    expect(planSummary(free)).toBe('Fino a 100 prodotti · Sync ogni 7 giorni');
-  });
-});
-
 describe('planPriceLabel', () => {
   it('scrive il prezzo al mese', () => {
     expect(planPriceLabel(card(), null)).toBe('€ 29/mese');
@@ -63,15 +36,6 @@ describe('planPriceLabel', () => {
   });
 });
 
-describe('planChoiceOptions', () => {
-  it('una riga per piano, con nome e prezzo nel titolo', () => {
-    const options = planChoiceOptions([card({ name: 'Free', priceMonthly: 0 }), card()], null);
-
-    expect(options.map((o) => o.label)).toEqual(['Free — Gratis', 'Pro — € 29/mese']);
-    expect(options[0].value).toBe('Free');
-  });
-});
-
 describe('preselectedPlan', () => {
   it('sceglie il piano che il negozio ha adesso', () => {
     expect(preselectedPlan([card({ name: 'Free' }), card()], 'free')).toBe('Free');
@@ -82,5 +46,44 @@ describe('preselectedPlan', () => {
     // loro posto un piano a pagamento farebbe confermare una spesa mai voluta.
     expect(preselectedPlan([card()], 'lifetime')).toBe('');
     expect(preselectedPlan([card()], null)).toBe('');
+  });
+});
+
+describe('recommendedPlan', () => {
+  const listino = [
+    card({ name: 'Free', priceMonthly: 0 }),
+    card({ name: 'Pro', priceMonthly: 27 }),
+    card({ name: 'Business', priceMonthly: 47 }),
+    card({ name: 'Enterprise', priceMonthly: 97 }),
+  ];
+  const tetti = { Free: 10, Pro: 200, Business: 1000, Enterprise: 5000 };
+
+  it('consiglia il piu economico che contiene tutto il catalogo', () => {
+    expect(recommendedPlan(listino, 8, tetti)).toBe('Free');
+    expect(recommendedPlan(listino, 26, tetti)).toBe('Pro');
+    expect(recommendedPlan(listino, 900, tetti)).toBe('Business');
+  });
+
+  it('sul confine sta il piano che ci arriva esatto', () => {
+    expect(recommendedPlan(listino, 10, tetti)).toBe('Free');
+    expect(recommendedPlan(listino, 11, tetti)).toBe('Pro');
+  });
+
+  it('se nessuno basta consiglia il piu capiente', () => {
+    // Tacere lascerebbe senza indicazione proprio il negozio piu' grande.
+    expect(recommendedPlan(listino, 99_999, tetti)).toBe('Enterprise');
+  });
+
+  it('un piano senza tetto contiene qualunque catalogo', () => {
+    expect(recommendedPlan([card({ name: 'Pro', priceMonthly: 27 })], 99_999, { Pro: null })).toBe(
+      'Pro',
+    );
+  });
+
+  it('senza conteggio dei prodotti non consiglia niente', () => {
+    // I prodotti arrivano da una richiesta: finche' non ci sono, un consiglio
+    // sarebbe basato sul nulla.
+    expect(recommendedPlan(listino, null, tetti)).toBeNull();
+    expect(recommendedPlan([], 26, tetti)).toBeNull();
   });
 });

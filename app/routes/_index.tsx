@@ -70,11 +70,7 @@ import {
   isServerSideAnswer,
   type ServerSideAnswer,
 } from '~/components/Dashboard/tracking-platforms';
-import {
-  planChoiceOptions,
-  planSummary,
-  preselectedPlan,
-} from '~/components/Dashboard/plan-step';
+import { preselectedPlan, recommendedPlan } from '~/components/Dashboard/plan-step';
 
 /**
  * Larghezza del contenitore durante la configurazione.
@@ -283,9 +279,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
           ),
       customersTableCreated: customersTableJob !== null,
       // Il negozio ha gia' scelto un piano almeno una volta? planStartedAt lo
-      // scrive l'attivazione, gratuita o a pagamento che sia. Al terzo passo
-      // serve a sapere se chiedere una scelta o una conferma.
+      // scrive l'attivazione, gratuita o a pagamento che sia. Al passo del
+      // piano serve a sapere se chiedere una scelta o una conferma.
       planChosen: shop.planStartedAt !== null,
+      // La conferma vale per il collegamento di adesso? Confermare e' un gesto
+      // che riguarda questa configurazione: dopo un ri-collegamento il passo
+      // torna a chiederlo, come fa gia' la sincronizzazione.
+      planConfirmedForConnection:
+        shop.planConfirmedAt != null &&
+        shop.supabaseConfig?.connectionVerifiedAt != null &&
+        shop.planConfirmedAt >= shop.supabaseConfig.connectionVerifiedAt,
       // Risposta gia' data sull'infrastruttura server side: chiude l'ultimo
       // passo, e ricomparire dopo che si e' risposto sarebbe una domanda a cui
       // il merchant ha gia' risposto.
@@ -382,6 +385,17 @@ export async function action({ request }: ActionFunctionArgs) {
     await enqueueManualSync(shop.id);
     triggerSyncDrain();
 
+    // La sincronizzazione parte da qui solo per una via: il pulsante "Conferma
+    // e sincronizza" del passo del piano. Quindi qui la conferma c'e' stata, e
+    // va segnata: confermare il piano che si ha gia' non attiva nessun
+    // abbonamento, quindi `planStartedAt` resterebbe vuoto e il passo non si
+    // chiuderebbe mai — restava aperto anche a sincronizzazione conclusa, con
+    // il passo successivo bloccato dietro di lui.
+    await prisma.shop.update({
+      where: { id: shop.id },
+      data: { planConfirmedAt: new Date() },
+    });
+
     return json({ queued: true });
   } catch (err) {
     // Non far crashare la pagina con "Unexpected Server Error": errore gestito.
@@ -437,7 +451,7 @@ interface ProductHistoryResponse {
 }
 
 export default function Dashboard() {
-  const { shop, plan, supabaseConnected, supabaseAccountConnected, customersEnabled, authorization, syncState, planChanged, currentMaxProducts, previousMaxProducts, previousCustomersEnabled, customersTableCreated, customersUpgradePlan, trackingAuthorization, schemaUpdatePending, planOptions, sync, recentRuns, planChosen, planPickable, planCards, discountIntervals, serverSideAnswer, serverSidePlatforms } =
+  const { shop, plan, supabaseConnected, supabaseAccountConnected, customersEnabled, authorization, syncState, planChanged, currentMaxProducts, previousMaxProducts, previousCustomersEnabled, customersTableCreated, customersUpgradePlan, trackingAuthorization, schemaUpdatePending, planOptions, sync, recentRuns, planChosen, planConfirmedForConnection, planCards, discountIntervals, serverSideAnswer, serverSidePlatforms } =
     useLoaderData<typeof loader>();
   const blocked = authorization !== 'ENABLED';
 
@@ -706,7 +720,7 @@ export default function Dashboard() {
   // concludersi prima che qualcuno abbia scelto un piano, e il passo sparirebbe
   // portandosi via quella scelta. Chi ha un piano assegnato dall'owner non ha
   // invece niente da scegliere, e per lui la questione e' chiusa in partenza.
-  const planConfirmed = syncCompleted && (planChosen || !planPickable);
+  const planConfirmed = syncCompleted && planConfirmedForConnection;
 
   const steps = resolveStepStates({
     accountConnected: supabaseAccountConnected,
@@ -908,67 +922,22 @@ export default function Dashboard() {
       lockedHint: 'Finisci il controllo dei tracciamenti per scegliere il piano.',
       content: (
         <PlanStep
-          options={planChoiceOptions(planCards, discountIntervals)}
+          cards={planCards}
+          discountIntervals={discountIntervals}
           selected={selectedPlan}
           onSelect={setSelectedPlan}
           planChosen={planChosen}
           currentPlanName={shop.currentPlan}
-          currentPlanSummary={planSummary(
-            planCards.find((card) => samePlanName(card.name, shop.currentPlan)),
+          recommendedPlanName={recommendedPlan(
+            planCards,
+            readiness ? totalProducts : null,
+            Object.fromEntries(planOptions.map((p) => [p.planName, p.maxProducts])),
           )}
           onConfirm={confirmPlanAndSync}
           loading={inProgress || subscribing}
           disabled={blocked}
           error={planError ?? syncFetcher.data?.error ?? null}
-        >
-          <Box background="bg-surface-secondary" borderRadius="200" padding="400">
-            <BlockStack gap="300">
-              <Text as="h3" variant="headingSm">
-                Cosa verrà sincronizzato
-              </Text>
-              <BlockStack gap="200">
-                <InlineStack align="space-between" blockAlign="center">
-                  <InlineStack gap="200" blockAlign="center">
-                    <Icon source={ProductIcon} tone="subdued" />
-                    <Text as="span">Prodotti</Text>
-                  </InlineStack>
-                  {previewProducts}
-                </InlineStack>
-                {/* La riga Clienti c'e' sempre: se il piano non li include, al
-                    posto del numero mostriamo un lucchetto, cosi' si capisce che
-                    e' una funzione da sbloccare e non un dato fermo a zero. */}
-                <InlineStack align="space-between" blockAlign="center">
-                  <InlineStack gap="200" blockAlign="center">
-                    <Icon source={PersonIcon} tone="subdued" />
-                    <Text as="span" tone={customersEnabled ? undefined : 'subdued'}>
-                      Clienti
-                    </Text>
-                  </InlineStack>
-                  {customersEnabled ? (
-                    previewCustomers
-                  ) : (
-                    <Tooltip content="Aggiorna ora per integrare la sincronizzazione dei clienti">
-                      {/* Il glifo del lucchetto e' disegnato dentro un viewBox 20
-                          con ~4px vuoti a destra: senza questo recupero l'icona
-                          sembra rientrata rispetto al numero della riga sopra. */}
-                      <span style={{ display: 'block', marginInlineEnd: '-4px' }}>
-                        <Icon source={LockIcon} tone="subdued" />
-                      </span>
-                    </Tooltip>
-                  )}
-                </InlineStack>
-              </BlockStack>
-            </BlockStack>
-          </Box>
-          {/* La sincronizzazione prosegue per conto suo: e' l'unica cosa che
-              serve sapere mentre gira, e il pulsante e' gia' in attesa. */}
-          {inProgress && (
-            <Text as="span" tone="subdued">
-              Sincronizzazione in corso: prosegue in background, puoi chiudere
-              questa pagina.
-            </Text>
-          )}
-        </PlanStep>
+        />
       ),
     },
     {
@@ -1113,8 +1082,13 @@ export default function Dashboard() {
         )}
 
         {/* Catalogo piu' grande del tetto: dice quanti restano fuori e propone
-            il piano che li contiene tutti. */}
-        {supabaseConnected && <ProductOverflowBanner disabled={blocked} />}
+            il piano che li contiene tutti. Non prima che un piano sia stato
+            scelto e confermato: fino a quel momento il tetto e' quello del
+            piano gratuito assegnato all'installazione, che nessuno ha voluto —
+            avvisare che non basta sarebbe rimproverare una scelta mai fatta, e
+            per giunta accanto al passo che quella scelta la sta chiedendo, dove
+            il badge "Consigliato" dice gia' la stessa cosa meglio. */}
+        {planConfirmed && <ProductOverflowBanner disabled={blocked} />}
 
         </BlockStack>
         </div>

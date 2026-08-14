@@ -48,6 +48,12 @@ model Shop {
   trialEndsAt       DateTime?          @map("trial_ends_at")
   isInTrial         Boolean            @default(true) @map("is_in_trial")
   planStartedAt     DateTime?          @map("plan_started_at")
+  // Quando il merchant ha confermato il piano dal passo della configurazione.
+  // Distinto da planStartedAt, che segna l'attivazione di un abbonamento:
+  // confermare il piano che si ha gia' non attiva niente, ma chiude un passo.
+  // Confrontato con connectionVerifiedAt dice se la conferma vale per il
+  // collegamento di adesso o per uno precedente.
+  planConfirmedAt   DateTime?          @map("plan_confirmed_at")
   billingCycle      String?            @map("billing_cycle")
   installedAt       DateTime           @default(now()) @map("installed_at")
   uninstalledAt     DateTime?          @map("uninstalled_at")
