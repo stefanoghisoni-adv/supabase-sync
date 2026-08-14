@@ -18,8 +18,8 @@ describe('resolveStepStates', () => {
       connectAccount: 'active',
       connectDatabase: 'locked',
       trackingCheck: 'locked',
-      plan: 'locked',
       serverSide: 'locked',
+      plan: 'locked',
     });
   });
 
@@ -28,8 +28,8 @@ describe('resolveStepStates', () => {
       connectAccount: 'complete',
       connectDatabase: 'active',
       trackingCheck: 'locked',
-      plan: 'locked',
       serverSide: 'locked',
+      plan: 'locked',
     });
   });
 
@@ -40,12 +40,12 @@ describe('resolveStepStates', () => {
       connectAccount: 'complete',
       connectDatabase: 'complete',
       trackingCheck: 'active',
-      plan: 'locked',
       serverSide: 'locked',
+      plan: 'locked',
     });
   });
 
-  it('controllo fatto: tocca al piano', () => {
+  it('controllo fatto: tocca alla domanda sull infrastruttura', () => {
     expect(
       resolveStepStates(
         input({ accountConnected: true, databaseConnected: true, trackingChecked: true }),
@@ -54,27 +54,27 @@ describe('resolveStepStates', () => {
       connectAccount: 'complete',
       connectDatabase: 'complete',
       trackingCheck: 'complete',
-      plan: 'active',
-      serverSide: 'locked',
+      serverSide: 'active',
+      plan: 'locked',
     });
   });
 
-  it('piano confermato: resta la domanda sull infrastruttura', () => {
+  it('risposto sull infrastruttura: resta il piano, che e la fine', () => {
     expect(
       resolveStepStates(
         input({
           accountConnected: true,
           databaseConnected: true,
           trackingChecked: true,
-          planConfirmed: true,
+          serverSideAnswered: true,
         }),
       ),
     ).toEqual({
       connectAccount: 'complete',
       connectDatabase: 'complete',
       trackingCheck: 'complete',
-      plan: 'complete',
-      serverSide: 'active',
+      serverSide: 'complete',
+      plan: 'active',
     });
   });
 

@@ -7,10 +7,10 @@ export interface DashboardStepStates {
   connectDatabase: StepState;
   /** 3. Controllo delle altre fonti di eventi gia' attive sul negozio. */
   trackingCheck: StepState;
-  /** 4. Piano scelto o confermato, e prima sincronizzazione. */
-  plan: StepState;
-  /** 5. Infrastruttura server side: ce l'ha, o gliela serve. */
+  /** 4. Infrastruttura server side: ce l'ha, o gliela serve. */
   serverSide: StepState;
+  /** 5. Piano scelto o confermato, e prima sincronizzazione: e' la fine. */
+  plan: StepState;
 }
 
 export interface StepInput {
@@ -34,9 +34,13 @@ export interface StepInput {
  * passo piu' avanti.
  *
  * Da li' in poi ogni passo si apre quando il precedente e' concluso: nessuno di
- * essi ha senso da solo — non si sceglie un piano senza sapere cosa entrera'
- * nella sincronizzazione, e non si parla di infrastruttura prima di sapere cosa
- * gia' trasmette dati.
+ * essi ha senso da solo — non si parla di infrastruttura prima di sapere cosa
+ * gia' trasmette dati, e non si sceglie un piano prima di sapere che
+ * infrastruttura si ha.
+ *
+ * Il piano e' l'ultimo perche' e' la fine vera: confermandolo parte la
+ * sincronizzazione, e da quel momento l'app lavora. Tutto cio' che viene prima
+ * serve a sapere cosa si sta comprando.
  */
 export function resolveStepStates(input: StepInput): DashboardStepStates {
   const account = input.accountConnected || input.databaseConnected;
@@ -48,10 +52,13 @@ export function resolveStepStates(input: StepInput): DashboardStepStates {
     connectAccount: account ? 'complete' : 'active',
     connectDatabase: state(input.databaseConnected, account),
     trackingCheck: state(input.trackingChecked, input.databaseConnected),
-    plan: state(input.planConfirmed, input.databaseConnected && input.trackingChecked),
     serverSide: state(
       input.serverSideAnswered,
-      input.databaseConnected && input.trackingChecked && input.planConfirmed,
+      input.databaseConnected && input.trackingChecked,
+    ),
+    plan: state(
+      input.planConfirmed,
+      input.databaseConnected && input.trackingChecked && input.serverSideAnswered,
     ),
   };
 }

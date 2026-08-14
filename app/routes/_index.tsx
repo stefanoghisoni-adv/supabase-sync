@@ -492,6 +492,13 @@ export default function Dashboard() {
   // perche' quel componente viene rimontato appena il collegamento cade: il
   // banner sparirebbe nello stesso istante in cui deve comparire.
   const [disconnectDone, setDisconnectDone] = useState<'delete' | 'keep' | null>(null);
+  // Ricollegato qualcosa, l'esito della disconnessione precedente non parla piu'
+  // di niente: "Tabelle e dati eliminati" sopra un account appena collegato
+  // racconta una storia finita, e per giunta allarmante. Sparisce da solo,
+  // senza aspettare la "x".
+  useEffect(() => {
+    if (supabaseAccountConnected || supabaseConnected) setDisconnectDone(null);
+  }, [supabaseAccountConnected, supabaseConnected]);
   // Badge del primo passo. "Collegato" lo decide il server (l'accesso risulta
   // fatto); gli stati intermedi li conosce solo il componente, che li riporta.
   const connectBadge = supabaseAccountConnected || supabaseConnected
@@ -938,41 +945,11 @@ export default function Dashboard() {
       ),
     },
     {
-      id: 'plan',
-      // Il piano, non la sincronizzazione: e' il piano a stabilire quanti
-      // prodotti entrano e ogni quanto si aggiornano, quindi e' li' che si
-      // decide. La sincronizzazione parte con la conferma, senza un pulsante
-      // suo — dopo il collegamento del database non c'e' piu' niente da premere
-      // per farla iniziare.
-      title: planChosen ? 'Conferma il piano' : 'Scegli il piano',
-      state: steps.plan,
-      // A sync completata: nessun badge sullo step (né "In corso" né altro).
-      hideBadge: syncCompleted,
-      lockedHint: 'Finisci il controllo dei tracciamenti per scegliere il piano.',
-      content: (
-        <PlanStep
-          cards={planCards}
-          discountIntervals={discountIntervals}
-          interval={billingInterval}
-          onIntervalChange={setBillingInterval}
-          selected={selectedPlan}
-          onSelect={choosePlan}
-          planChosen={planChosen}
-          currentPlanName={shop.currentPlan}
-          recommendedPlanName={recommendedPlanName}
-          onConfirm={confirmPlanAndSync}
-          loading={inProgress || subscribing}
-          disabled={blocked}
-          error={planError ?? syncFetcher.data?.error ?? null}
-        />
-      ),
-    },
-    {
       id: 'server-side',
       title: 'Hai già un tracciamento full server side?',
       state: steps.serverSide,
       completeLabel: 'Risposto',
-      lockedHint: 'Conferma il piano per rispondere a questa domanda.',
+      lockedHint: 'Finisci il controllo dei tracciamenti per rispondere a questa domanda.',
       // Beta dichiarata: e' l'unico passo che non configura niente dell'app, e
       // vale la pena dirlo invece di lasciarlo intuire.
       badge:
@@ -988,6 +965,37 @@ export default function Dashboard() {
           disabled={blocked}
           answered={isServerSideAnswer(serverSideAnswer) ? serverSideAnswer : null}
           error={serverSideError}
+        />
+      ),
+    },
+    {
+      id: 'plan',
+      // Ultimo passo, ed e' la fine vera: confermando il piano parte la
+      // sincronizzazione e da quel momento l'app lavora. Tutto quello che viene
+      // prima serve a sapere cosa si sta comprando — cosa c'e' da sincronizzare,
+      // cosa gia' trasmette dati, che infrastruttura si ha.
+      //
+      // La sincronizzazione non ha un pulsante suo: parte con la conferma.
+      title: planChosen ? 'Conferma il piano' : 'Scegli il piano',
+      state: steps.plan,
+      // A sync completata: nessun badge sullo step (né "In corso" né altro).
+      hideBadge: syncCompleted,
+      lockedHint: 'Rispondi alla domanda qui sopra per scegliere il piano.',
+      content: (
+        <PlanStep
+          cards={planCards}
+          discountIntervals={discountIntervals}
+          interval={billingInterval}
+          onIntervalChange={setBillingInterval}
+          selected={selectedPlan}
+          onSelect={choosePlan}
+          planChosen={planChosen}
+          currentPlanName={shop.currentPlan}
+          recommendedPlanName={recommendedPlanName}
+          onConfirm={confirmPlanAndSync}
+          loading={inProgress || subscribing}
+          disabled={blocked}
+          error={planError ?? syncFetcher.data?.error ?? null}
         />
       ),
     },
@@ -1069,16 +1077,18 @@ export default function Dashboard() {
             vede. */}
         {schemaUpdatePending && <SchemaUpdateBanner />}
 
-        {/* I due avvisi sulla sincronizzazione — piano cambiato e tetto prodotti
-            raggiunto — parlano di una sincronizzazione che senza database non
-            esiste. A collegamento assente (mai fatto, oppure appena sciolto)
-            non hanno niente da avvisare: resta il solo esito dell'ultima
-            azione, che invece va letto.
+        {/* L'avviso sul cambio di piano parla di una configurazione che gira
+            gia': confronta il piano di adesso con quello dell'ultima
+            sincronizzazione. Durante la configurazione quel confronto e' con
+            una vita precedente dell'installazione — un database appena
+            collegato faceva comparire "Piano aggiornato" senza che nessun piano
+            fosse cambiato — quindi tace del tutto finche' i passi non sono
+            chiusi.
 
-            L'ordine fra i due non e' indifferente: il piano e' la causa, il
-            tetto raggiunto una delle sue conseguenze, e la causa si legge
-            prima. */}
-        {supabaseConnected && showPlanBanner && banner && (
+            L'ordine con l'avviso sul tetto prodotti non e' indifferente: il
+            piano e' la causa, il tetto raggiunto una delle sue conseguenze, e
+            la causa si legge prima. */}
+        {setupComplete && showPlanBanner && banner && (
           <Banner
             tone={banner.value.tone}
             title={banner.value.title}
