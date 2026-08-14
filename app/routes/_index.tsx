@@ -6,6 +6,7 @@ import {
   useRevalidator,
   useSearchParams,
 } from '@remix-run/react';
+import type { CSSProperties } from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import {
   Page,
@@ -74,6 +75,22 @@ import {
   planSummary,
   preselectedPlan,
 } from '~/components/Dashboard/plan-step';
+
+/**
+ * Larghezza del contenitore durante la configurazione.
+ *
+ * E' quella che la Page aveva prima di passare a `fullWidth`, presa
+ * dall'espressione di Polaris e non da un numero copiato: resta allineata anche
+ * se il tema cambia. Vale per i passi e per gli avvisi che li accompagnano —
+ * un avviso largo tutto lo schermo sopra una colonna stretta sembrerebbe
+ * parlare di un'altra pagina.
+ */
+const SETUP_CONTAINER: CSSProperties = {
+  maxWidth:
+    'calc(var(--pg-layout-width-primary-max) + var(--pg-layout-width-secondary-max) + var(--pg-layout-width-inner-spacing-base))',
+  marginInline: 'auto',
+  width: '100%',
+};
 
 // Solo per questo store mostriamo il messaggio d'errore reale (utile in debug),
 // invece del generico "Errore interno": gli altri merchant non devono vedere
@@ -1001,7 +1018,14 @@ export default function Dashboard() {
             leggere in fila, non sezioni indipendenti. Tenendoli nel contenitore
             del contenuto avrebbero avuto per forza la stessa distanza delle
             card, che fra un avviso e l'altro e' troppa. Lo stacco piu' ampio
-            resta uno solo, fra l'ultimo avviso e il contenuto. */}
+            resta uno solo, fra l'ultimo avviso e il contenuto.
+
+            Durante la configurazione la pila prende la stessa larghezza dei
+            passi: un avviso disteso su tutto lo schermo, sopra una colonna
+            stretta, sembrerebbe riguardare un'altra pagina. A configurazione
+            conclusa la larghezza torna quella delle card, che sono cio' che
+            gli avvisi accompagnano. */}
+        <div style={setupComplete ? undefined : SETUP_CONTAINER}>
         <BlockStack gap="200">
         {/* Esito della disconnessione: in cima perche' e' la risposta all'ultima
             azione del merchant, e il modal che l'ha avviata e' gia' sparito. */}
@@ -1093,6 +1117,7 @@ export default function Dashboard() {
         {supabaseConnected && <ProductOverflowBanner disabled={blocked} />}
 
         </BlockStack>
+        </div>
 
         {/* I passi vengono prima di tutto il resto: finche' ce n'e' uno aperto,
             e' quello la cosa da fare, e leggerlo dopo le card significherebbe
@@ -1104,14 +1129,7 @@ export default function Dashboard() {
             da compilare largo tutto lo schermo si legge peggio, e le card che
             arrivano dopo hanno bisogno di tutta la larghezza, non lui. */}
         {!setupComplete && (
-          <div
-            style={{
-              maxWidth:
-                'calc(var(--pg-layout-width-primary-max) + var(--pg-layout-width-secondary-max) + var(--pg-layout-width-inner-spacing-base))',
-              marginInline: 'auto',
-              width: '100%',
-            }}
-          >
+          <div style={SETUP_CONTAINER}>
             <Stepper steps={stepperItems} />
           </div>
         )}
