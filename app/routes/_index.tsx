@@ -62,6 +62,7 @@ import { loadSyncRuns, syncTimingFrom } from '~/lib/sync/sync-timing.server';
 import { buildPlanCards } from '~/components/Billing/plan-catalog';
 import { canAccessPlanTab } from '~/components/Billing/plan-access';
 import type { SubscribeResponse } from '~/routes/billing.subscribe';
+import type { BillingInterval } from '~/lib/billing/partner-pricing';
 import { PlanStep } from '~/components/Dashboard/PlanStep';
 import { TrackingCheckStep } from '~/components/Dashboard/TrackingCheckStep';
 import { ServerSideStep } from '~/components/Dashboard/ServerSideStep';
@@ -572,6 +573,18 @@ export default function Dashboard() {
   const [selectedPlan, setSelectedPlan] = useState(() =>
     preselectedPlan(planCards, shop.currentPlan),
   );
+  // Il merchant ha toccato la scelta: da quel momento nessun consiglio la
+  // sovrascrive piu'. Senza questo, il conteggio dei prodotti che arriva un
+  // istante dopo riporterebbe la selezione sul consigliato, cancellando quella
+  // appena fatta a mano.
+  const [planTouched, setPlanTouched] = useState(false);
+  // Mensile o annuale. Si parte dal mensile: e' l'impegno piu' leggero, e chi
+  // sta configurando sta ancora decidendo se il servizio gli serve.
+  const [billingInterval, setBillingInterval] = useState<BillingInterval>('monthly');
+  const choosePlan = useCallback((name: string) => {
+    setPlanTouched(true);
+    setSelectedPlan(name);
+  }, []);
   const [planError, setPlanError] = useState<string | null>(null);
   const subscribing = subscribeFetcher.state !== 'idle';
 
@@ -591,11 +604,11 @@ export default function Dashboard() {
       return;
     }
     subscribeFetcher.submit(
-      { plan: selectedPlan, interval: 'monthly', returnTo: 'dashboard' },
+      { plan: selectedPlan, interval: billingInterval, returnTo: 'dashboard' },
       { method: 'POST', action: '/billing/subscribe' },
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [planChosen, selectedPlan, shop.currentPlan, startSync, subscribeFetcher]);
+  }, [planChosen, selectedPlan, billingInterval, shop.currentPlan, startSync, subscribeFetcher]);
 
   // Esito dell'avvio dell'acquisto.
   useEffect(() => {
@@ -721,6 +734,22 @@ export default function Dashboard() {
   // portandosi via quella scelta. Chi ha un piano assegnato dall'owner non ha
   // invece niente da scegliere, e per lui la questione e' chiusa in partenza.
   const planConfirmed = syncCompleted && planConfirmedForConnection;
+
+  // Il piano che basta a questo catalogo. Dipende dal conteggio dei prodotti,
+  // che arriva da una richiesta: finche' non c'e' non si consiglia niente.
+  const recommendedPlanName = recommendedPlan(
+    planCards,
+    readiness ? totalProducts : null,
+    Object.fromEntries(planOptions.map((p) => [p.planName, p.maxProducts])),
+  );
+
+  // Il consigliato parte selezionato, appena si sa quale sia. Confermarlo non
+  // acquista niente: un piano a pagamento passa comunque dall'approvazione di
+  // Shopify, che e' dove la spesa si accetta davvero.
+  useEffect(() => {
+    if (planTouched || !recommendedPlanName) return;
+    setSelectedPlan(recommendedPlanName);
+  }, [planTouched, recommendedPlanName]);
 
   const steps = resolveStepStates({
     accountConnected: supabaseAccountConnected,
@@ -924,15 +953,13 @@ export default function Dashboard() {
         <PlanStep
           cards={planCards}
           discountIntervals={discountIntervals}
+          interval={billingInterval}
+          onIntervalChange={setBillingInterval}
           selected={selectedPlan}
-          onSelect={setSelectedPlan}
+          onSelect={choosePlan}
           planChosen={planChosen}
           currentPlanName={shop.currentPlan}
-          recommendedPlanName={recommendedPlan(
-            planCards,
-            readiness ? totalProducts : null,
-            Object.fromEntries(planOptions.map((p) => [p.planName, p.maxProducts])),
-          )}
+          recommendedPlanName={recommendedPlanName}
           onConfirm={confirmPlanAndSync}
           loading={inProgress || subscribing}
           disabled={blocked}

@@ -1,7 +1,7 @@
 import type { PlanCard } from '~/components/Billing/plan-catalog';
 import { formatPrice } from '~/components/Billing/plan-catalog';
 import { isSelectablePlan } from '~/components/Billing/plan-access';
-import { effectivePrice } from '~/lib/billing/partner-pricing';
+import { effectivePrice, type BillingInterval } from '~/lib/billing/partner-pricing';
 import { samePlanName } from '~/lib/billing/plan-name';
 
 /**
@@ -12,11 +12,38 @@ import { samePlanName } from '~/lib/billing/plan-name';
  * passo deve far scegliere in dieci secondi, non spiegare il listino.
  */
 
-/** "€ 29/mese", oppure "Gratis" quando non c'e' niente da pagare. */
-export function planPriceLabel(card: PlanCard, discountIntervals: number | null): string {
-  const price = effectivePrice(card.priceMonthly, card.partnerMonthly, discountIntervals);
+/** "€ 29/mese", "€ 290/anno", oppure "Gratis" quando non c'e' niente da pagare. */
+export function planPriceLabel(
+  card: PlanCard,
+  discountIntervals: number | null,
+  interval: BillingInterval = 'monthly',
+): string {
+  const yearly = interval === 'yearly';
+  const price = effectivePrice(
+    yearly ? card.priceYearly : card.priceMonthly,
+    yearly ? card.partnerYearly : card.partnerMonthly,
+    discountIntervals,
+  );
   if (!(price.payablePrice > 0)) return 'Gratis';
-  return `€ ${formatPrice(price.payablePrice)}/mese`;
+  return `€ ${formatPrice(price.payablePrice)}/${yearly ? 'anno' : 'mese'}`;
+}
+
+/**
+ * Quanto si risparmia al massimo scegliendo l'annuale.
+ *
+ * Va detto, non lasciato da calcolare: e' l'unica ragione per preferirlo, e
+ * nessuno moltiplica per dodici mentre sceglie. `null` quando non c'e' nessun
+ * risparmio da annunciare — un listino in cui l'annuale non conviene esiste, e
+ * annunciarlo lo stesso sarebbe falso.
+ */
+export function yearlySaving(cards: PlanCard[]): number | null {
+  return cards.reduce<number | null>((best, card) => {
+    const monthly = card.partnerMonthly ?? card.priceMonthly;
+    const yearly = card.partnerYearly ?? card.priceYearly;
+    if (!(monthly > 0) || !(yearly > 0)) return best;
+    const saving = monthly * 12 - yearly;
+    return saving > (best ?? 0) ? saving : best;
+  }, null);
 }
 
 /**

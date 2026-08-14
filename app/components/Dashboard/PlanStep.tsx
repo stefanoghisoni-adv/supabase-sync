@@ -4,6 +4,7 @@ import {
   BlockStack,
   Box,
   Button,
+  ButtonGroup,
   Card,
   InlineGrid,
   InlineStack,
@@ -11,14 +12,19 @@ import {
   Text,
 } from '@shopify/polaris';
 import type { PlanCard } from '~/components/Billing/plan-catalog';
+import { formatPrice } from '~/components/Billing/plan-catalog';
 import { PlanFeatureList } from '~/components/Billing/PlanFeatureList';
-import { planPriceLabel } from './plan-step';
+import type { BillingInterval } from '~/lib/billing/partner-pricing';
+import { planPriceLabel, yearlySaving } from './plan-step';
 
 export interface PlanStepProps {
   /** Le card fra cui scegliere. Vuoto = nessuna scelta da fare. */
   cards: PlanCard[];
   /** Per quanti cicli vale il prezzo riservato del partner, se ce n'e' uno. */
   discountIntervals: number | null;
+  /** Mensile o annuale: cambia tutti i prezzi insieme. */
+  interval: BillingInterval;
+  onIntervalChange: (interval: BillingInterval) => void;
   /** Nome del piano selezionato, '' se nessuno. */
   selected: string;
   onSelect: (planName: string) => void;
@@ -52,6 +58,8 @@ export interface PlanStepProps {
 export function PlanStep({
   cards,
   discountIntervals,
+  interval,
+  onIntervalChange,
   selected,
   onSelect,
   currentPlanName,
@@ -63,6 +71,7 @@ export function PlanStep({
   error,
 }: PlanStepProps) {
   const hasChoice = cards.length > 0;
+  const saving = yearlySaving(cards);
   const isCurrent = (card: PlanCard) =>
     card.name.trim().toLowerCase() === currentPlanName.trim().toLowerCase();
 
@@ -76,6 +85,33 @@ export function PlanStep({
               : 'Il piano stabilisce quanti prodotti entrano e ogni quanto si aggiornano.'}
           </Text>
 
+          {/* La cadenza sta sopra le card perche' cambia tutti i prezzi
+              insieme: dentro ciascuna card avrebbe fatto credere che si potesse
+              pagare un piano al mese e un altro all'anno. */}
+          <InlineStack gap="300" blockAlign="center">
+            <ButtonGroup variant="segmented">
+              <Button
+                pressed={interval === 'monthly'}
+                onClick={() => onIntervalChange('monthly')}
+                disabled={disabled || loading}
+              >
+                Mensile
+              </Button>
+              <Button
+                pressed={interval === 'yearly'}
+                onClick={() => onIntervalChange('yearly')}
+                disabled={disabled || loading}
+              >
+                Annuale
+              </Button>
+            </ButtonGroup>
+            {interval === 'monthly' && saving != null && (
+              <Text as="span" tone="subdued">
+                Con l&apos;annuale risparmi fino a €{formatPrice(saving)} l&apos;anno
+              </Text>
+            )}
+          </InlineStack>
+
           <InlineGrid columns={{ xs: 1, sm: 2, lg: 4 }} gap="300">
             {cards.map((card) => {
               const chosen = card.name === selected;
@@ -86,10 +122,19 @@ export function PlanStep({
                 // Stessa tecnica gia' usata per il "Consigliato" nella tab Piano.
                 <div
                   key={card.name}
+                  // Tutta la card sceglie, non il solo pallino: il bersaglio e'
+                  // grande quanto la cosa che si sta scegliendo. Il radio resta
+                  // dov'e' — e' lui a dire quale sia lo stato, e a permettere di
+                  // scegliere da tastiera — ma non e' piu' l'unico modo.
+                  onClick={() => {
+                    if (disabled || loading) return;
+                    onSelect(card.name);
+                  }}
                   style={{
                     borderRadius: 'var(--p-border-radius-300)',
                     outline: chosen ? '2px solid var(--p-color-bg-fill-brand)' : undefined,
                     display: 'grid',
+                    cursor: disabled || loading ? undefined : 'pointer',
                   }}
                 >
                   <Card padding="400">
@@ -119,7 +164,7 @@ export function PlanStep({
                         </InlineStack>
 
                         <Text as="p" variant="headingLg">
-                          {planPriceLabel(card, discountIntervals)}
+                          {planPriceLabel(card, discountIntervals, interval)}
                         </Text>
 
                         <PlanFeatureList features={card.features} />

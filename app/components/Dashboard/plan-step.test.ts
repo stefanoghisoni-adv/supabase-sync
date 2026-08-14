@@ -1,6 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import type { PlanCard } from '~/components/Billing/plan-catalog';
-import { planPriceLabel, preselectedPlan, recommendedPlan } from './plan-step';
+import {
+  planPriceLabel,
+  preselectedPlan,
+  recommendedPlan,
+  yearlySaving,
+} from './plan-step';
 
 function card(overrides: Partial<PlanCard> = {}): PlanCard {
   return {
@@ -33,6 +38,29 @@ describe('planPriceLabel', () => {
 
   it('usa il prezzo riservato quando il negozio ne ha uno', () => {
     expect(planPriceLabel(card({ partnerMonthly: 24 }), 3)).toBe('€ 24/mese');
+  });
+
+  it('sull annuale scrive il prezzo dell anno', () => {
+    expect(planPriceLabel(card(), null, 'yearly')).toBe('€ 290/anno');
+    expect(planPriceLabel(card({ partnerYearly: 240 }), 3, 'yearly')).toBe('€ 240/anno');
+  });
+});
+
+describe('yearlySaving', () => {
+  it('dice il risparmio piu alto fra i piani', () => {
+    // 29x12 - 290 = 58 su Pro; 47x12 - 400 = 164 su Business: vince il secondo.
+    const saving = yearlySaving([
+      card(),
+      card({ name: 'Business', priceMonthly: 47, priceYearly: 400 }),
+    ]);
+    expect(saving).toBe(164);
+  });
+
+  it('senza risparmio non annuncia niente', () => {
+    // Un listino in cui l'annuale non conviene esiste: annunciarlo lo stesso
+    // sarebbe falso.
+    expect(yearlySaving([card({ priceMonthly: 10, priceYearly: 120 })])).toBeNull();
+    expect(yearlySaving([card({ priceMonthly: 0, priceYearly: 0 })])).toBeNull();
   });
 });
 
