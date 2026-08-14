@@ -48,3 +48,44 @@ export function embeddedContextParams(opts: EmbeddedContextOptions): URLSearchPa
   params.set('embedded', '1');
   return params;
 }
+
+/** Il nome del negozio senza il suffisso: "negozio.myshopify.com" -> "negozio". */
+function storeHandle(shopDomain: string): string {
+  return shopDomain.trim().replace(/\.myshopify\.com$/i, '');
+}
+
+export interface AdminAppUrlOptions {
+  shopDomain: string;
+  /** Percorso dentro l'app, con lo slash iniziale. Vuoto = la home dell'app. */
+  path?: string;
+  /** Parametri da consegnare alla pagina dell'app. */
+  params?: URLSearchParams;
+}
+
+/**
+ * L'indirizzo dell'app DENTRO l'admin di Shopify.
+ *
+ * Al ritorno dal pagamento il browser e' di primo livello, fuori dal riquadro.
+ * Rimandarlo a un indirizzo dell'app significa chiedergli di rientrare da solo:
+ * la libreria risponde con una paginetta che chiede il token di sessione e poi
+ * ricarica, e quando quel giro si inceppa il merchant resta davanti a una
+ * pagina bianca — con il piano appena pagato e nessun modo di proseguire.
+ *
+ * Questo indirizzo salta il giro: e' l'admin ad aprirsi, ed e' lui a caricare
+ * l'app nel riquadro con la sessione gia' buona. E' la strada che Shopify
+ * indica per rientrare da una pagina esterna.
+ *
+ * `null` se manca la chiave dell'app: senza non si puo' comporre, e chi chiama
+ * ha una via di ripiego.
+ */
+export function adminAppUrl(opts: AdminAppUrlOptions): string | null {
+  const apiKey = process.env.SHOPIFY_API_KEY?.trim();
+  if (!apiKey) return null;
+
+  const path = opts.path?.trim() ?? '';
+  const query = opts.params?.toString();
+  return (
+    `https://admin.shopify.com/store/${storeHandle(opts.shopDomain)}/apps/${apiKey}` +
+    `${path}${query ? `?${query}` : ''}`
+  );
+}

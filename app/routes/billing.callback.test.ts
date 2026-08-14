@@ -174,7 +174,34 @@ describe('/billing/callback', () => {
     expect(location(res).searchParams.get('billing')).toBe('ok');
   });
 
-  it('il rimando alla tab Piano porta con se il contesto embedded', async () => {
+  it('si rientra dall admin, non dall indirizzo dell app', async () => {
+    // Al ritorno dal pagamento il browser e' di primo livello: mandarlo su una
+    // rotta dell'app significa chiedergli di rientrare da solo nel riquadro, ed
+    // e' quel giro che lasciava una pagina bianca dopo aver pagato.
+    process.env.SHOPIFY_API_KEY = 'chiave-app';
+    getSubscription.mockResolvedValue(subscription());
+
+    const url = location(
+      await call('?charge_id=1234&shop=test-shop.myshopify.com&return_to=dashboard'),
+    );
+
+    expect(url.origin).toBe('https://admin.shopify.com');
+    expect(url.pathname).toBe('/store/test-shop/apps/chiave-app');
+    expect(url.searchParams.get('billing')).toBe('ok');
+    delete process.env.SHOPIFY_API_KEY;
+  });
+
+  it('dalla tab Piano si torna alla tab Piano, sempre dentro l admin', async () => {
+    process.env.SHOPIFY_API_KEY = 'chiave-app';
+    getSubscription.mockResolvedValue(subscription());
+
+    const url = location(await call());
+
+    expect(url.pathname).toBe('/store/test-shop/apps/chiave-app/plan');
+    delete process.env.SHOPIFY_API_KEY;
+  });
+
+  it('senza la chiave dell app resta la via diretta, con il contesto embedded', async () => {
     getSubscription.mockResolvedValue(subscription());
 
     const url = location(await call());

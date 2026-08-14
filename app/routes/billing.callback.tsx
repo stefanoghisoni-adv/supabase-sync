@@ -10,7 +10,7 @@ import {
   type BillingAdmin,
 } from '~/lib/billing/subscription.server';
 import { appSubscriptionGid, applyPlanToShop } from '~/lib/billing/apply-plan.server';
-import { embeddedContextParams } from '~/lib/billing/embedded-return.server';
+import { adminAppUrl, embeddedContextParams } from '~/lib/billing/embedded-return.server';
 import { findPlanByName } from '~/lib/billing/find-plan.server';
 
 // Ritorno da Shopify dopo che il merchant ha approvato (o rifiutato) l'addebito.
@@ -42,12 +42,24 @@ type Outcome = 'ok' | 'ko';
  * un indirizzo preso dalla querystring sarebbe un rimando aperto.
  */
 function backToPlan(requestUrl: URL, shopDomain: string, outcome: Outcome): Response {
-  // shop/host/embedded viaggiano con il rimando: senza, la tab Piano verrebbe
-  // raggiunta fuori dall'admin e finirebbe sul modulo che chiede il negozio.
+  const dashboard = requestUrl.searchParams.get('return_to') === 'dashboard';
+
+  // Si rientra dall'admin, non dall'indirizzo dell'app: cosi' e' l'admin ad
+  // aprire il riquadro con la sessione gia' buona, invece di chiedere all'app
+  // di rientrare da sola — un giro che, inceppandosi, lasciava il merchant
+  // davanti a una pagina bianca dopo aver pagato.
+  const adminUrl = adminAppUrl({
+    shopDomain,
+    path: dashboard ? '' : '/plan',
+    params: new URLSearchParams({ billing: outcome }),
+  });
+  if (adminUrl) return redirect(adminUrl);
+
+  // Senza la chiave dell'app quell'indirizzo non si compone: si ripiega sulla
+  // rotta diretta, con shop/host/embedded in coda perche' possa rientrare.
   const params = embeddedContextParams({ requestUrl, shopDomain });
   params.set('billing', outcome);
-  const path = requestUrl.searchParams.get('return_to') === 'dashboard' ? '/' : '/plan';
-  return redirect(`${path}?${params.toString()}`);
+  return redirect(`${dashboard ? '/' : '/plan'}?${params.toString()}`);
 }
 
 /**
