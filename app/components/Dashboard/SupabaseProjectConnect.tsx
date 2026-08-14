@@ -519,11 +519,12 @@ export function SupabaseProjectConnect({
         // collegato alcun database, quindi non c'è nulla da eliminare — si
         // scollega e basta, senza il modal "mantieni/elimina dati".
         <InlineStack gap="300" blockAlign="center">
-          {selectedRef ? (
-            // Scelto un database, l'azione e' una sola e prende il posto della
-            // creazione: con entrambi i comandi visibili il merchant doveva
-            // decidere fra due strade quando ne aveva gia' imboccata una.
-            // Per tornare indietro c'e' la "x" nel campo.
+          {/* Con un database scelto la conferma e' l'azione principale, ma la
+              creazione resta al suo posto accanto: sono due strade, e la
+              seconda non deve sparire solo perche' si e' data un'occhiata alla
+              prima. Prima si nascondeva, e per riaverla bisognava sapere che la
+              "x" nel campo la faceva tornare. */}
+          {selectedRef && (
             <Button
               variant="primary"
               onClick={confirmSelection}
@@ -532,23 +533,22 @@ export function SupabaseProjectConnect({
             >
               Conferma
             </Button>
-          ) : (
-            /* A limite raggiunto il comando resta al suo posto, spento: dice
-               cosa non si puo' fare e perche' — l'avviso qui sopra porta gia'
-               all'aggiornamento del piano. */
-            <Button
-              // Icona di Polaris e non l'emoji: l'emoji ha colori propri e
-              // restava nera a pulsante spento, come se quella parte fosse
-              // ancora attiva. L'icona segue lo stato del comando.
-              icon={PlusIcon}
-              onClick={() => setShowCreate(true)}
-              // Loader finché non sappiamo se il piano consente un altro progetto.
-              loading={limitsChecking}
-              disabled={disabled || limitsChecking || disconnecting || planLimitHit}
-            >
-              Crea nuovo database
-            </Button>
           )}
+          {/* A limite raggiunto il comando resta al suo posto, spento: dice
+              cosa non si puo' fare e perche' — l'avviso qui sopra porta gia'
+              all'aggiornamento del piano. */}
+          <Button
+            // Icona di Polaris e non l'emoji: l'emoji ha colori propri e
+            // restava nera a pulsante spento, come se quella parte fosse
+            // ancora attiva. L'icona segue lo stato del comando.
+            icon={PlusIcon}
+            onClick={() => setShowCreate(true)}
+            // Loader finché non sappiamo se il piano consente un altro progetto.
+            loading={limitsChecking}
+            disabled={disabled || limitsChecking || disconnecting || planLimitHit}
+          >
+            Crea nuovo database
+          </Button>
           {/* Chi sta cambiando database e' gia' collegato: qui non ha niente da
               scollegare, ha solo da poter tornare indietro. */}
           {changing ? (
