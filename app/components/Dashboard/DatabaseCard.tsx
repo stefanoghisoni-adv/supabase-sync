@@ -119,12 +119,18 @@ function DatabaseAddress({ url, openUrl }: { url: string; openUrl: string }) {
   }, [opening]);
 
   return (
-    <BlockStack gap="200">
+    // Una riga sola, come le altre della card: nome a sinistra, valore e
+    // comando a destra. Su due righe l'indirizzo si staccava dal pulsante che
+    // lo apre, e la card perdeva l'allineamento per colonne.
+    <InlineStack align="space-between" blockAlign="center" gap="300" wrap={false}>
       <Text as="span" variant="bodyMd">
         {t.database.ownerUrl}
       </Text>
-      <InlineStack align="space-between" blockAlign="center" gap="300" wrap={false}>
-        <Text as="span" tone="subdued" breakWord>
+      <InlineStack gap="300" blockAlign="center" wrap={false}>
+        {/* truncate e non breakWord: l'indirizzo deve restare su una riga
+            accanto al pulsante, e se lo spazio non basta si accorcia invece di
+            spingerlo fuori. */}
+        <Text as="span" tone="subdued" truncate>
           {url}
         </Text>
         <Button
@@ -137,7 +143,7 @@ function DatabaseAddress({ url, openUrl }: { url: string; openUrl: string }) {
           {t.database.open}
         </Button>
       </InlineStack>
-    </BlockStack>
+    </InlineStack>
   );
 }
 
