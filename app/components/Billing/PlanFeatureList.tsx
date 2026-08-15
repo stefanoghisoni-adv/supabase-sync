@@ -2,6 +2,8 @@ import { BlockStack, InlineStack, Icon, Text } from '@shopify/polaris';
 import { CheckIcon, XIcon } from '@shopify/polaris-icons';
 import type { PlanFeature } from './plan-catalog';
 import { sortFeatures } from './plan-features';
+import { featureLabel } from './feature-label';
+import { useT, useLocale } from '~/lib/i18n/context';
 
 interface Props {
   features: PlanFeature[];
@@ -13,6 +15,8 @@ interface Props {
 // wrap={false} tiene icona e testo sulla stessa riga: che la label non vada a
 // capo dipende invece dalla sua lunghezza, verificata nei test del catalogo.
 export function PlanFeatureList({ features }: Props) {
+  const t = useT();
+  const locale = useLocale();
   const sorted = sortFeatures(features);
   return (
     <BlockStack gap="300" inlineAlign="start">
@@ -23,7 +27,7 @@ export function PlanFeatureList({ features }: Props) {
             tone={feature.included ? 'success' : 'subdued'}
           />
           <Text as="span" tone={feature.included ? 'success' : 'subdued'}>
-            {feature.label}
+            {featureLabel(feature, t, locale)}
           </Text>
         </InlineStack>
       ))}

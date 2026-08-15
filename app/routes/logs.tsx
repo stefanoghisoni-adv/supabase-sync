@@ -8,6 +8,7 @@ import { prisma } from '~/db.server';
 import { SyncLog } from '~/components/Dashboard/SyncLog';
 import { findPlanByName } from '~/lib/billing/find-plan.server';
 import { useNavLoading } from '~/components/Dashboard/nav-loading';
+import { useT } from '~/lib/i18n/context';
 import { ProductOverflowBanner } from '~/components/Dashboard/ProductOverflowBanner';
 import { nextSyncAt, formatCountdown } from '~/lib/sync/next-sync';
 
@@ -56,10 +57,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 export default function Logs() {
   const { jobs, customersEnabled, timeZone, nextSync } = useLoaderData<typeof loader>();
+  const t = useT();
   // Il conto alla rovescia si scrive al render: calcolato nel loader
   // invecchierebbe con la pagina aperta, e "fra un minuto" resterebbe li' a
   // lungo dopo che quel minuto e' passato.
-  const countdown = nextSync ? formatCountdown(new Date(), new Date(nextSync)) : null;
+  const countdown = nextSync ? formatCountdown(new Date(), new Date(nextSync), t) : null;
 
   // Spinner e disabilitazione solo se e' stato questo pulsante a far partire
   // la navigazione: dal menu laterale dell'admin deve restare fermo.

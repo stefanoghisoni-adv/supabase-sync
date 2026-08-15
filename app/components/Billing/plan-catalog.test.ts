@@ -1,4 +1,8 @@
 import { describe, it, expect } from 'vitest';
+import { featureLabel } from './feature-label';
+// Alias: `it` e' anche il nome del caso di test in vitest.
+import { it as itDict } from '~/lib/i18n/it';
+import { en as enDict } from '~/lib/i18n/en';
 import {
   buildPlanCards,
   buildPlanFeatures,
@@ -93,15 +97,15 @@ describe('buildPlanFeatures', () => {
     }
   });
 
-  it('i limiti sono quelli della tabella', () => {
-    const label = (plan: PlanRow, key: string) =>
-      buildPlanFeatures(plan).find((f) => f.key === key)!.label;
+  it('i limiti sono quelli della tabella, e restano numeri', () => {
+    // La riga porta il dato, non la frase: la frase si compone dove si legge,
+    // che e' l'unico posto in cui si sa in che lingua sta guardando il merchant.
+    const value = (plan: PlanRow, key: string) =>
+      buildPlanFeatures(plan).find((f) => f.key === key)!.value;
 
-    expect(label(row({ maxProducts: 50 }), 'products')).toBe('Fino a 50 prodotti');
-    expect(label(row({ maxProducts: 12345 }), 'products')).toBe('Fino a 12.345 prodotti');
-    expect(label(row({ maxProducts: null }), 'products')).toBe('Prodotti illimitati');
-    expect(label(row({ maxSyncFrequencyHours: 168 }), 'sync')).toBe('Sync ogni 7 giorni');
-    expect(label(row({ maxSyncFrequencyHours: 24 }), 'sync')).toBe('Sync ogni giorno');
+    expect(value(row({ maxProducts: 50 }), 'products')).toBe(50);
+    expect(value(row({ maxProducts: null }), 'products')).toBeNull();
+    expect(value(row({ maxSyncFrequencyHours: 168 }), 'sync')).toBe(168);
   });
 
   it('i clienti seguono il piano: inclusi col loro tetto, altrimenti riga grigia', () => {
@@ -110,15 +114,13 @@ describe('buildPlanFeatures', () => {
 
     expect(customers(row({ customersSyncEnabled: false }))).toEqual({
       key: 'customers',
-      label: 'Sync clienti',
       included: false,
+      value: null,
     });
-    expect(customers(row({ customersSyncEnabled: true, maxCustomers: 50000 })).label).toBe(
-      'Fino a 50.000 clienti',
+    expect(customers(row({ customersSyncEnabled: true, maxCustomers: 50000 })).value).toBe(
+      50000,
     );
-    expect(customers(row({ customersSyncEnabled: true, maxCustomers: null })).label).toBe(
-      'Clienti illimitati',
-    );
+    expect(customers(row({ customersSyncEnabled: true, maxCustomers: null })).value).toBeNull();
   });
 
   it('l’assistenza segue il livello registrato', () => {
@@ -133,10 +135,13 @@ describe('buildPlanFeatures', () => {
     expect(has('dedicated', 'chat')).toBe(true);
   });
 
-  it('le label restano corte, altrimenti una card si alza sulle altre', () => {
-    for (const plan of buildPlanCards(PLANS)) {
-      for (const feature of plan.features) {
-        expect(feature.label.length).toBeLessThanOrEqual(26);
+  it('le label restano corte in ogni lingua, altrimenti una card si alza sulle altre', () => {
+    for (const dictionary of [itDict, enDict]) {
+      for (const plan of buildPlanCards(PLANS)) {
+        for (const feature of plan.features) {
+          const label = featureLabel(feature, dictionary, 'it');
+          expect(label.length).toBeLessThanOrEqual(26);
+        }
       }
     }
   });

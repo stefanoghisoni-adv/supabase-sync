@@ -1,3 +1,5 @@
+import type { Dictionary } from '~/lib/i18n/context';
+
 /**
  * Quando ripartira' la sincronizzazione periodica.
  *
@@ -59,20 +61,24 @@ export function nextSyncAt(
  * preciso ma nessuno lo legge per decidere qualcosa, e la precisione qui e'
  * finta — dipende da quando passa il cron.
  */
-export function formatCountdown(from: Date, to: Date): string | null {
+export function formatCountdown(
+  from: Date,
+  to: Date,
+  t: Pick<Dictionary, 'sync'>,
+): string | null {
   const ms = to.getTime() - from.getTime();
   if (ms <= 0) return null;
 
   const minutes = Math.round(ms / 60000);
   if (minutes < 60) {
-    return minutes <= 1 ? 'un minuto' : `${minutes} minuti`;
+    return minutes <= 1 ? t.sync.countdown.oneMinute : t.sync.countdown.minutes(minutes);
   }
 
   const hours = Math.round(minutes / 60);
   if (hours < 24) {
-    return hours === 1 ? "un'ora" : `${hours} ore`;
+    return hours === 1 ? t.sync.countdown.oneHour : t.sync.countdown.hours(hours);
   }
 
   const days = Math.round(hours / 24);
-  return days === 1 ? 'un giorno' : `${days} giorni`;
+  return days === 1 ? t.sync.countdown.oneDay : t.sync.countdown.days(days);
 }

@@ -17,12 +17,12 @@ function card(overrides: Partial<PlanCard> = {}): PlanCard {
     partnerYearly: null,
     recommended: true,
     features: [
-      { key: 'products', label: 'Fino a 5.000 prodotti', included: true },
-      { key: 'sync', label: 'Sync ogni 6 ore', included: true },
-      { key: 'email', label: 'Supporto via email', included: true },
-      { key: 'customers', label: 'Fino a 10.000 clienti', included: true },
-      { key: 'push', label: 'Push manuale', included: false },
-      { key: 'chat', label: 'Chat dedicata', included: false },
+      { key: 'products', included: true, value: 5000 },
+      { key: 'sync', included: true, value: 6 },
+      { key: 'email', included: true, value: null },
+      { key: 'customers', included: true, value: 10_000 },
+      { key: 'push', included: false, value: null },
+      { key: 'chat', included: false, value: null },
     ],
     ...overrides,
   };

@@ -1,6 +1,6 @@
 import type { LoaderFunctionArgs } from '@remix-run/node';
 import { json } from '@remix-run/node';
-import { useLoaderData } from '@remix-run/react';
+import { useFetcher, useLoaderData, useRevalidator } from '@remix-run/react';
 import {
   Page,
   Layout,
@@ -20,6 +20,9 @@ import { samePlanName } from '~/lib/billing/plan-name';
 import { syncIsActive } from '~/lib/sync/sync-active';
 import { loadSyncTiming } from '~/lib/sync/sync-timing.server';
 import { SyncCard } from '~/components/Dashboard/SyncCard';
+import { useT, useLocale } from '~/lib/i18n/context';
+import type { Locale } from '~/lib/i18n/locales';
+import { useCallback, useEffect } from 'react';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const { session } = await authenticate.admin(request);
@@ -110,9 +113,28 @@ export async function loader({ request }: LoaderFunctionArgs) {
 // al collegamento del progetto e le chiavi del progetto non si toccano da qui.
 export default function SupabaseSettings() {
   const { account, config, sync } = useLoaderData<typeof loader>();
+  const t = useT();
+  const locale = useLocale();
+
+  // La lingua si applica a tutta l'app, non alla sola pagina: salvata la
+  // scelta si rilegge il dato di root, che e' dove la lingua vive.
+  const localeFetcher = useFetcher<{ ok?: boolean }>();
+  const revalidator = useRevalidator();
+  const changeLocale = useCallback(
+    (next: Locale) => {
+      localeFetcher.submit({ locale: next }, { method: 'POST', action: '/api/locale' });
+    },
+    [localeFetcher],
+  );
+  useEffect(() => {
+    if (localeFetcher.state === 'idle' && localeFetcher.data?.ok) revalidator.revalidate();
+    // revalidator fuori dalle dipendenze: revalidate() ne cambia lo stato, e
+    // averlo qui rifarebbe partire l'effetto all'infinito.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [localeFetcher.state, localeFetcher.data]);
 
   return (
-    <Page fullWidth title="Impostazioni" backAction={{ url: '/' }}>
+    <Page fullWidth title={t.settings.title} backAction={{ url: '/' }}>
       <Layout>
         <Layout.Section>
           <BlockStack gap="400">
@@ -130,25 +152,22 @@ export default function SupabaseSettings() {
                     prop per chiedere il contrario). Il Button variant="plain" e'
                     lo stesso comando di "Aggiorna a Pro", quindi il blu e' lo
                     stesso per costruzione e non per una regola copiata. */}
-                Nessun progetto Supabase collegato. Vai alla{' '}
+                {t.settings.noProject.before}{' '}
                 <Button variant="plain" url="/">
-                  Dashboard
+                  {t.settings.noProject.link}
                 </Button>{' '}
-                per collegare il tuo database.
+                {t.settings.noProject.after}
               </Banner>
             ) : (
               <>
                 {!config.readToken && (
                   <Banner tone="warning">
-                    Chiave di lettura non disponibile: il tracciamento non riesce
-                    a leggere i dati. Scrivici e la rimettiamo a posto.
+                    {t.settings.missingReadKey}
                   </Banner>
                 )}
                 {!config.proxyBaseUrl && (
                   <Banner tone="critical">
-                    Indirizzo di lettura non disponibile: manca la configurazione
-                    del dominio dell&apos;app. Contatta il supporto prima di
-                    impostare il tracciamento.
+                    {t.settings.missingProxyUrl}
                   </Banner>
                 )}
               </>
@@ -170,6 +189,9 @@ export default function SupabaseSettings() {
                 productsSyncActive={account.productsSyncActive}
                 customersSyncActive={account.customersSyncActive}
                 customersUpgradePlan={account.customersUpgradePlan}
+                locale={locale}
+                onLocaleChange={changeLocale}
+                localeSaving={localeFetcher.state !== 'idle'}
               />
               <DatabaseCard
                 connected={account.connected}

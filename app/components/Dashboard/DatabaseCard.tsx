@@ -10,6 +10,7 @@ import {
 } from '@shopify/polaris';
 import { MetricRow } from './MetricRow';
 import { middleTruncate, copyToClipboard } from './copy-value';
+import { useT } from '~/lib/i18n/context';
 
 export interface DatabaseCardProps {
   connected: boolean;
@@ -32,6 +33,7 @@ export interface DatabaseCardProps {
  * per colonne invece che a blocchi.
  */
 function CopyableRow({ label, value }: { label: string; value: string }) {
+  const t = useT();
   const [copied, setCopied] = useState(false);
 
   const copy = useCallback(() => {
@@ -53,7 +55,7 @@ function CopyableRow({ label, value }: { label: string; value: string }) {
           del puntatore (regole in dashboard.css, il pulsante non prende una
           classe propria). */}
       <div className="copy-value">
-        <Tooltip content={copied ? 'Copiato!' : 'Clicca per copiare'}>
+        <Tooltip content={copied ? t.database.copied : t.database.copy}>
           {/* monochromePlain: e' un valore da leggere, non un link da seguire, e
               del blu non ha bisogno. Il testo mostrato puo' essere accorciato,
               quello copiato e' sempre intero. */}
@@ -84,8 +86,9 @@ function ValueRow({
   value: string | null;
   available: boolean;
 }) {
+  const t = useT();
   if (!available || !value) {
-    return <MetricRow label={label} badge={{ content: 'Non configurato' }} />;
+    return <MetricRow label={label} badge={{ content: t.database.notConfigured }} />;
   }
   return <CopyableRow label={label} value={value} />;
 }
@@ -100,6 +103,7 @@ function ValueRow({
  * partire due schede con due clic ravvicinati.
  */
 function DatabaseAddress({ url }: { url: string }) {
+  const t = useT();
   const [opening, setOpening] = useState(false);
 
   useEffect(() => {
@@ -111,7 +115,7 @@ function DatabaseAddress({ url }: { url: string }) {
   return (
     <BlockStack gap="200">
       <Text as="span" variant="bodyMd">
-        URL Database proprietario
+        {t.database.ownerUrl}
       </Text>
       <InlineStack align="space-between" blockAlign="center" gap="300" wrap={false}>
         <Text as="span" tone="subdued" breakWord>
@@ -124,7 +128,7 @@ function DatabaseAddress({ url }: { url: string }) {
           loading={opening}
           disabled={opening}
         >
-          Vai al database
+          {t.database.open}
         </Button>
       </InlineStack>
     </BlockStack>
@@ -137,22 +141,23 @@ export function DatabaseCard({
   readKey,
   databaseUrl,
 }: DatabaseCardProps) {
+  const t = useT();
   return (
     <Card>
       <BlockStack gap="300">
         <Text as="h2" variant="headingMd">
-          Database
+          {t.database.title}
         </Text>
         <MetricRow
-          label="Stato"
+          label={t.database.status}
           badge={{
             tone: connected ? 'success' : undefined,
-            content: connected ? 'Collegato' : 'Non collegato',
+            content: connected ? t.common.connected : t.common.notConnected,
           }}
         />
-        <ValueRow label="App URL" value={appUrl} available={connected} />
+        <ValueRow label={t.database.appUrl} value={appUrl} available={connected} />
         <ValueRow
-          label="Publishable API Key"
+          label={t.database.readKey}
           value={readKey}
           available={connected}
         />

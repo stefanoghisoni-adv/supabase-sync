@@ -1,4 +1,5 @@
 import { isSelectablePlan } from '~/components/Billing/plan-access';
+import type { Dictionary } from '~/lib/i18n/context';
 
 // Il nome tecnico del piano (colonna plan_name) non e' adatto alla UI: mappa esplicita.
 const PLAN_LABELS: Record<string, string> = {
@@ -24,8 +25,13 @@ export interface SyncBadge {
 // Badge di una sincronizzazione: verde quando gira, grigio quando non gira. Il
 // grigio e' lo stesso dei badge senza tono (es. il piano Lifetime): "non attiva"
 // non e' un errore, e' solo una funzione che al momento non e' in uso.
-export function syncStatusBadge(active: boolean): SyncBadge {
-  return active ? { tone: 'success', content: 'Attiva' } : { content: 'Non attiva' };
+export function syncStatusBadge(
+  active: boolean,
+  t: Pick<Dictionary, 'common'>,
+): SyncBadge {
+  return active
+    ? { tone: 'success', content: t.common.active }
+    : { content: t.common.inactive };
 }
 
 export interface PlanOption {
@@ -63,14 +69,17 @@ export function firstPlanWithCustomersSync(
 
 // Plan.maxSyncFrequencyHours e' un Float: sotto l'ora si legge meglio in minuti,
 // sopra le 24 ore (multipli esatti) in giorni ("Ogni 7 giorni" invece di "168 ore").
-export function syncFrequencyLabel(hours: number | null | undefined): string {
-  if (hours == null || !Number.isFinite(hours) || hours <= 0) return '—';
-  if (hours < 1) return `Ogni ${Math.round(hours * 60)} minuti`;
-  if (hours === 1) return 'Ogni ora';
+export function syncFrequencyLabel(
+  hours: number | null | undefined,
+  t: Pick<Dictionary, 'common' | 'sync'>,
+): string {
+  if (hours == null || !Number.isFinite(hours) || hours <= 0) return t.common.notSet;
+  if (hours < 1) return t.sync.every.minutes(Math.round(hours * 60));
+  if (hours === 1) return t.sync.every.hour;
   if (hours >= 24 && hours % 24 === 0) {
     const days = hours / 24;
-    return days === 1 ? 'Ogni giorno' : `Ogni ${days} giorni`;
+    return days === 1 ? t.sync.every.day : t.sync.every.days(days);
   }
   const value = Number.isInteger(hours) ? hours : Number(hours.toFixed(1));
-  return `Ogni ${value} ore`;
+  return t.sync.every.hours(value);
 }

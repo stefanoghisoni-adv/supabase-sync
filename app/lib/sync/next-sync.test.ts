@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { nextSyncAt, formatCountdown } from './next-sync';
+// Alias: `it` e' anche il nome del caso di test in vitest.
+import { it as itDict } from '~/lib/i18n/it';
 
 const at = (iso: string) => new Date(iso);
 
@@ -41,16 +43,16 @@ describe('nextSyncAt', () => {
 
 describe('formatCountdown', () => {
   it('sceglie una sola unita, la piu grande che abbia senso', () => {
-    expect(formatCountdown(at('2026-08-01T00:00:00Z'), at('2026-08-08T00:00:00Z'))).toBe('7 giorni');
-    expect(formatCountdown(at('2026-08-01T00:00:00Z'), at('2026-08-02T00:00:00Z'))).toBe('un giorno');
-    expect(formatCountdown(at('2026-08-01T00:00:00Z'), at('2026-08-01T05:00:00Z'))).toBe('5 ore');
-    expect(formatCountdown(at('2026-08-01T00:00:00Z'), at('2026-08-01T01:00:00Z'))).toBe("un'ora");
-    expect(formatCountdown(at('2026-08-01T00:00:00Z'), at('2026-08-01T00:30:00Z'))).toBe('30 minuti');
-    expect(formatCountdown(at('2026-08-01T00:00:00Z'), at('2026-08-01T00:01:00Z'))).toBe('un minuto');
+    expect(formatCountdown(at('2026-08-01T00:00:00Z'), at('2026-08-08T00:00:00Z'), itDict)).toBe('7 giorni');
+    expect(formatCountdown(at('2026-08-01T00:00:00Z'), at('2026-08-02T00:00:00Z'), itDict)).toBe('un giorno');
+    expect(formatCountdown(at('2026-08-01T00:00:00Z'), at('2026-08-01T05:00:00Z'), itDict)).toBe('5 ore');
+    expect(formatCountdown(at('2026-08-01T00:00:00Z'), at('2026-08-01T01:00:00Z'), itDict)).toBe("un'ora");
+    expect(formatCountdown(at('2026-08-01T00:00:00Z'), at('2026-08-01T00:30:00Z'), itDict)).toBe('30 minuti');
+    expect(formatCountdown(at('2026-08-01T00:00:00Z'), at('2026-08-01T00:01:00Z'), itDict)).toBe('un minuto');
   });
 
   it('niente da dire se e gia passata', () => {
-    expect(formatCountdown(at('2026-08-02T00:00:00Z'), at('2026-08-01T00:00:00Z'))).toBeNull();
-    expect(formatCountdown(at('2026-08-01T00:00:00Z'), at('2026-08-01T00:00:00Z'))).toBeNull();
+    expect(formatCountdown(at('2026-08-02T00:00:00Z'), at('2026-08-01T00:00:00Z'), itDict)).toBeNull();
+    expect(formatCountdown(at('2026-08-01T00:00:00Z'), at('2026-08-01T00:00:00Z'), itDict)).toBeNull();
   });
 });

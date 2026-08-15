@@ -60,6 +60,14 @@ model Shop {
   // ogni apertura dell'app — la risposta arriva da una richiesta al browser, e
   // il browser riparte da zero ogni volta.
   trackingCheckedAt DateTime?          @map("tracking_checked_at")
+  // Lingua scelta dal merchant in Impostazioni. null = si segue quella del suo
+  // admin Shopify, che e' il comportamento normale: la lingua non si chiede,
+  // la si eredita. Una scelta esplicita invece vince sempre.
+  locale            String?
+  // L'ultima lingua che Shopify ci ha dichiarato per questo admin. La manda in
+  // coda alla URL a ogni apertura, ma non alle navigazioni interne: senza
+  // ricordarla, a meta' sessione l'app cambierebbe lingua da sola.
+  detectedLocale    String?            @map("detected_locale")
   billingCycle      String?            @map("billing_cycle")
   installedAt       DateTime           @default(now()) @map("installed_at")
   uninstalledAt     DateTime?          @map("uninstalled_at")

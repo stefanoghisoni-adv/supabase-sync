@@ -26,6 +26,8 @@ import { authenticate } from './shopify.server';
 import { prisma } from './db.server';
 import { canAccessPlanTab } from './components/Billing/plan-access';
 import { adminAppUrl, reloadWholePage } from './utils/admin-page';
+import { FALLBACK_LOCALE, localeFromTag, resolveLocale } from './lib/i18n/locales';
+import { I18nProvider } from './lib/i18n/context';
 
 // Rete di sicurezza del tema chiaro, in linea nel documento e DOPO i fogli di
 // stile: force-light.css fa il lavoro completo, ma e' un file esterno, e se per
@@ -68,11 +70,26 @@ export async function loader({ request }: LoaderFunctionArgs) {
     const { session } = await authenticate.admin(request);
     const shop = await prisma.shop.findUnique({
       where: { shopDomain: session.shop },
-      select: { currentPlan: true },
+      select: { id: true, currentPlan: true, locale: true, detectedLocale: true },
     });
+
+    // Shopify dichiara la lingua dell'admin in coda alla URL, ma solo quando e'
+    // lui ad aprire l'app: alle navigazioni interne quel parametro non c'e'.
+    // Quando arriva lo si ricorda, cosi' la lingua non cambia a meta' sessione.
+    const declared = new URL(request.url).searchParams.get('locale');
+    if (shop && declared && localeFromTag(declared) !== shop.detectedLocale) {
+      // Best effort: e' una preferenza, non un dato su cui si regge una pagina.
+      prisma.shop
+        .update({ where: { id: shop.id }, data: { detectedLocale: localeFromTag(declared) } })
+        .catch(() => {});
+    }
+
     return json({
       apiKey,
       canSeePlanTab: canAccessPlanTab(shop?.currentPlan),
+      // La lingua sta in root perche' la usa tutta l'app, menu compreso. La
+      // scelta del merchant vince su tutto; senza una scelta si segue l'admin.
+      locale: resolveLocale(shop?.locale, declared ?? shop?.detectedLocale),
       // Serve alla pagina d'errore per ricaricare la pagina dell'admin. Si
       // ricava dalla sessione e non dai parametri della URL, che una
       // navigazione interna si porta via.
@@ -83,7 +100,12 @@ export async function loader({ request }: LoaderFunctionArgs) {
     // intatte. Un guasto diverso (es. DB irraggiungibile) non deve far fallire
     // l'intera app per una voce di menu: la rotta /plan si difende comunque da se'.
     if (error instanceof Response) throw error;
-    return json({ apiKey, canSeePlanTab: true, adminAppUrl: null });
+    return json({
+      apiKey,
+      canSeePlanTab: true,
+      adminAppUrl: null,
+      locale: FALLBACK_LOCALE,
+    });
   }
 }
 
@@ -161,10 +183,11 @@ function useReloadOnStaleAssets(): void {
 }
 
 export default function App() {
-  const { apiKey, canSeePlanTab } = useLoaderData<typeof loader>();
+  const { apiKey, canSeePlanTab, locale } = useLoaderData<typeof loader>();
   useReloadOnStaleAssets();
 
   return (
+      <I18nProvider locale={locale}>
         <AppProvider isEmbeddedApp apiKey={apiKey} theme="light">
           <NavMenu>
             {/* rel="home" e' la radice dell'app: l'admin la usa per il nome
@@ -183,6 +206,7 @@ export default function App() {
           </NavMenu>
           <Outlet />
         </AppProvider>
+      </I18nProvider>
   );
 }
 

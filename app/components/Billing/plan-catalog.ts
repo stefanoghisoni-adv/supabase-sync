@@ -1,4 +1,3 @@
-import { syncFrequencyLabel } from '~/components/Dashboard/account-format';
 import { isSelectablePlan } from './plan-access';
 
 // Le card della tab Piano si costruiscono dalla tabella `plans`: nome, prezzo e
@@ -25,10 +24,16 @@ export type FeatureKey = (typeof FEATURE_ORDER)[number];
 
 export interface PlanFeature {
   key: FeatureKey;
-  // Label corta per scelta: nella griglia a piu' colonne una label lunga andrebbe
-  // a capo, alzando solo quella card. Vedi il test sulla lunghezza massima.
-  label: string;
   included: boolean; // true = SI (verde), false = NO (grigio)
+  /**
+   * Il numero dentro la riga, quando ce n'e' uno: il tetto di prodotti o
+   * clienti, oppure le ore fra una sincronizzazione e l'altra. `null` significa
+   * "nessun tetto" dove un tetto e' previsto.
+   *
+   * Il testo non si compone qui ma dove si legge: queste righe nascono anche
+   * nei loader, che non sanno in che lingua sta guardando il merchant.
+   */
+  value: number | null;
 }
 
 export interface PlanCard {
@@ -59,34 +64,15 @@ export interface PlanRow {
 // tabella lo scrive l'owner e puo' cambiare forma.
 const RECOMMENDED_PLAN = 'pro';
 
-/** I numeri lunghi si leggono a colpo d'occhio solo raggruppati: 50.000. */
-function amount(value: number): string {
-  return value.toLocaleString('it-IT');
-}
-
 function productsFeature(plan: PlanRow): PlanFeature {
-  return {
-    key: 'products',
-    label:
-      plan.maxProducts == null
-        ? 'Prodotti illimitati'
-        : `Fino a ${amount(plan.maxProducts)} prodotti`,
-    included: true,
-  };
+  return { key: 'products', included: true, value: plan.maxProducts };
 }
 
 function customersFeature(plan: PlanRow): PlanFeature {
   if (!plan.customersSyncEnabled) {
-    return { key: 'customers', label: 'Sync clienti', included: false };
+    return { key: 'customers', included: false, value: null };
   }
-  return {
-    key: 'customers',
-    label:
-      plan.maxCustomers == null
-        ? 'Clienti illimitati'
-        : `Fino a ${amount(plan.maxCustomers)} clienti`,
-    included: true,
-  };
+  return { key: 'customers', included: true, value: plan.maxCustomers };
 }
 
 // Assistenza: nella tabella c'e' un livello (`support_level`), qui diventa le tre
@@ -98,16 +84,11 @@ export function buildPlanFeatures(plan: PlanRow): PlanFeature[] {
   const level = (plan.supportLevel ?? '').trim().toLowerCase();
   return [
     productsFeature(plan),
-    {
-      key: 'sync',
-      // "Ogni 7 giorni" -> "Sync ogni 7 giorni".
-      label: `Sync ${syncFrequencyLabel(plan.maxSyncFrequencyHours).toLowerCase()}`,
-      included: true,
-    },
-    { key: 'email', label: 'Supporto via email', included: true },
+    { key: 'sync', included: true, value: plan.maxSyncFrequencyHours },
+    { key: 'email', included: true, value: null },
     customersFeature(plan),
-    { key: 'push', label: 'Push manuale', included: PUSH_LEVELS.has(level) },
-    { key: 'chat', label: 'Chat dedicata', included: CHAT_LEVELS.has(level) },
+    { key: 'push', included: PUSH_LEVELS.has(level), value: null },
+    { key: 'chat', included: CHAT_LEVELS.has(level), value: null },
   ];
 }
 

@@ -2,6 +2,7 @@ import { BlockStack, Card, Text } from '@shopify/polaris';
 import { MetricRow } from './MetricRow';
 import { syncFrequencyLabel } from './account-format';
 import { formatCountdown } from '~/lib/sync/next-sync';
+import { useT, useLocale } from '~/lib/i18n/context';
 
 export interface SyncCardProps {
   /** Cadenza prevista dal piano, in ore. null = piano senza cadenza nota. */
@@ -23,38 +24,43 @@ export interface SyncCardProps {
  * andare piu' veloci senza cambiare piano, che non e' vero.
  */
 export function SyncCard({ frequencyHours, lastSync, nextSync, timeZone }: SyncCardProps) {
-  const countdown = nextSync ? formatCountdown(new Date(), new Date(nextSync)) : null;
+  const t = useT();
+  const locale = useLocale();
+  const countdown = nextSync ? formatCountdown(new Date(), new Date(nextSync), t) : null;
 
   return (
     <Card>
       <BlockStack gap="300">
         <Text as="h2" variant="headingMd">
-          Sincronizzazione
+          {t.sync.title}
         </Text>
         <MetricRow
-          label="Frequenza"
-          badge={{ content: syncFrequencyLabel(frequencyHours) }}
+          label={t.sync.frequency}
+          badge={{ content: syncFrequencyLabel(frequencyHours, t) }}
         />
         <MetricRow
-          label="Ultima"
-          badge={{ content: lastSync ? formatDate(lastSync, timeZone) : 'Mai' }}
+          label={t.sync.last}
+          badge={{
+            content: lastSync ? formatDate(lastSync, timeZone, locale) : t.common.never,
+          }}
         />
         {/* Il conto alla rovescia e non l'orario: "fra 2 giorni" si capisce a
             colpo d'occhio, mentre una data va confrontata con oggi. Quando non
             e' prevedibile la riga sparisce, invece di mostrare un trattino che
             somiglia a un guasto. */}
-        {countdown && <MetricRow label="Prossima" badge={{ content: `Tra ${countdown}` }} />}
+        {countdown && (
+          <MetricRow label={t.sync.next} badge={{ content: t.sync.inLabel(countdown) }} />
+        )}
         <Text as="p" tone="subdued" variant="bodySm">
-          La frequenza è quella prevista dal tuo piano: con un piano superiore i dati
-          si aggiornano più spesso.
+          {t.sync.fromPlan}
         </Text>
       </BlockStack>
     </Card>
   );
 }
 
-function formatDate(iso: string, timeZone?: string | null): string {
-  return new Date(iso).toLocaleString('it-IT', {
+function formatDate(iso: string, timeZone: string | null | undefined, locale: string): string {
+  return new Date(iso).toLocaleString(locale, {
     day: 'numeric',
     month: 'short',
     hour: '2-digit',

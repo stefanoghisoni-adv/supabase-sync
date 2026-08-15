@@ -1,4 +1,7 @@
 import { describe, it, expect } from 'vitest';
+// Alias: `it` e' anche il nome del caso di test in vitest.
+import { it as itDict } from '~/lib/i18n/it';
+import { en as enDict } from '~/lib/i18n/en';
 import {
   planLabel,
   syncFrequencyLabel,
@@ -27,11 +30,14 @@ describe('planLabel', () => {
 });
 
 describe('syncStatusBadge', () => {
-  it('attiva → verde', () => {
-    expect(syncStatusBadge(true)).toEqual({ tone: 'success', content: 'Attiva' });
+  it('attiva → verde, con la parola della lingua in uso', () => {
+    expect(syncStatusBadge(true, itDict)).toEqual({ tone: 'success', content: 'Attiva' });
+    expect(syncStatusBadge(true, enDict)).toEqual({ tone: 'success', content: 'Active' });
   });
   it('non attiva → grigio, senza tono', () => {
-    expect(syncStatusBadge(false)).toEqual({ content: 'Non attiva' });
+    // Il grigio non e' un errore: e' una funzione che al momento non e' in uso.
+    expect(syncStatusBadge(false, itDict)).toEqual({ content: 'Non attiva' });
+    expect(syncStatusBadge(false, enDict)).toEqual({ content: 'Not active' });
   });
 });
 
@@ -73,26 +79,26 @@ describe('firstPlanWithCustomersSync', () => {
 });
 
 describe('syncFrequencyLabel', () => {
-  it('1 ora', () => expect(syncFrequencyLabel(1)).toBe('Ogni ora'));
-  it('mezz ora → minuti', () => expect(syncFrequencyLabel(0.5)).toBe('Ogni 30 minuti'));
-  it('decimale → una cifra', () => expect(syncFrequencyLabel(1.5)).toBe('Ogni 1.5 ore'));
+  it('1 ora', () => expect(syncFrequencyLabel(1, itDict)).toBe('Ogni ora'));
+  it('mezz ora → minuti', () => expect(syncFrequencyLabel(0.5, itDict)).toBe('Ogni 30 minuti'));
+  it('decimale → una cifra', () => expect(syncFrequencyLabel(1.5, itDict)).toBe('Ogni 1.5 ore'));
   it('assente o non valido → trattino', () => {
-    expect(syncFrequencyLabel(null)).toBe('—');
-    expect(syncFrequencyLabel(0)).toBe('—');
+    expect(syncFrequencyLabel(null, itDict)).toBe('—');
+    expect(syncFrequencyLabel(0, itDict)).toBe('—');
   });
 });
 
 describe('syncFrequencyLabel — giorni', () => {
   it('rende i multipli esatti di 24h come giorni', () => {
-    expect(syncFrequencyLabel(168)).toBe('Ogni 7 giorni');
-    expect(syncFrequencyLabel(24)).toBe('Ogni giorno');
-    expect(syncFrequencyLabel(48)).toBe('Ogni 2 giorni');
+    expect(syncFrequencyLabel(168, itDict)).toBe('Ogni 7 giorni');
+    expect(syncFrequencyLabel(24, itDict)).toBe('Ogni giorno');
+    expect(syncFrequencyLabel(48, itDict)).toBe('Ogni 2 giorni');
   });
 
   it('lascia invariati i casi ore/minuti (e i non-multipli di 24)', () => {
-    expect(syncFrequencyLabel(6)).toBe('Ogni 6 ore');
-    expect(syncFrequencyLabel(1)).toBe('Ogni ora');
-    expect(syncFrequencyLabel(0.5)).toBe('Ogni 30 minuti');
-    expect(syncFrequencyLabel(30)).toBe('Ogni 30 ore');
+    expect(syncFrequencyLabel(6, itDict)).toBe('Ogni 6 ore');
+    expect(syncFrequencyLabel(1, itDict)).toBe('Ogni ora');
+    expect(syncFrequencyLabel(0.5, itDict)).toBe('Ogni 30 minuti');
+    expect(syncFrequencyLabel(30, itDict)).toBe('Ogni 30 ore');
   });
 });
