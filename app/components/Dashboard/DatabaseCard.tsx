@@ -18,8 +18,14 @@ export interface DatabaseCardProps {
   appUrl: string | null;
   /** Chiave di lettura da usare insieme all'indirizzo qui sopra. */
   readKey: string | null;
-  /** Indirizzo del database del merchant, per aprirlo da qui. */
+  /** Indirizzo a cui il progetto risponde: si legge e si copia. */
   databaseUrl: string | null;
+  /**
+   * La pagina del progetto sulla dashboard di Supabase: e' li' che si va a
+   * guardare le tabelle. `databaseUrl` aperto in un browser darebbe una
+   * risposta dell'API, non una pagina.
+   */
+  dashboardUrl: string | null;
 }
 
 /**
@@ -102,7 +108,7 @@ function ValueRow({
  * che possiamo seguire: lo stato di attesa e' a tempo, il minimo per non far
  * partire due schede con due clic ravvicinati.
  */
-function DatabaseAddress({ url }: { url: string }) {
+function DatabaseAddress({ url, openUrl }: { url: string; openUrl: string }) {
   const t = useT();
   const [opening, setOpening] = useState(false);
 
@@ -122,7 +128,7 @@ function DatabaseAddress({ url }: { url: string }) {
           {url}
         </Text>
         <Button
-          url={url}
+          url={openUrl}
           target="_blank"
           onClick={() => setOpening(true)}
           loading={opening}
@@ -140,6 +146,7 @@ export function DatabaseCard({
   appUrl,
   readKey,
   databaseUrl,
+  dashboardUrl,
 }: DatabaseCardProps) {
   const t = useT();
   return (
@@ -164,7 +171,7 @@ export function DatabaseCard({
         {connected && databaseUrl && (
           <>
             <Divider />
-            <DatabaseAddress url={databaseUrl} />
+            <DatabaseAddress url={databaseUrl} openUrl={dashboardUrl ?? databaseUrl} />
           </>
         )}
       </BlockStack>

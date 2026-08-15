@@ -1,5 +1,16 @@
 import { useMemo, useState } from 'react';
-import { Combobox, Icon, Listbox, Select, Spinner, InlineStack, Text } from '@shopify/polaris';
+import {
+  Box,
+  Button,
+  Icon,
+  InlineStack,
+  Labelled,
+  OptionList,
+  Popover,
+  Spinner,
+  Text,
+  TextField,
+} from '@shopify/polaris';
 import { SearchIcon } from '@shopify/polaris-icons';
 import { LOCALES, LOCALE_LABELS, needsSearch, type Locale } from '~/lib/i18n/locales';
 import { useT } from '~/lib/i18n/context';
@@ -15,13 +26,18 @@ export interface LanguageSelectProps {
 /**
  * Il selettore della lingua.
  *
- * Due lingue si scorrono, trenta si cercano: sotto la soglia e' una tendina,
- * sopra diventa un campo con la ricerca. Il passaggio e' automatico — la soglia
- * la decide `needsSearch` — cosi' aggiungendo lingue non resta un elenco
- * infinito da scorrere solo perche' nessuno si e' ricordato di cambiarlo.
+ * Popover + OptionList, non `<Select>`: quest'ultimo rende un `<select>` nativo,
+ * quindi il menu aperto sarebbe quello del sistema operativo — un pezzo di
+ * un'altra interfaccia dentro l'app. E' lo stesso comando con cui si sceglie la
+ * region creando un database, e per la stessa ragione.
+ *
+ * Da dieci lingue in su compare anche un campo di ricerca: due si scorrono,
+ * trenta si cercano. La soglia la decide `needsSearch`, cosi' aggiungendo
+ * lingue il campo arriva da solo.
  */
 export function LanguageSelect({ value, onChange, saving, disabled }: LanguageSelectProps) {
   const t = useT();
+  const [active, setActive] = useState(false);
   const [query, setQuery] = useState('');
 
   const options = useMemo(
@@ -35,59 +51,70 @@ export function LanguageSelect({ value, onChange, saving, disabled }: LanguageSe
     return options.filter((option) => option.label.toLowerCase().includes(needle));
   }, [options, query]);
 
-  const label = (
-    <InlineStack gap="200" blockAlign="center">
-      <Text as="span">{t.language.label}</Text>
-      {saving && <Spinner size="small" accessibilityLabel={t.language.saving} />}
-    </InlineStack>
-  );
-
-  if (!needsSearch()) {
-    return (
-      <Select
-        label={label}
-        options={options}
-        value={value}
-        onChange={(next) => onChange(next as Locale)}
-        disabled={disabled || saving}
-      />
-    );
-  }
+  const searchable = needsSearch();
 
   return (
-    <Combobox
-      activator={
-        <Combobox.TextField
-          label={label}
-          prefix={<Icon source={SearchIcon} />}
-          value={query || LOCALE_LABELS[value]}
-          onChange={setQuery}
-          placeholder={t.language.searchPlaceholder}
-          autoComplete="off"
-          disabled={disabled || saving}
-          clearButton={Boolean(query)}
-          onClearButtonClick={() => setQuery('')}
-        />
+    <Labelled
+      id="language-select"
+      label={
+        <InlineStack gap="200" blockAlign="center">
+          <Text as="span">{t.language.label}</Text>
+          {saving && <Spinner size="small" accessibilityLabel={t.language.saving} />}
+        </InlineStack>
       }
     >
-      {filtered.length > 0 ? (
-        <Listbox
-          onSelect={(selected) => {
-            setQuery('');
-            onChange(selected as Locale);
-          }}
-        >
-          {filtered.map((option) => (
-            <Listbox.Option
-              key={option.value}
-              value={option.value}
-              selected={option.value === value}
-            >
-              {option.label}
-            </Listbox.Option>
-          ))}
-        </Listbox>
-      ) : null}
-    </Combobox>
+      <Popover
+        active={active}
+        // Popover largo quanto l'attivatore: pulsante e menu combaciano.
+        fullWidth
+        preferredPosition="below"
+        onClose={() => {
+          setActive(false);
+          setQuery('');
+        }}
+        activator={
+          <Button
+            id="language-select"
+            onClick={() => setActive((open) => !open)}
+            disclosure
+            fullWidth
+            textAlign="left"
+            disabled={disabled || saving}
+          >
+            {LOCALE_LABELS[value]}
+          </Button>
+        }
+      >
+        {searchable && (
+          // `fixed`: il campo resta in vista mentre l'elenco sotto scorre.
+          <Popover.Pane fixed>
+            <Box padding="200">
+              <TextField
+                label={t.language.label}
+                labelHidden
+                prefix={<Icon source={SearchIcon} />}
+                value={query}
+                onChange={setQuery}
+                placeholder={t.language.searchPlaceholder}
+                autoComplete="off"
+                clearButton={Boolean(query)}
+                onClearButtonClick={() => setQuery('')}
+              />
+            </Box>
+          </Popover.Pane>
+        )}
+        <Popover.Pane height={searchable ? '280px' : undefined}>
+          <OptionList
+            options={filtered}
+            selected={[value]}
+            onChange={(selected) => {
+              if (selected[0]) onChange(selected[0] as Locale);
+              setActive(false);
+              setQuery('');
+            }}
+          />
+        </Popover.Pane>
+      </Popover>
+    </Labelled>
   );
 }

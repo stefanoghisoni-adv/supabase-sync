@@ -278,6 +278,18 @@ export function projectUrl(ref: string): string {
   return `https://${ref}.supabase.co`;
 }
 
+/**
+ * La pagina del progetto sulla dashboard di Supabase.
+ *
+ * Diversa da `projectUrl`, che e' l'indirizzo a cui il progetto risponde alle
+ * chiamate: aprendo quello in un browser si arriva a una risposta dell'API, non
+ * a una pagina da guardare. Chi clicca "Vai al database" vuole vedere le sue
+ * tabelle, quindi va portato qui.
+ */
+export function projectDashboardUrl(ref: string): string {
+  return `https://supabase.com/dashboard/project/${ref}`;
+}
+
 export type SupabasePlan = 'free' | 'pro' | 'team' | 'enterprise' | 'platform';
 
 export const SUPABASE_PLAN_LABELS: Record<SupabasePlan, string> = {

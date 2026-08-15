@@ -19,6 +19,7 @@ import { firstPlanWithCustomersSync } from '~/components/Dashboard/account-forma
 import { samePlanName } from '~/lib/billing/plan-name';
 import { syncIsActive } from '~/lib/sync/sync-active';
 import { loadSyncTiming } from '~/lib/sync/sync-timing.server';
+import { projectDashboardUrl } from '~/lib/supabase-management.server';
 import { SyncCard } from '~/components/Dashboard/SyncCard';
 import { useT, useLocale } from '~/lib/i18n/context';
 import type { Locale } from '~/lib/i18n/locales';
@@ -101,8 +102,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
       readToken,
       proxyBaseUrl,
       // Indirizzo del progetto del merchant: e' suo, e da qui ci arriva con un
-      // clic invece di ricordarselo.
+      // clic invece di ricordarselo. Due indirizzi diversi per due mestieri: la
+      // pagina da guardare (la dashboard di Supabase) e l'indirizzo a cui il
+      // progetto risponde, che aperto in un browser da' una risposta dell'API.
       databaseUrl: config.supabaseUrl,
+      dashboardUrl: config.supabaseProjectRef
+        ? projectDashboardUrl(config.supabaseProjectRef)
+        : null,
       syncIntervalHours: config.syncIntervalHours,
     },
   });
@@ -198,6 +204,7 @@ export default function SupabaseSettings() {
                 appUrl={config?.proxyBaseUrl || null}
                 readKey={config?.readToken ?? null}
                 databaseUrl={config?.databaseUrl ?? null}
+                dashboardUrl={config?.dashboardUrl ?? null}
               />
             </InlineGrid>
 
