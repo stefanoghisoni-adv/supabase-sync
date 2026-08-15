@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Card, BlockStack, InlineStack, Text, Badge } from '@shopify/polaris';
 import type { BadgeProps } from '@shopify/polaris';
 import type { StepState } from './stepper-state';
+import { useT, type Dictionary } from '~/lib/i18n/context';
 
 export interface StepperItem {
   id: string;
@@ -20,19 +21,20 @@ export interface StepperItem {
   badge?: { tone?: BadgeProps['tone']; label: string };
 }
 
-const BADGE: Record<StepState, { tone?: 'success' | 'info'; label: string }> = {
-  complete: { tone: 'success', label: 'Completato' },
-  active: { tone: 'info', label: 'In corso' },
-  locked: { tone: undefined, label: 'Bloccato' },
+const BADGE_TONE: Record<StepState, 'success' | 'info' | undefined> = {
+  complete: 'success',
+  active: 'info',
+  locked: undefined,
 };
 
-function badgeLabel(step: StepperItem): string {
+function badgeLabel(step: StepperItem, t: Dictionary): string {
   if (step.state === 'complete' && step.completeLabel) return step.completeLabel;
   if (step.state === 'active' && step.activeLabel) return step.activeLabel;
-  return BADGE[step.state].label;
+  return t.steps.badge[step.state];
 }
 
 export function Stepper({ steps }: { steps: StepperItem[] }) {
+  const t = useT();
   return (
     <BlockStack gap="300">
       {steps.map((step, index) => (
@@ -56,8 +58,8 @@ export function Stepper({ steps }: { steps: StepperItem[] }) {
                 {index + 1}. {step.title}
               </Text>
               {!step.hideBadge && (
-                <Badge tone={step.badge ? step.badge.tone : BADGE[step.state].tone}>
-                  {step.badge ? step.badge.label : badgeLabel(step)}
+                <Badge tone={step.badge ? step.badge.tone : BADGE_TONE[step.state]}>
+                  {step.badge ? step.badge.label : badgeLabel(step, t)}
                 </Badge>
               )}
             </InlineStack>

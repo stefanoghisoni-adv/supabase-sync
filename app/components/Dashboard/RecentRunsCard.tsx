@@ -2,6 +2,7 @@ import { Card, BlockStack, InlineStack, Text, Badge, Button, Divider } from '@sh
 import { recentRunRows, type RecentRunInput } from './recent-runs';
 import { formatDateTime } from './sync-log-format';
 import { useNavLoading } from './nav-loading';
+import { useT, useLocale } from '~/lib/i18n/context';
 
 const LOGS_PATH = '/logs';
 
@@ -18,7 +19,9 @@ export interface RecentRunsCardProps {
  * chi vuole il resto ha il pulsante per la pagina che lo mostra.
  */
 export function RecentRunsCard({ runs, timeZone }: RecentRunsCardProps) {
-  const rows = recentRunRows(runs);
+  const t = useT();
+  const locale = useLocale();
+  const rows = recentRunRows(runs, t);
   // Stesso comportamento degli altri pulsanti-link della dashboard: mentre Remix
   // carica /logs il pulsante mostra lo spinner e si disabilita.
   const logs = useNavLoading(LOGS_PATH);
@@ -28,7 +31,7 @@ export function RecentRunsCard({ runs, timeZone }: RecentRunsCardProps) {
       <BlockStack gap="300">
         <InlineStack align="space-between" blockAlign="center" gap="200" wrap={false}>
           <Text as="h2" variant="headingMd">
-            Ultime sincronizzazioni
+            {t.dashboard.recentRuns.title}
           </Text>
           {rows.length > 0 && (
             <Button
@@ -38,14 +41,14 @@ export function RecentRunsCard({ runs, timeZone }: RecentRunsCardProps) {
               disabled={logs.loading}
               loading={logs.loading}
             >
-              Vedi tutte
+              {t.dashboard.recentRuns.seeAll}
             </Button>
           )}
         </InlineStack>
 
         {rows.length === 0 ? (
           <Text as="p" tone="subdued">
-            Nessuna sincronizzazione ancora.
+            {t.dashboard.recentRuns.empty}
           </Text>
         ) : (
           <BlockStack gap="200">
@@ -61,7 +64,7 @@ export function RecentRunsCard({ runs, timeZone }: RecentRunsCardProps) {
                       {row.label}
                     </Text>
                     <Text as="span" variant="bodySm" tone="subdued">
-                      {formatDateTime(row.startedAt, timeZone)}
+                      {formatDateTime(row.startedAt, timeZone, locale)}
                     </Text>
                   </BlockStack>
                   <Badge tone={row.badge.tone}>{row.badge.label}</Badge>

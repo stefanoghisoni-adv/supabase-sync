@@ -1,9 +1,7 @@
 import { Card, BlockStack, Text, Button, Box } from '@shopify/polaris';
 import { MetricRow } from './MetricRow';
 import { useNavLoading } from './nav-loading';
-
-const OPT_IN_INFO = 'Qui vengono identificati i clienti che hanno acconsentito al marketing';
-const OPT_OUT_INFO = 'Qui vengono identificati i clienti che non hanno acconsentito al marketing';
+import { useT } from '~/lib/i18n/context';
 
 export interface CustomersCardProps {
   enabled: boolean;
@@ -20,6 +18,7 @@ export function CustomersCard({
   optOut,
   loading,
 }: CustomersCardProps) {
+  const t = useT();
   const value = (n: number) => (loading ? '—' : String(n));
 
   // Stesso comportamento degli altri pulsanti-link della dashboard: mentre Remix
@@ -30,20 +29,23 @@ export function CustomersCard({
     <Card>
       <BlockStack gap="300">
         <Text as="h2" variant="headingMd">
-          Clienti
+          {t.dashboard.customers.title}
         </Text>
 
         {enabled ? (
           <BlockStack gap="300">
-            <MetricRow label="Clienti totali" badge={{ content: value(totalCustomers) }} />
             <MetricRow
-              label="Clienti opt-in"
-              info={OPT_IN_INFO}
+              label={t.dashboard.customers.total}
+              badge={{ content: value(totalCustomers) }}
+            />
+            <MetricRow
+              label={t.dashboard.customers.optIn}
+              info={t.dashboard.customers.optInInfo}
               badge={{ tone: 'success', content: value(optIn) }}
             />
             <MetricRow
-              label="Clienti opt-out"
-              info={OPT_OUT_INFO}
+              label={t.dashboard.customers.optOut}
+              info={t.dashboard.customers.optOutInfo}
               badge={{ content: value(optOut) }}
             />
           </BlockStack>
@@ -55,8 +57,7 @@ export function CustomersCard({
           <BlockStack gap="200" inlineAlign="center">
             <Box paddingInline="400">
               <Text as="p" tone="subdued" alignment="center" variant="bodySm">
-                Potenzia la trasmissione dei dati utente monitorando anche il
-                Lifetime Value (LTV) e Lifetime Profit (LTP).
+                {t.dashboard.customers.upsell}
               </Text>
             </Box>
             {/* Un filo piu' in basso: stacca il pulsante dal testo sopra. */}
@@ -68,7 +69,7 @@ export function CustomersCard({
                 disabled={plan.loading}
                 loading={plan.loading}
               >
-                Aggiorna piano
+                {t.dashboard.customers.upgrade}
               </Button>
             </Box>
           </BlockStack>

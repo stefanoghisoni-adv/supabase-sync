@@ -1,12 +1,15 @@
-const TABLE_CREATION_MESSAGES: Record<string, string> = {
-  table_create_products: 'Creazione tabella prodotti riuscita',
-  table_create_customers: 'Creazione tabella clienti riuscita',
-  table_create_both: 'Creazione tabelle prodotti e clienti riuscita',
+import type { Dictionary } from '~/lib/i18n/context';
+
+const TABLE_CREATION_KEYS: Record<string, keyof Dictionary['logs']['tableCreated']> = {
+  table_create_products: 'products',
+  table_create_customers: 'customers',
+  table_create_both: 'both',
 };
 
 // null se il job non e' un evento di creazione tabelle.
-export function tableCreationMessage(jobType: string): string | null {
-  return TABLE_CREATION_MESSAGES[jobType] ?? null;
+export function tableCreationMessage(jobType: string, t: Dictionary): string | null {
+  const key = TABLE_CREATION_KEYS[jobType];
+  return key ? t.logs.tableCreated[key] : null;
 }
 
 // Il modo in cui il database dice che una tabella non c'e': o non esiste
@@ -22,17 +25,13 @@ const TABLE_MISSING = /could not find the table|does not exist|relation .* does 
  * che sappiamo riconoscere li traduciamo in una frase sola; gli altri passano
  * come sono — meglio un errore tecnico che nessun errore.
  */
-export function syncErrorMessage(raw: string | null | undefined): string {
+export function syncErrorMessage(raw: string | null | undefined, t: Dictionary): string {
   const text = (raw ?? '').trim();
-  if (!text) return 'Errore sconosciuto';
+  if (!text) return t.logs.unknownError;
 
   if (TABLE_MISSING.test(text)) {
-    if (/customer|client/i.test(text)) {
-      return 'Non è stata trovata nessuna tabella per i clienti';
-    }
-    if (/product|prodott/i.test(text)) {
-      return 'Non è stata trovata nessuna tabella per i prodotti';
-    }
+    if (/customer|client/i.test(text)) return t.logs.missingCustomersTable;
+    if (/product|prodott/i.test(text)) return t.logs.missingProductsTable;
   }
 
   return text;
@@ -71,18 +70,18 @@ export interface StatusBadge {
   label: string;
 }
 
-export function syncStatusBadge(status: string): StatusBadge {
-  if (status === 'completed') return { tone: 'success', label: 'Completata' };
-  if (status === 'failed') return { tone: 'critical', label: 'Fallita' };
-  return { tone: 'info', label: 'In corso' };
+export function syncStatusBadge(status: string, t: Dictionary): StatusBadge {
+  if (status === 'completed') return { tone: 'success', label: t.logs.status.completed };
+  if (status === 'failed') return { tone: 'critical', label: t.logs.status.failed };
+  return { tone: 'info', label: t.logs.status.running };
 }
 
 // Formatta SEMPRE nel fuso indicato, mai in quello della macchina: cosi' il
 // render sul server e l'idratazione sul client producono la stessa stringa
 // (niente disallineamento) e il merchant legge l'orario del proprio negozio.
 // Fallback UTC se il fuso manca o non e' valido: deterministico comunque.
-function formatIn(iso: string, timeZone: string): string {
-  return new Intl.DateTimeFormat('it-IT', {
+function formatIn(iso: string, timeZone: string, locale: string): string {
+  return new Intl.DateTimeFormat(locale, {
     timeZone,
     day: '2-digit',
     month: '2-digit',
@@ -94,11 +93,15 @@ function formatIn(iso: string, timeZone: string): string {
     .replace(',', '');
 }
 
-export function formatDateTime(iso: string, timeZone?: string | null): string {
+export function formatDateTime(
+  iso: string,
+  timeZone: string | null | undefined,
+  locale: string,
+): string {
   try {
-    return formatIn(iso, timeZone || 'UTC');
+    return formatIn(iso, timeZone || 'UTC', locale);
   } catch {
     // Fuso non riconosciuto dall'ambiente: non deve rompere la pagina.
-    return formatIn(iso, 'UTC');
+    return formatIn(iso, 'UTC', locale);
   }
 }

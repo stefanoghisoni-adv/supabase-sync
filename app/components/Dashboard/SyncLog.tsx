@@ -11,6 +11,7 @@ import {
   hasSyncDetail,
 } from './sync-log-format';
 import { SyncJobDetailsModal } from './SyncJobDetailsModal';
+import { useT, useLocale } from '~/lib/i18n/context';
 
 type SerializedSyncJob = SerializeFrom<SyncJob>;
 
@@ -21,16 +22,18 @@ interface SyncLogProps {
 }
 
 export function SyncLog({ jobs, customersEnabled, timeZone }: SyncLogProps) {
+  const t = useT();
+  const locale = useLocale();
   const [detailsJobId, setDetailsJobId] = useState<string | null>(null);
 
   const detailsJob = detailsJobId ? jobs.find((j) => j.id === detailsJobId) : null;
 
   const rows = jobs.map((job) => {
-    const creation = tableCreationMessage(job.jobType);
-    const status = syncStatusBadge(job.status);
+    const creation = tableCreationMessage(job.jobType, t);
+    const status = syncStatusBadge(job.status, t);
     const failure =
       job.status === 'failed' && job.errors
-        ? syncErrorMessage((job.errors as { message?: string }).message)
+        ? syncErrorMessage((job.errors as { message?: string }).message, t)
         : null;
 
     // Il badge porta solo lo stato: cosa e' successo si legge nella colonna
@@ -57,7 +60,7 @@ export function SyncLog({ jobs, customersEnabled, timeZone }: SyncLogProps) {
     const detailsCell =
       !creation && hasSyncDetail(job) ? (
         <Button variant="plain" onClick={() => setDetailsJobId(job.id)}>
-          Vedi dettagli
+          {t.logs.seeDetails}
         </Button>
       ) : (
         ''
@@ -67,7 +70,7 @@ export function SyncLog({ jobs, customersEnabled, timeZone }: SyncLogProps) {
     return [
       stateCell,
       descriptionCell,
-      formatDateTime(job.startedAt, timeZone),
+      formatDateTime(job.startedAt, timeZone, locale),
       detailsCell,
     ];
   });
@@ -77,16 +80,21 @@ export function SyncLog({ jobs, customersEnabled, timeZone }: SyncLogProps) {
       <Card>
         <BlockStack gap="400">
           <Text as="h2" variant="headingMd">
-            Log di sincronizzazione
+            {t.logs.logTitle}
           </Text>
           {jobs.length === 0 ? (
             <Text as="p" tone="subdued">
-              Nessuna attività registrata
+              {t.logs.noActivity}
             </Text>
           ) : (
             <DataTable
               columnContentTypes={['text', 'text', 'text', 'text']}
-              headings={['Stato', 'Descrizione', 'Data e ora', 'Dettagli']}
+              headings={[
+                t.logs.columns.state,
+                t.logs.columns.description,
+                t.logs.dateTime,
+                t.logs.detailsColumn,
+              ]}
               rows={rows}
             />
           )}

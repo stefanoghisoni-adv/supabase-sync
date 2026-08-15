@@ -15,6 +15,7 @@ import {
 import { useFetcher } from '@remix-run/react';
 import { useState, useEffect } from 'react';
 import { formatDateTime } from './sync-log-format';
+import { useT, useLocale } from '~/lib/i18n/context';
 import {
   detailBadge,
   productSummary,
@@ -69,6 +70,8 @@ export function SyncJobDetailsModal({
   timeZone,
   customersEnabled,
 }: SyncJobDetailsModalProps) {
+  const t = useT();
+  const locale = useLocale();
   const fetcher = useFetcher<SyncJobDetailsResponse>();
   const [selectedTab, setSelectedTab] = useState(0);
 
@@ -93,28 +96,30 @@ export function SyncJobDetailsModal({
   // Le tab da mostrare: sempre Prodotti, Clienti solo se customersEnabled è true.
   const tabs = visibleTabs(data?.customersEnabled ?? customersEnabled);
   const tabsConfig = [
-    { id: 'products', content: 'Prodotti' },
-    ...(tabs.includes('customers') ? [{ id: 'customers', content: 'Clienti' }] : []),
+    { id: 'products', content: t.logs.details.products },
+    ...(tabs.includes('customers')
+      ? [{ id: 'customers', content: t.logs.details.customers }]
+      : []),
   ];
 
   return (
     <Modal
       open={open}
       onClose={onClose}
-      title="Dettaglio sincronizzazione"
-      secondaryActions={[{ content: 'Chiudi', onAction: onClose }]}
+      title={t.logs.details.title}
+      secondaryActions={[{ content: t.logs.details.close, onAction: onClose }]}
     >
       <Modal.Section>
         <BlockStack gap="400">
           <Text as="p" variant="bodyMd" tone="subdued">
-            {formatDateTime(jobStartedAt, timeZone)}
+            {formatDateTime(jobStartedAt, timeZone, locale)}
           </Text>
 
           {loading && <SkeletonBodyText lines={5} />}
 
           {error && (
             <Banner tone="critical">
-              Non è stato possibile caricare i dettagli di questa sincronizzazione.
+              {t.logs.details.loadFailed}
             </Banner>
           )}
 
@@ -151,8 +156,9 @@ interface ProductsTabProps {
 }
 
 function ProductsTab({ rows, added, removed, truncated }: ProductsTabProps) {
-  const summary = productSummary(added, removed);
-  const notice = truncationNotice(truncated);
+  const t = useT();
+  const summary = productSummary(added, removed, t);
+  const notice = truncationNotice(truncated, t);
 
   // Riga di testo e non EmptyState: quel componente pretende un'illustrazione, e
   // senza immagine mostrerebbe il segnaposto di una figura mancante. Qui poi il
@@ -160,7 +166,7 @@ function ProductsTab({ rows, added, removed, truncated }: ProductsTabProps) {
   if (rows.length === 0) {
     return (
       <Text as="p" tone="subdued">
-        Nessun dettaglio registrato per questa sincronizzazione.
+        {t.logs.details.none}
       </Text>
     );
   }
@@ -175,14 +181,14 @@ function ProductsTab({ rows, added, removed, truncated }: ProductsTabProps) {
       <IndexTable
         selectable={false}
         headings={[
-          { title: 'Azione' },
-          { title: 'Nome' },
-          { title: 'ID Shopify' },
+          { title: t.logs.details.action },
+          { title: t.logs.details.name },
+          { title: t.logs.details.shopifyId },
         ]}
         itemCount={rows.length}
       >
         {rows.map((row, index) => {
-          const badge = detailBadge(row.action);
+          const badge = detailBadge(row.action, t);
           return (
             <IndexTable.Row id={row.id} key={row.id} position={index}>
               <IndexTable.Cell>
@@ -229,7 +235,8 @@ interface CustomersTabProps {
  * registrato qui, e il merchant lo ritrova nel proprio database.
  */
 function CustomersTab({ added, updated, suspended }: CustomersTabProps) {
-  const summary = customerSummary(added, updated, suspended);
+  const t = useT();
+  const summary = customerSummary(added, updated, suspended, t);
 
   // Riga di testo e non EmptyState: quel componente pretende un'illustrazione, e
   // senza immagine mostrerebbe il segnaposto di una figura mancante. Qui poi il
@@ -237,7 +244,7 @@ function CustomersTab({ added, updated, suspended }: CustomersTabProps) {
   if (!summary) {
     return (
       <Text as="p" tone="subdued">
-        Nessun cliente modificato in questa sincronizzazione.
+        {t.logs.details.noCustomers}
       </Text>
     );
   }
@@ -248,7 +255,7 @@ function CustomersTab({ added, updated, suspended }: CustomersTabProps) {
         {summary}
       </Text>
       <Text as="p" variant="bodySm" tone="subdued">
-        L&rsquo;elenco dei singoli clienti resta nel tuo database: qui trovi i totali.
+        {t.logs.details.customersElsewhere}
       </Text>
     </BlockStack>
   );

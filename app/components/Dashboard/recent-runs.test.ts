@@ -1,21 +1,23 @@
 import { describe, it, expect } from 'vitest';
 import { recentRunLabel, recentRunRows } from './recent-runs';
+// Alias: `it` e' anche il nome del caso di test in vitest.
+import { it as itDict } from '~/lib/i18n/it';
 
 describe('recentRunLabel', () => {
   it('dà un nome parlante a ogni tipo di corsa', () => {
-    expect(recentRunLabel('initial_bulk')).toBe('Sincronizzazione completa');
-    expect(recentRunLabel('periodic_check')).toBe('Aggiornamento periodico');
-    expect(recentRunLabel('webhook')).toBe('Aggiornamento da Shopify');
+    expect(recentRunLabel('initial_bulk', itDict)).toBe('Sincronizzazione completa');
+    expect(recentRunLabel('periodic_check', itDict)).toBe('Aggiornamento periodico');
+    expect(recentRunLabel('webhook', itDict)).toBe('Aggiornamento da Shopify');
   });
 
   it('per le creazioni di tabella riusa la frase del registro', () => {
-    expect(recentRunLabel('table_create_customers')).toBe(
+    expect(recentRunLabel('table_create_customers', itDict)).toBe(
       'Creazione tabella clienti riuscita',
     );
   });
 
   it('un tipo mai visto non lascia la riga senza nome', () => {
-    expect(recentRunLabel('qualcosa_di_nuovo')).toBe('Sincronizzazione');
+    expect(recentRunLabel('qualcosa_di_nuovo', itDict)).toBe('Sincronizzazione');
   });
 });
 
@@ -37,6 +39,7 @@ describe('recentRunRows', () => {
         run('5', 'periodic_check'),
         run('6', 'periodic_check'),
       ],
+      itDict,
       5,
     );
 
@@ -49,18 +52,18 @@ describe('recentRunRows', () => {
     const rows = recentRunRows([
       run('gdpr', 'gdpr_redact'),
       run('sync', 'periodic_check'),
-    ]);
+    ], itDict);
 
     expect(rows.map((r) => r.id)).toEqual(['sync']);
   });
 
   it('porta lo stato della corsa nel badge', () => {
-    const rows = recentRunRows([run('ko', 'periodic_check', 'failed')]);
+    const rows = recentRunRows([run('ko', 'periodic_check', 'failed')], itDict);
 
     expect(rows[0].badge).toEqual({ tone: 'critical', label: 'Fallita' });
   });
 
   it('senza corse non inventa righe', () => {
-    expect(recentRunRows([])).toEqual([]);
+    expect(recentRunRows([], itDict)).toEqual([]);
   });
 });

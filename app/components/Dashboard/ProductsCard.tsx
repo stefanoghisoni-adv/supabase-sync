@@ -3,6 +3,7 @@ import { MetricRow } from './MetricRow';
 import { problemRowPresentation } from './product-rows';
 import { productQuotaLabel } from './product-quota';
 import { useNavLoading } from './nav-loading';
+import { useT } from '~/lib/i18n/context';
 
 const ISSUES_PATH = '/products/issues';
 
@@ -20,6 +21,7 @@ export function ProductsCard({
   planLimit,
   loading,
 }: ProductsCardProps) {
+  const t = useT();
   // La pagina dei prodotti non idonei interroga Shopify pagina per pagina, quindi
   // l'attesa si sente. Senza un segnale il merchant clicca una seconda volta,
   // convinto che il primo clic non sia arrivato.
@@ -34,11 +36,11 @@ export function ProductsCard({
     <Card>
       <BlockStack gap="300">
         <Text as="h2" variant="headingMd">
-          Prodotti
+          {t.dashboard.products.title}
         </Text>
-        <MetricRow label="Prodotti totali" badge={{ content: value(total) }} />
+        <MetricRow label={t.dashboard.products.total} badge={{ content: value(total) }} />
         <MetricRow
-          label="Non idonei"
+          label={t.dashboard.products.notEligible}
           action={
             showLink && !loading ? (
               <Button
@@ -48,7 +50,7 @@ export function ProductsCard({
                 disabled={issues.loading}
                 loading={issues.loading}
               >
-                Vedi prodotti
+                {t.dashboard.products.seeProducts}
               </Button>
             ) : undefined
           }
@@ -58,7 +60,7 @@ export function ProductsCard({
             conta davvero. Accanto, il tetto del piano — il conteggio da solo
             non dice quanto margine resta. */}
         <MetricRow
-          label="Prodotti idonei"
+          label={t.dashboard.products.eligible}
           badge={{
             tone: 'success',
             content: loading ? '—' : productQuotaLabel(readyCount, planLimit),

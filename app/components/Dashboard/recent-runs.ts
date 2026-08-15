@@ -1,4 +1,5 @@
 import { syncStatusBadge, tableCreationMessage, type StatusBadge } from './sync-log-format';
+import type { Dictionary } from '~/lib/i18n/context';
 
 /**
  * Le ultime corse, come si leggono nella card della dashboard.
@@ -31,10 +32,10 @@ export interface RecentRunRow {
  * sincronizzazioni, e in un riquadro che si intitola "Ultime sincronizzazioni"
  * sarebbero fuori posto. Nel registro completo restano.
  */
-const RUN_LABELS: Record<string, string> = {
-  initial_bulk: 'Sincronizzazione completa',
-  periodic_check: 'Aggiornamento periodico',
-  webhook: 'Aggiornamento da Shopify',
+const RUN_LABELS: Record<string, keyof Dictionary['dashboard']['recentRuns']['run']> = {
+  initial_bulk: 'initial',
+  periodic_check: 'periodic',
+  webhook: 'webhook',
 };
 
 const HIDDEN_JOB_TYPES = new Set([
@@ -43,12 +44,13 @@ const HIDDEN_JOB_TYPES = new Set([
   'gdpr_shop_redact',
 ]);
 
-export function recentRunLabel(jobType: string): string {
+export function recentRunLabel(jobType: string, t: Dictionary): string {
   // Le creazioni di tabella hanno gia' una frase loro, la stessa del registro:
   // due modi di dire la stessa cosa nelle due pagine sarebbero uno di troppo.
-  const creation = tableCreationMessage(jobType);
+  const creation = tableCreationMessage(jobType, t);
   if (creation) return creation;
-  return RUN_LABELS[jobType] ?? 'Sincronizzazione';
+  const key = RUN_LABELS[jobType];
+  return key ? t.dashboard.recentRuns.run[key] : t.dashboard.recentRuns.run.generic;
 }
 
 /**
@@ -57,14 +59,18 @@ export function recentRunLabel(jobType: string): string {
  * L'ordine arriva gia' fatto da chi legge il database (dalla piu' recente): qui
  * si filtra e si taglia, non si riordina.
  */
-export function recentRunRows(runs: RecentRunInput[], limit = 5): RecentRunRow[] {
+export function recentRunRows(
+  runs: RecentRunInput[],
+  t: Dictionary,
+  limit = 5,
+): RecentRunRow[] {
   return runs
     .filter((run) => !HIDDEN_JOB_TYPES.has(run.jobType))
     .slice(0, limit)
     .map((run) => ({
       id: run.id,
-      badge: syncStatusBadge(run.status),
-      label: recentRunLabel(run.jobType),
+      badge: syncStatusBadge(run.status, t),
+      label: recentRunLabel(run.jobType, t),
       startedAt: run.startedAt,
     }));
 }

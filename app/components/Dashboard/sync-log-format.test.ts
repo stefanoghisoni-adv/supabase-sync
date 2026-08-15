@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest';
+// Alias: `it` e' anche il nome del caso di test in vitest.
+import { it as itDict } from '~/lib/i18n/it';
 import {
   tableCreationMessage,
   syncStatusBadge,
@@ -31,19 +33,19 @@ describe('hasSyncDetail', () => {
 
 describe('tableCreationMessage', () => {
   it('mappa i tre eventi di creazione', () => {
-    expect(tableCreationMessage('table_create_products')).toBe('Creazione tabella prodotti riuscita');
-    expect(tableCreationMessage('table_create_customers')).toBe('Creazione tabella clienti riuscita');
-    expect(tableCreationMessage('table_create_both')).toBe('Creazione tabelle prodotti e clienti riuscita');
+    expect(tableCreationMessage('table_create_products', itDict)).toBe('Creazione tabella prodotti riuscita');
+    expect(tableCreationMessage('table_create_customers', itDict)).toBe('Creazione tabella clienti riuscita');
+    expect(tableCreationMessage('table_create_both', itDict)).toBe('Creazione tabelle prodotti e clienti riuscita');
   });
   it('un job di sync non e un evento di creazione', () => {
-    expect(tableCreationMessage('initial_bulk')).toBeNull();
+    expect(tableCreationMessage('initial_bulk', itDict)).toBeNull();
   });
 });
 
 describe('syncStatusBadge', () => {
-  it('completed', () => expect(syncStatusBadge('completed')).toEqual({ tone: 'success', label: 'Completata' }));
-  it('failed', () => expect(syncStatusBadge('failed')).toEqual({ tone: 'critical', label: 'Fallita' }));
-  it('running', () => expect(syncStatusBadge('running')).toEqual({ tone: 'info', label: 'In corso' }));
+  it('completed', () => expect(syncStatusBadge('completed', itDict)).toEqual({ tone: 'success', label: 'Completata' }));
+  it('failed', () => expect(syncStatusBadge('failed', itDict)).toEqual({ tone: 'critical', label: 'Fallita' }));
+  it('running', () => expect(syncStatusBadge('running', itDict)).toEqual({ tone: 'info', label: 'In corso' }));
 });
 
 describe('formatDateTime', () => {
@@ -52,20 +54,20 @@ describe('formatDateTime', () => {
 
   it('formatta nel fuso indicato', () => {
     // Europe/Rome d'estate e UTC+2.
-    expect(formatDateTime(iso, 'Europe/Rome')).toBe('24/07/2026 14:05');
+    expect(formatDateTime(iso, 'Europe/Rome', 'it')).toBe('24/07/2026 14:05');
   });
 
   it('fuso assente → UTC', () => {
-    expect(formatDateTime(iso, null)).toBe('24/07/2026 12:05');
-    expect(formatDateTime(iso)).toBe('24/07/2026 12:05');
+    expect(formatDateTime(iso, null, 'it')).toBe('24/07/2026 12:05');
+    expect(formatDateTime(iso, undefined, 'it')).toBe('24/07/2026 12:05');
   });
 
   it('fuso non valido → ricade su UTC senza lanciare', () => {
-    expect(formatDateTime(iso, 'Non/Esiste')).toBe('24/07/2026 12:05');
+    expect(formatDateTime(iso, 'Non/Esiste', 'it')).toBe('24/07/2026 12:05');
   });
 
   it('fuso diverso produce un orario diverso dallo stesso istante', () => {
-    expect(formatDateTime(iso, 'America/New_York')).toBe('24/07/2026 08:05');
+    expect(formatDateTime(iso, 'America/New_York', 'it')).toBe('24/07/2026 08:05');
   });
 });
 
@@ -74,6 +76,7 @@ describe('syncErrorMessage', () => {
     expect(
       syncErrorMessage(
         "Supabase products upsert failed: Could not find the table 'public.products' in the schema cache",
+        itDict,
       ),
     ).toBe('Non è stata trovata nessuna tabella per i prodotti');
   });
@@ -82,15 +85,16 @@ describe('syncErrorMessage', () => {
     expect(
       syncErrorMessage(
         "Supabase customer upsert failed: Could not find the table 'public.customers' in the schema cache",
+        itDict,
       ),
     ).toBe('Non è stata trovata nessuna tabella per i clienti');
   });
 
   it('vale anche per il "does not exist" di Postgres', () => {
-    expect(syncErrorMessage('relation "products" does not exist')).toBe(
+    expect(syncErrorMessage('relation "products" does not exist', itDict)).toBe(
       'Non è stata trovata nessuna tabella per i prodotti',
     );
-    expect(syncErrorMessage('relation "customers" does not exist')).toBe(
+    expect(syncErrorMessage('relation "customers" does not exist', itDict)).toBe(
       'Non è stata trovata nessuna tabella per i clienti',
     );
   });
@@ -98,11 +102,11 @@ describe('syncErrorMessage', () => {
   it('errori che non sappiamo tradurre passano com’erano', () => {
     // Meglio un errore tecnico che nessun errore: chi guarda il log deve
     // comunque poterlo riportare al supporto.
-    expect(syncErrorMessage('Shopify API error: 429')).toBe('Shopify API error: 429');
+    expect(syncErrorMessage('Shopify API error: 429', itDict)).toBe('Shopify API error: 429');
   });
 
   it('errore assente o vuoto → non lascia la cella muta', () => {
-    expect(syncErrorMessage(null)).toBe('Errore sconosciuto');
-    expect(syncErrorMessage('   ')).toBe('Errore sconosciuto');
+    expect(syncErrorMessage(null, itDict)).toBe('Errore sconosciuto');
+    expect(syncErrorMessage('   ', itDict)).toBe('Errore sconosciuto');
   });
 });

@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Card, BlockStack, Text } from '@shopify/polaris';
 import { MetricRow } from './MetricRow';
+import { useT } from '~/lib/i18n/context';
 
 /**
  * Il collegamento, quando non e' piu' un passo da fare.
@@ -15,16 +16,20 @@ import { MetricRow } from './MetricRow';
  * con la stessa conferma, e non ne esiste una seconda copia da tenere allineata.
  */
 export function ConnectionCard({ children }: { children: ReactNode }) {
+  const t = useT();
   return (
     <Card>
       <BlockStack gap="300">
         <Text as="h2" variant="headingMd">
-          Connessione
+          {t.dashboard.connection.title}
         </Text>
         {/* La riga di stato apre la card come nelle altre: etichetta a
             sinistra, badge a destra. La card compare solo a collegamento
             fatto, quindi non ha un altro stato da dire. */}
-        <MetricRow label="Stato" badge={{ tone: 'success', content: 'Collegato' }} />
+        <MetricRow
+          label={t.database.status}
+          badge={{ tone: 'success', content: t.common.connected }}
+        />
         {children}
       </BlockStack>
     </Card>
