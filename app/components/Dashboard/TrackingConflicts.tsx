@@ -6,6 +6,7 @@ import metaIcon from '~/assets/channel-meta.avif';
 import googleIcon from '~/assets/channel-google.webp';
 import tiktokIcon from '~/assets/channel-tiktok.webp';
 import pinterestIcon from '~/assets/channel-pinterest.webp';
+import { useT } from '~/lib/i18n/context';
 
 // Icone dei canali che sappiamo riconoscere. Vite le trasforma in URL con hash
 // al build, quindi non serve una cartella pubblica ne' un percorso scritto a
@@ -65,6 +66,7 @@ export function TrackingConflicts({
   themeId,
   variant = 'banner',
 }: TrackingConflictsProps) {
+  const t = useT();
   // Stato per riga, non uno solo per la tabella: le righe sono indipendenti, e
   // dichiarare Meta innocuo mentre si dichiara anche Google deve poter avvenire
   // insieme, con ciascuna riga che mostra la propria attesa.
@@ -134,11 +136,7 @@ export function TrackingConflicts({
 
   const content = (
       <BlockStack gap="300">
-        <Text as="p">
-          Ogni conversione dovrebbe essere inviata una volta sola. Se una di queste
-          manda gli stessi eventi che invii tu, acquisti e valore vengono contati due
-          volte e le campagne vengono ottimizzate su numeri gonfiati.
-        </Text>
+        <Text as="p">{t.tracking.conflicts.intro}</Text>
 
         <BlockStack gap="200">
           {findings.map((finding) => {
@@ -193,8 +191,8 @@ export function TrackingConflicts({
                 {declared[key] ? (
                   <Text as="span" tone="subdued">
                     {finding.kind === 'channel'
-                      ? "Quest'app non esegue attività di tracciamento"
-                      : 'Questo codice non esegue attività di tracciamento'}
+                      ? t.tracking.conflicts.declaredChannel
+                      : t.tracking.conflicts.declaredCode}
                   </Text>
                 ) : (
                 <InlineStack gap="200">
@@ -204,8 +202,8 @@ export function TrackingConflicts({
                     loading={busy[key] === 'dismiss'}
                   >
                     {finding.kind === 'channel'
-                      ? 'Gestisce solo shop e cataloghi'
-                      : 'Non considerare'}
+                      ? t.tracking.conflicts.channelHarmless
+                      : t.tracking.conflicts.codeHarmless}
                   </Button>
                   {/* _top e non una scheda nuova: l'admin di Shopify rifiuta di
                       essere incorniciato, quindi un collegamento normale da qui
@@ -219,7 +217,9 @@ export function TrackingConflicts({
                     loading={busy[key] === 'leave'}
                     onClick={() => setBusy((current) => ({ ...current, [key]: 'leave' }))}
                   >
-                    {finding.kind === 'channel' ? 'Disinstalla' : 'Rimuovi snippet'}
+                    {finding.kind === 'channel'
+                      ? t.tracking.conflicts.uninstall
+                      : t.tracking.conflicts.removeSnippet}
                   </Button>
                 </InlineStack>
                 )}
@@ -229,9 +229,7 @@ export function TrackingConflicts({
         </BlockStack>
 
         <Text as="p" tone="subdued">
-          L&apos;elenco può non essere completo: i pixel personalizzati aggiunti in
-          Impostazioni → Eventi cliente non sono visibili da qui. Vale la pena
-          controllarli insieme a questi.
+          {t.tracking.conflicts.incomplete}
         </Text>
       </BlockStack>
   );
@@ -239,7 +237,7 @@ export function TrackingConflicts({
   if (variant === 'plain') return content;
 
   return (
-    <Banner tone="warning" title="Altre fonti di eventi su questo negozio">
+    <Banner tone="warning" title={t.tracking.conflicts.title}>
       {content}
     </Banner>
   );

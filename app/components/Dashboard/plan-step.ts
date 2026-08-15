@@ -1,3 +1,4 @@
+import type { Dictionary } from '~/lib/i18n/context';
 import type { PlanCard } from '~/components/Billing/plan-catalog';
 import { formatPrice } from '~/components/Billing/plan-catalog';
 import { isSelectablePlan } from '~/components/Billing/plan-access';
@@ -20,7 +21,8 @@ import { samePlanName } from '~/lib/billing/plan-name';
 export function planPriceLabel(
   card: PlanCard,
   discountIntervals: number | null,
-  interval: BillingInterval = 'monthly',
+  interval: BillingInterval,
+  t: Pick<Dictionary, 'planStep'>,
 ): string {
   const yearly = interval === 'yearly';
   const price = effectivePrice(
@@ -28,8 +30,9 @@ export function planPriceLabel(
     yearly ? card.partnerYearly : card.partnerMonthly,
     discountIntervals,
   );
-  if (!(price.payablePrice > 0)) return 'Gratis';
-  return `€ ${formatPrice(price.payablePrice)}/${yearly ? 'anno' : 'mese'}`;
+  if (!(price.payablePrice > 0)) return t.planStep.free;
+  const amount = formatPrice(price.payablePrice);
+  return yearly ? t.planStep.perYear(amount) : t.planStep.perMonth(amount);
 }
 
 /**
@@ -120,7 +123,10 @@ export function planYearlySaving(card: PlanCard): number | null {
 }
 
 /** "Risparmi € 58,00", o niente se non c'e' un risparmio da annunciare. */
-export function planSavingBadge(card: PlanCard): string | null {
+export function planSavingBadge(
+  card: PlanCard,
+  t: Pick<Dictionary, 'planStep'>,
+): string | null {
   const saving = planYearlySaving(card);
-  return saving == null ? null : `Risparmi € ${formatAmount(saving)}`;
+  return saving == null ? null : t.planStep.saving(formatAmount(saving));
 }

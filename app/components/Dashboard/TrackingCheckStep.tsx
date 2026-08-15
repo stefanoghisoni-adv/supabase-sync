@@ -1,5 +1,6 @@
 import { BlockStack, InlineStack, Spinner, Text } from '@shopify/polaris';
 import { TrackingConflicts, type TrackingConflictsProps } from './TrackingConflicts';
+import { useT } from '~/lib/i18n/context';
 
 export interface TrackingCheckStepProps extends Omit<TrackingConflictsProps, 'variant'> {
   /** Il controllo e' ancora in corso. */
@@ -15,13 +16,13 @@ export interface TrackingCheckStepProps extends Omit<TrackingConflictsProps, 'va
  * un tracciamento che sostituisce quello che ha, non uno che ci si somma.
  */
 export function TrackingCheckStep({ loading, findings, ...rest }: TrackingCheckStepProps) {
+  const t = useT();
   if (loading) {
     return (
       <InlineStack gap="200" blockAlign="center" wrap={false}>
-        <Spinner size="small" accessibilityLabel="Controllo in corso" />
+        <Spinner size="small" accessibilityLabel={t.tracking.checkingLabel} />
         <Text as="p" tone="subdued">
-          Controllo se ci sono canali di vendita o snippet di codice nel tema che
-          trasmettono dati alle piattaforme
+          {t.tracking.checking}
         </Text>
       </InlineStack>
     );
@@ -30,16 +31,12 @@ export function TrackingCheckStep({ loading, findings, ...rest }: TrackingCheckS
   if (findings.length === 0) {
     return (
       <BlockStack gap="200">
-        <Text as="p">
-          Non ho trovato canali di vendita né codice nel tema che mandino eventi
-          alle piattaforme.
-        </Text>
+        <Text as="p">{t.tracking.nothingFound}</Text>
         {/* Dirlo apertamente: l'elenco e' per forza parziale, e "non ho trovato
             nulla" letto come "sei a posto" e' esattamente cio' che non possiamo
             garantire. */}
         <Text as="p" tone="subdued" variant="bodySm">
-          Restano fuori dal controllo i pixel personalizzati aggiunti in
-          Impostazioni → Eventi cliente: quelli vale la pena guardarli a mano.
+          {t.tracking.partialNote}
         </Text>
       </BlockStack>
     );

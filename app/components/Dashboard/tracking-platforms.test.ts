@@ -1,4 +1,7 @@
 import { describe, it, expect } from 'vitest';
+// Alias: `it` e' anche il nome del caso di test in vitest.
+import { it as itDict } from '~/lib/i18n/it';
+import { en as enDict } from '~/lib/i18n/en';
 import {
   TRACKING_CATEGORIES,
   defaultSelection,
@@ -9,12 +12,18 @@ import {
 
 describe('TRACKING_CATEGORIES', () => {
   it('raccoglie le piattaforme nelle quattro categorie previste', () => {
-    expect(TRACKING_CATEGORIES.map((c) => c.title)).toEqual([
-      'Social & Browser',
-      'Email',
-      'CRM',
-      'Analytics',
+    expect(TRACKING_CATEGORIES.map((c) => c.id)).toEqual([
+      'social',
+      'email',
+      'crm',
+      'analytics',
     ]);
+    // Ogni categoria ha il suo titolo in entrambe le lingue: senza, a schermo
+    // resterebbe uno spazio vuoto proprio in quella che usiamo meno.
+    for (const category of TRACKING_CATEGORIES) {
+      expect(itDict.tracking.serverSide.categories[category.id]).toBeTruthy();
+      expect(enDict.tracking.serverSide.categories[category.id]).toBeTruthy();
+    }
   });
 
   it('nessun nome compare in due categorie', () => {

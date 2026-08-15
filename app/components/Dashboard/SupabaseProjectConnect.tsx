@@ -1,3 +1,4 @@
+import { useT } from '~/lib/i18n/context';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useFetcher, useRevalidator } from '@remix-run/react';
 import {
@@ -57,6 +58,7 @@ export function SupabaseProjectConnect({
   authorization = 'ENABLED',
   onDisconnected,
 }: SupabaseProjectConnectProps) {
+  const t = useT();
   const revalidator = useRevalidator();
   const projectsFetcher = useFetcher<{ projects: SupabaseProject[]; error?: string }>();
   const selectFetcher = useFetcher<{ ok?: boolean; error?: string }>();
@@ -319,13 +321,13 @@ export function SupabaseProjectConnect({
     return (
       <BlockStack gap="300">
         {authorization === 'DISABLED' ? (
-          <Banner tone="critical">Sincronizzazione disabilitata.</Banner>
+          <Banner tone="critical">{t.connect.database.syncDisabled}</Banner>
         ) : authorization === 'PENDING' ? (
-          <Banner tone="warning">Sincronizzazione sospesa.</Banner>
+          <Banner tone="warning">{t.connect.database.syncSuspended}</Banner>
         ) : null}
         {projectName && (
           <Text as="p" tone="subdued">
-            Database collegato: <strong>{projectName}</strong>
+            {t.connect.database.connectedTo} <strong>{projectName}</strong>
           </Text>
         )}
         <InlineStack gap="200">
@@ -334,7 +336,7 @@ export function SupabaseProjectConnect({
               altro. Per questo il comando sta a sinistra e in tono normale —
               accanto a una disconnessione, che invece e' definitiva. */}
           <Button onClick={() => setChanging(true)} disabled={disabled || disconnecting}>
-            Cambia database
+            {t.connect.database.change}
           </Button>
           <Button
             tone="critical"
@@ -342,16 +344,16 @@ export function SupabaseProjectConnect({
             loading={disconnecting}
             disabled={disabled}
           >
-            Disconnetti
+            {t.connect.database.disconnect}
           </Button>
         </InlineStack>
 
         <Modal
           open={showDisconnect}
           onClose={closeDisconnect}
-          title="Scollegare Supabase?"
+          title={t.connect.database.disconnectTitle}
           primaryAction={{
-            content: 'Elimina tabelle e dati',
+            content: t.connect.database.deleteData,
             destructive: true,
             // Primo clic: chiede di scrivere il nome del progetto. Il secondo
             // cancella davvero, e arriva solo se il nome corrisponde.
@@ -367,13 +369,13 @@ export function SupabaseProjectConnect({
           }}
           secondaryActions={[
             {
-              content: 'Mantieni i dati',
+              content: t.connect.database.keepData,
               onAction: () => disconnect(false),
               loading: disconnecting && disconnectMode === 'keep',
               disabled: disconnecting,
             },
             {
-              content: 'Annulla',
+              content: t.common.cancel,
               onAction: closeDisconnect,
               disabled: disconnecting,
             },
@@ -382,19 +384,21 @@ export function SupabaseProjectConnect({
           <Modal.Section>
             <BlockStack gap="400">
               <Text as="p">
-                Puoi <strong>eliminare</strong> le tabelle e i dati sincronizzati dal tuo
-                progetto Supabase, oppure <strong>mantenerli</strong> (verrà interrotta solo la
-                sincronizzazione). In entrambi i casi il collegamento verrà rimosso.
+                {t.connect.database.disconnectBody.before}
+                <strong>{t.connect.database.disconnectBody.delete}</strong>
+                {t.connect.database.disconnectBody.middle}
+                <strong>{t.connect.database.disconnectBody.keep}</strong>
+                {t.connect.database.disconnectBody.after}
               </Text>
 
               {askingName && (
                 <BlockStack gap="200">
                   <Text as="p">
-                    Inserisci qui sotto il nome del progetto{' '}
+                    {t.connect.database.typeName}{' '}
                     <strong>{confirmationName}</strong>
                   </Text>
                   <TextField
-                    label="Nome del progetto"
+                    label={t.connect.database.projectName}
                     labelHidden
                     value={typedName}
                     onChange={setTypedName}
@@ -423,22 +427,25 @@ export function SupabaseProjectConnect({
                 Supabase alla creazione non lo sappiamo: in quel caso diciamo
                 cosa è successo senza inventare un nome di piano. */}
             {limits?.planLabel && limits.maxProjects !== null
-              ? `Il tuo piano ${limits.planLabel} consente al massimo ${limits.maxProjects} progetti attivi e ne hai già ${limits.activeProjects}.`
-              : 'Il tuo piano Supabase non consente di creare altri progetti.'}{' '}
-            Per crearne un altro{' '}
+              ? t.connect.database.limitKnown(
+                  limits.planLabel,
+                  limits.maxProjects,
+                  limits.activeProjects,
+                )
+              : t.connect.database.limitUnknown}{' '}
+            {t.connect.database.limitBefore}{' '}
             {/* Button e non Link: dentro un Banner, Polaris spegne i Link
                 rendendoli monocromatici (leggono BannerContext e non hanno una
                 prop per chiedere il contrario). Il Button variant="plain" resta
                 blu, ed e' lo stesso comando gia' usato altrove nell'app. */}
             {planLimitBillingUrl ? (
               <Button variant="plain" url={planLimitBillingUrl} target="_blank">
-                aggiorna ora il piano Supabase
+                {t.connect.database.limitUpgradeLink}
               </Button>
             ) : (
-              'aggiorna il piano Supabase'
+              t.connect.database.limitUpgradePlain
             )}
-            , oppure metti in pausa un progetto esistente dalla dashboard Supabase: i
-            progetti in pausa non occupano nessuno slot.
+            {t.connect.database.limitAfter}
           </Text>
         </Banner>
       )}
@@ -449,16 +456,16 @@ export function SupabaseProjectConnect({
 
       {!projectsLoaded && (
         <InlineStack gap="200" blockAlign="center">
-          <Spinner accessibilityLabel="Caricamento dei database" size="small" />
+          <Spinner accessibilityLabel={t.connect.database.loading} size="small" />
           <Text as="span" tone="subdued">
-            Caricamento dei database del tuo account…
+            {t.connect.database.loading}
           </Text>
         </InlineStack>
       )}
 
       {projectsLoaded && projects && projects.length === 0 && (
         <Banner tone="warning">
-          Nessun database trovato nel tuo account Supabase. Puoi crearne uno qui sotto.
+          {t.connect.database.none}
         </Banner>
       )}
 
@@ -481,9 +488,9 @@ export function SupabaseProjectConnect({
                   // campo mostra ciò che si sta cercando e la lista si rifiltra.
                   if (selectedRef) setSelectedRef('');
                 }}
-                label="Database"
+                label={t.connect.database.label}
                 value={selectedRef ? selectedName : query}
-                placeholder="Seleziona un database…"
+                placeholder={t.connect.database.placeholder}
                 autoComplete="off"
                 // Con una scelta fatta il campo non si puo' piu' svuotare
                 // scrivendoci dentro: la "x" e' l'unico modo per tornare
@@ -531,7 +538,7 @@ export function SupabaseProjectConnect({
               loading={selectFetcher.state !== 'idle'}
               disabled={disabled}
             >
-              Conferma
+              {t.common.confirm}
             </Button>
           )}
           {/* A limite raggiunto il comando resta al suo posto, spento: dice
@@ -547,13 +554,13 @@ export function SupabaseProjectConnect({
             loading={limitsChecking}
             disabled={disabled || limitsChecking || disconnecting || planLimitHit}
           >
-            Crea nuovo database
+            {t.connect.database.create}
           </Button>
           {/* Chi sta cambiando database e' gia' collegato: qui non ha niente da
               scollegare, ha solo da poter tornare indietro. */}
           {changing ? (
             <Button onClick={() => setChanging(false)} disabled={disabled}>
-              Annulla
+              {t.common.cancel}
             </Button>
           ) : (
             <Button
@@ -562,7 +569,7 @@ export function SupabaseProjectConnect({
               loading={disconnecting}
               disabled={disabled || disconnecting}
             >
-              Disconnetti
+              {t.connect.database.disconnect}
             </Button>
           )}
         </InlineStack>
@@ -575,7 +582,7 @@ export function SupabaseProjectConnect({
         <Box maxWidth="420px">
           <BlockStack gap="300">
             <TextField
-              label="Nome del nuovo database"
+              label={t.connect.database.newName}
               value={newName}
               onChange={setNewName}
               autoComplete="off"
@@ -586,7 +593,7 @@ export function SupabaseProjectConnect({
                 select e non come un campo di testo. OptionList da' gia' i titoli di
                 sezione in grassetto (Text headingSm) con le opzioni in peso normale,
                 e non disegna divider: nessun bordo dopo l'ultima sezione. */}
-            <Labelled id="region-select" label="Region">
+            <Labelled id="region-select" label={t.connect.database.region}>
               <Popover
                 active={regionPopoverActive}
                 // Popover largo quanto l'attivatore: pulsante e menu combaciano.
@@ -606,7 +613,7 @@ export function SupabaseProjectConnect({
                     textAlign="left"
                     disabled={disabled}
                   >
-                    {selectedRegionName || 'Seleziona una region…'}
+                    {selectedRegionName || t.connect.database.regionPlaceholder}
                   </Button>
                 }
               >
@@ -614,9 +621,9 @@ export function SupabaseProjectConnect({
                   {regionsLoading ? (
                     <Box padding="600">
                       <BlockStack gap="300" inlineAlign="center">
-                        <Spinner accessibilityLabel="Caricamento delle region" size="small" />
+                        <Spinner accessibilityLabel={t.connect.database.regionsLoading} size="small" />
                         <Text as="span" tone="subdued">
-                          Caricamento delle region…
+                          {t.connect.database.regionsLoading}
                         </Text>
                       </BlockStack>
                     </Box>
@@ -638,7 +645,7 @@ export function SupabaseProjectConnect({
               <InlineStack gap="200" blockAlign="center">
                 <Spinner accessibilityLabel="Creazione in corso" size="small" />
                 <Text as="span">
-                  Creazione del database in corso… (può richiedere 1-2 minuti)
+                  {t.connect.database.creating}
                 </Text>
               </InlineStack>
             ) : (
@@ -651,7 +658,7 @@ export function SupabaseProjectConnect({
                 >
                   Crea database
                 </Button>
-                <Button onClick={() => setShowCreate(false)}>Annulla</Button>
+                <Button onClick={() => setShowCreate(false)}>{t.common.cancel}</Button>
               </InlineStack>
             )}
           </BlockStack>

@@ -1,3 +1,4 @@
+import { useT } from '~/lib/i18n/context';
 import {
   Badge,
   Banner,
@@ -70,6 +71,7 @@ export function PlanStep({
   disabled,
   error,
 }: PlanStepProps) {
+  const t = useT();
   const hasChoice = cards.length > 0;
   const saving = yearlySaving(cards);
   const isCurrent = (card: PlanCard) =>
@@ -80,9 +82,7 @@ export function PlanStep({
       {hasChoice ? (
         <BlockStack gap="300">
           <Text as="p" tone="subdued">
-            {planChosen
-              ? 'Confermi il piano attivo, oppure ne scegli un altro: la sincronizzazione parte subito dopo.'
-              : 'Il piano stabilisce quanti prodotti entrano e ogni quanto si aggiornano.'}
+            {planChosen ? t.planStep.introConfirm : t.planStep.introChoose}
           </Text>
 
           {/* La cadenza sta sopra le card perche' cambia tutti i prezzi
@@ -95,19 +95,19 @@ export function PlanStep({
                 onClick={() => onIntervalChange('monthly')}
                 disabled={disabled || loading}
               >
-                Mensile
+                {t.planStep.monthly}
               </Button>
               <Button
                 pressed={interval === 'yearly'}
                 onClick={() => onIntervalChange('yearly')}
                 disabled={disabled || loading}
               >
-                Annuale
+                {t.planStep.yearly}
               </Button>
             </ButtonGroup>
             {interval === 'monthly' && saving != null && (
               <Text as="span" tone="subdued">
-                Con l&apos;annuale risparmi fino a €{formatPrice(saving)} l&apos;anno
+                {t.planStep.yearlyHint(formatPrice(saving))}
               </Text>
             )}
           </InlineStack>
@@ -154,26 +154,30 @@ export function PlanStep({
                             onChange={() => onSelect(card.name)}
                             disabled={disabled || loading}
                           />
-                          {isCurrent(card) && <Badge tone="info">Attuale</Badge>}
+                          {isCurrent(card) && (
+                            <Badge tone="info">{t.planStep.current}</Badge>
+                          )}
                           {/* Consigliato per QUESTO negozio: il piu' economico
                               che contenga il suo catalogo. Non e' il
                               "consigliato" del listino, uguale per tutti. */}
                           {card.name === recommendedPlanName && !isCurrent(card) && (
-                            <Badge tone="success">Consigliato</Badge>
+                            <Badge tone="success">{t.planStep.recommended}</Badge>
                           )}
                         </InlineStack>
 
                         <BlockStack gap="150">
                           <Text as="p" variant="headingLg">
-                            {planPriceLabel(card, discountIntervals, interval)}
+                            {planPriceLabel(card, discountIntervals, interval, t)}
                           </Text>
                           {/* Quanto fa risparmiare l'annuale su questo piano,
                               sotto il prezzo a cui si riferisce. Nasce dal
                               testo: dove non c'e' risparmio — il gratuito — il
                               badge non esiste, invece di comparire vuoto. */}
-                          {planSavingBadge(card) && (
+                          {planSavingBadge(card, t) && (
                             <InlineStack>
-                              <Badge tone="info">{planSavingBadge(card) as string}</Badge>
+                              <Badge tone="info">
+                                {planSavingBadge(card, t) as string}
+                              </Badge>
                             </InlineStack>
                           )}
                         </BlockStack>
@@ -189,7 +193,7 @@ export function PlanStep({
         </BlockStack>
       ) : (
         <Text as="p">
-          Il tuo piano:{' '}
+          {t.planStep.yourPlan}{' '}
           <Text as="span" fontWeight="bold">
             {currentPlanName}
           </Text>
@@ -206,7 +210,7 @@ export function PlanStep({
             loading={loading}
             disabled={disabled || loading || (hasChoice && !selected)}
           >
-            Conferma e sincronizza
+            {t.planStep.confirmAndSync}
           </Button>
         </InlineStack>
       </Box>

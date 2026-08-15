@@ -1,3 +1,4 @@
+import { useT } from '~/lib/i18n/context';
 import type { ActionFunctionArgs, LoaderFunctionArgs } from '@remix-run/node';
 import { json } from '@remix-run/node';
 import {
@@ -464,6 +465,7 @@ export default function Dashboard() {
   const { shop, plan, supabaseConnected, supabaseAccountConnected, customersEnabled, authorization, syncState, planChanged, currentMaxProducts, previousMaxProducts, previousCustomersEnabled, customersTableCreated, customersUpgradePlan, trackingAuthorization, schemaUpdatePending, planOptions, sync, recentRuns, planChosen, planConfirmedForConnection, trackingCheckedForConnection, planCards, discountIntervals, serverSideAnswer, serverSidePlatforms } =
     useLoaderData<typeof loader>();
   const blocked = authorization !== 'ENABLED';
+  const t = useT();
 
   // Altre fonti di eventi gia' attive sul negozio. Si chiede una volta sola: e'
   // un controllo di configurazione, non un dato che cambia mentre il merchant
@@ -511,12 +513,12 @@ export default function Dashboard() {
   // Badge del primo passo. "Collegato" lo decide il server (l'accesso risulta
   // fatto); gli stati intermedi li conosce solo il componente, che li riporta.
   const connectBadge = supabaseAccountConnected || supabaseConnected
-    ? { tone: 'success' as const, label: 'Collegato' }
+    ? { tone: 'success' as const, label: t.steps.connectAccount.complete }
     : connectStatus === 'failed'
-      ? { tone: 'critical' as const, label: 'Fallito' }
+      ? { tone: 'critical' as const, label: t.steps.connectAccount.failed }
       : connectStatus === 'in_progress'
-        ? { tone: 'warning' as const, label: 'In corso' }
-        : { tone: undefined, label: 'Non collegato' };
+        ? { tone: 'warning' as const, label: t.steps.connectAccount.inProgress }
+        : { tone: undefined, label: t.steps.connectAccount.notConnected };
 
   // Due fetcher separati: i conteggi (totale prodotti/clienti) sono chiamate
   // "count" istantanee e alimentano subito PlanBanner, card totali e anteprima;
@@ -668,14 +670,14 @@ export default function Dashboard() {
         });
         const data = (await response.json()) as { ok?: boolean; error?: string };
         if (!data.ok) {
-          setServerSideError(data.error ?? 'Non è stato possibile registrare la risposta.');
+          setServerSideError(data.error ?? t.tracking.serverSide.failed);
           return;
         }
         // La risposta la dice il server: ricaricandola il passo risulta chiuso e
         // la configurazione finita.
         revalidator.revalidate();
       } catch {
-        setServerSideError('Non è stato possibile registrare la risposta. Riprova.');
+        setServerSideError(t.tracking.serverSide.failed);
       } finally {
         setAnsweringServerSide(null);
       }
@@ -908,9 +910,9 @@ export default function Dashboard() {
   const stepperItems: StepperItem[] = [
     {
       id: 'connect-supabase',
-      title: 'Collega Supabase',
+      title: t.steps.connectAccount.title,
       state: steps.connectAccount,
-      completeLabel: 'Collegato',
+      completeLabel: t.steps.connectAccount.complete,
       badge: connectBadge,
       content: (
         // key sullo stato: rimonta il componente quando ci si collega o si
@@ -925,10 +927,10 @@ export default function Dashboard() {
     },
     {
       id: 'connect-database',
-      title: 'Crea o collega un database',
+      title: t.steps.connectDatabase.title,
       state: steps.connectDatabase,
-      completeLabel: 'Collegato',
-      lockedHint: 'Accedi a Supabase per scegliere il database da collegare.',
+      completeLabel: t.steps.connectDatabase.complete,
+      lockedHint: t.steps.connectDatabase.locked,
       content: (
         <SupabaseProjectConnect
           key={supabaseConnected ? 'connected' : 'disconnected'}
@@ -943,10 +945,10 @@ export default function Dashboard() {
     },
     {
       id: 'tracking-check',
-      title: 'Controllo tracciamenti',
+      title: t.steps.trackingCheck.title,
       state: steps.trackingCheck,
-      completeLabel: 'Controllato',
-      lockedHint: 'Collega un database per controllare cosa trasmette già dati.',
+      completeLabel: t.steps.trackingCheck.complete,
+      lockedHint: t.steps.trackingCheck.locked,
       content: (
         <TrackingCheckStep
           loading={!trackingChecked}
@@ -958,16 +960,16 @@ export default function Dashboard() {
     },
     {
       id: 'server-side',
-      title: 'Hai già un tracciamento full server side?',
+      title: t.steps.serverSide.title,
       state: steps.serverSide,
-      completeLabel: 'Risposto',
-      lockedHint: 'Finisci il controllo dei tracciamenti per rispondere a questa domanda.',
+      completeLabel: t.steps.serverSide.complete,
+      lockedHint: t.steps.serverSide.locked,
       // Beta dichiarata: e' l'unico passo che non configura niente dell'app, e
       // vale la pena dirlo invece di lasciarlo intuire.
       badge:
         steps.serverSide === 'complete'
-          ? { tone: 'success' as const, label: 'Risposto' }
-          : { tone: 'new' as const, label: 'Beta' },
+          ? { tone: 'success' as const, label: t.steps.serverSide.complete }
+          : { tone: 'new' as const, label: t.steps.serverSide.beta },
       content: (
         <ServerSideStep
           selected={selectedPlatforms}
@@ -988,11 +990,11 @@ export default function Dashboard() {
       // cosa gia' trasmette dati, che infrastruttura si ha.
       //
       // La sincronizzazione non ha un pulsante suo: parte con la conferma.
-      title: planChosen ? 'Conferma il piano' : 'Scegli il piano',
+      title: planChosen ? t.steps.plan.confirm : t.steps.plan.choose,
       state: steps.plan,
       // A sync completata: nessun badge sullo step (né "In corso" né altro).
       hideBadge: syncCompleted,
-      lockedHint: 'Rispondi alla domanda qui sopra per scegliere il piano.',
+      lockedHint: t.steps.plan.locked,
       content: (
         <PlanStep
           cards={planCards}
@@ -1016,13 +1018,13 @@ export default function Dashboard() {
   return (
     <Page
       fullWidth
-      title="Dashboard"
+      title={t.dashboard.title}
       secondaryActions={[
         {
-          content: 'Impostazioni',
+          content: t.common.settings,
           icon: SettingsIcon,
           url: '/settings/supabase',
-          accessibilityLabel: 'Impostazioni',
+          accessibilityLabel: t.common.settings,
           onAction: settingsNav.start,
           disabled: settingsNav.loading,
           loading: settingsNav.loading,
@@ -1050,15 +1052,15 @@ export default function Dashboard() {
             tone="success"
             title={
               disconnectDone === 'delete'
-                ? 'Tabelle e dati eliminati'
-                : 'Collegamento rimosso'
+                ? t.dashboard.disconnect.deletedTitle
+                : t.dashboard.disconnect.keptTitle
             }
             onDismiss={() => setDisconnectDone(null)}
           >
             <Text as="p">
               {disconnectDone === 'delete'
-                ? 'Il collegamento è stato rimosso e le tabelle create dall’app, con i dati sincronizzati, sono state eliminate dal progetto.'
-                : 'Il collegamento è stato rimosso. Le tabelle e i dati sincronizzati restano nel progetto: ricollegandolo, la sincronizzazione riparte da lì.'}
+                ? t.dashboard.disconnect.deletedBody
+                : t.dashboard.disconnect.keptBody}
             </Text>
           </Banner>
         )}

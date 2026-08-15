@@ -1,3 +1,4 @@
+import type { Dictionary } from '~/lib/i18n/context';
 /**
  * Le piattaforme verso cui un negozio manda dati, raccolte per categoria.
  *
@@ -16,15 +17,13 @@ export interface TrackingPlatform {
 }
 
 export interface TrackingCategory {
-  id: string;
-  title: string;
+  id: keyof Dictionary['tracking']['serverSide']['categories'];
   platforms: TrackingPlatform[];
 }
 
 export const TRACKING_CATEGORIES: TrackingCategory[] = [
   {
     id: 'social',
-    title: 'Social & Browser',
     platforms: [
       { name: 'Meta Ads', preselected: true },
       { name: 'Google Ads', preselected: true },
@@ -34,17 +33,14 @@ export const TRACKING_CATEGORIES: TrackingCategory[] = [
   },
   {
     id: 'email',
-    title: 'Email',
     platforms: [{ name: 'Klaviyo' }],
   },
   {
     id: 'crm',
-    title: 'CRM',
     platforms: [{ name: 'HubSpot' }, { name: 'GoHighLevel' }],
   },
   {
     id: 'analytics',
-    title: 'Analytics',
     platforms: [{ name: 'Google Analytics 4', preselected: true }],
   },
 ];

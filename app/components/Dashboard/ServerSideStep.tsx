@@ -10,6 +10,7 @@ import {
   InlineStack,
   Text,
 } from '@shopify/polaris';
+import { useT } from '~/lib/i18n/context';
 import {
   TRACKING_CATEGORIES,
   selectedInCategory,
@@ -48,6 +49,7 @@ export function ServerSideStep({
   answered,
   error,
 }: ServerSideStepProps) {
+  const t = useT();
   // Aperta solo la prima categoria: le altre si aprono se interessano. Il badge
   // dice quante spunte contengono, quindi chiuse non nascondono niente.
   const [open, setOpen] = useState<Record<string, boolean>>({
@@ -72,10 +74,7 @@ export function ServerSideStep({
   return (
     <BlockStack gap="400">
       <Text as="p" tone="subdued">
-        Un tracciamento server side manda le conversioni dal server e non dal
-        browser: arrivano anche quando il browser le blocca, e con i dati di
-        catalogo e clientela che questa app tiene allineati diventano attribuibili
-        e misurabili. Dicci per quali piattaforme raccogli dati.
+        {t.tracking.serverSide.intro}
       </Text>
 
       <BlockStack gap="200">
@@ -103,7 +102,7 @@ export function ServerSideStep({
                     ariaExpanded={isOpen}
                     ariaControls={`platforms-${category.id}`}
                   >
-                    {category.title}
+                    {t.tracking.serverSide.categories[category.id]}
                   </Button>
                   {/* Il badge nasce dal conteggio: a zero non esiste, invece di
                       comparire vuoto accanto a ogni categoria. */}
@@ -138,18 +137,13 @@ export function ServerSideStep({
       {error && <Banner tone="critical">{error}</Banner>}
 
       {answered === 'needs' && (
-        <Banner tone="success" title="Richiesta ricevuta">
-          <Text as="p">
-            Ti ricontattiamo con una proposta per le piattaforme che hai indicato.
-          </Text>
+        <Banner tone="success" title={t.tracking.serverSide.receivedTitle}>
+          <Text as="p">{t.tracking.serverSide.receivedBody}</Text>
         </Banner>
       )}
       {answered === 'has' && (
         <Banner tone="info">
-          <Text as="p">
-            Hai dichiarato di avere già un&apos;infrastruttura server side. Se
-            cambia qualcosa, scrivici quando vuoi.
-          </Text>
+          <Text as="p">{t.tracking.serverSide.hasBody}</Text>
         </Banner>
       )}
 
@@ -161,14 +155,14 @@ export function ServerSideStep({
             loading={submitting === 'needs'}
             disabled={disabled || busy}
           >
-            Ho bisogno di un&apos;infrastruttura server side
+            {t.tracking.serverSide.needs}
           </Button>
           <Button
             onClick={() => onAnswer('has')}
             loading={submitting === 'has'}
             disabled={disabled || busy}
           >
-            Ho già una struttura server side
+            {t.tracking.serverSide.has}
           </Button>
         </InlineStack>
       )}

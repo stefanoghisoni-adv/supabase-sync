@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFetcher, useRevalidator } from '@remix-run/react';
 import { BlockStack, Button, Banner, InlineStack, Spinner, Text } from '@shopify/polaris';
+import { useT } from '~/lib/i18n/context';
 
 export type SupabaseConnectStatus = 'idle' | 'in_progress' | 'failed';
 
@@ -28,6 +29,7 @@ export function SupabaseAccountConnect({
   disabled,
   onStatusChange,
 }: SupabaseAccountConnectProps) {
+  const t = useT();
   const revalidator = useRevalidator();
   const urlFetcher = useFetcher<{ url?: string; error?: string }>();
   const accountFetcher = useFetcher<{ email: string | null }>();
@@ -65,7 +67,7 @@ export function SupabaseAccountConnect({
         revalidator.revalidate();
       } else {
         setConnectFailed(true);
-        setOauthError('Collegamento a Supabase non riuscito. Riprova.');
+        setOauthError(t.connect.account.failed);
       }
     }
     window.addEventListener('message', onMessage);
@@ -196,7 +198,7 @@ export function SupabaseAccountConnect({
     // riporta li' chi nel frattempo e' finito a creare account o organizzazione.
     const popup = window.open('', 'supabase-oauth', 'width=600,height=760');
     if (!popup) {
-      setOauthError('Consenti i popup per collegare Supabase.');
+      setOauthError(t.connect.account.popupsBlocked);
       return;
     }
     popup.focus();
@@ -239,9 +241,9 @@ export function SupabaseAccountConnect({
     if (emailPending) {
       return (
         <InlineStack gap="200" blockAlign="center">
-          <Spinner size="small" accessibilityLabel="Caricamento dell'email in corso" />
+          <Spinner size="small" accessibilityLabel={t.connect.account.loadingEmail} />
           <Text as="p" tone="subdued">
-            Carico l&apos;email connessa all&apos;account
+            {t.connect.account.loadingEmail}
           </Text>
         </InlineStack>
       );
@@ -250,7 +252,9 @@ export function SupabaseAccountConnect({
       <Text as="p" tone="subdued">
         {/* Senza email la risposta e' arrivata lo stesso: si dice quel che si sa,
             non si resta a girare su un dato che non tornera'. */}
-        {accountEmail ? `Account connesso con ${accountEmail}.` : 'Account connesso.'}
+        {accountEmail
+          ? t.connect.account.connectedWith(accountEmail)
+          : t.connect.account.connectedNoEmail}
       </Text>
     );
   }
@@ -258,9 +262,7 @@ export function SupabaseAccountConnect({
   return (
     <BlockStack gap="300">
       <Text as="p" tone="subdued">
-        Accedi a Supabase o crea un nuovo account. Subito dopo l&apos;accesso ti verrà chiesto
-        di accettare l&apos;integrazione e, proseguendo, potrai selezionare o creare un nuovo
-        database da collegare.
+        {t.connect.account.intro}
       </Text>
 
       {oauthError && <Banner tone="critical">{oauthError}</Banner>}
@@ -270,18 +272,11 @@ export function SupabaseAccountConnect({
           di autorizzazione resta indietro. Il passo si sblocca comunque da solo
           appena l'autorizzazione arriva, ma qui gli si dice dove cercarla. */}
       {connecting && (
-        <Banner tone="info" title="Completa l'accesso nella finestra di Supabase">
+        <Banner tone="info" title={t.connect.account.windowTitle}>
           <BlockStack gap="200">
-            <Text as="p">
-              Se Supabase ti chiede prima di creare l&apos;account o
-              l&apos;organizzazione, finisci quel passaggio: la richiesta di
-              autorizzazione resta indietro e va riaperta. Questa pagina si
-              aggiorna da sola appena l&apos;accesso è fatto.
-            </Text>
+            <Text as="p">{t.connect.account.windowBody}</Text>
             <InlineStack>
-              <Button onClick={startConnect}>
-                Riapri la pagina di autorizzazione
-              </Button>
+              <Button onClick={startConnect}>{t.connect.account.reopen}</Button>
             </InlineStack>
           </BlockStack>
         </Banner>
@@ -293,11 +288,8 @@ export function SupabaseAccountConnect({
           sarebbe falso e scoraggiante: gli manca un clic, e il pulsante qui
           sotto cambia nome per andarlo a prendere da dove si trova ora. */}
       {connectFailed && (
-        <Banner tone="info" title="Manca solo un passaggio">
-          <Text as="p">
-            Se hai appena creato l&apos;account o il database su Supabase, resta
-            da accettare il collegamento: è un clic, nella finestra di Supabase.
-          </Text>
+        <Banner tone="info" title={t.connect.account.almostTitle}>
+          <Text as="p">{t.connect.account.almostBody}</Text>
         </Banner>
       )}
 
@@ -308,7 +300,7 @@ export function SupabaseAccountConnect({
           loading={pending}
           disabled={disabled || pending}
         >
-          {connectFailed ? 'Ho creato il database' : 'Collega Supabase'}
+          {connectFailed ? t.connect.account.retry : t.connect.account.connect}
         </Button>
       </InlineStack>
     </BlockStack>

@@ -1,3 +1,5 @@
+// Alias: `it` e' anche il nome del caso di test in vitest.
+import { it as itDict } from '~/lib/i18n/it';
 import { describe, it, expect } from 'vitest';
 import type { PlanCard } from '~/components/Billing/plan-catalog';
 import {
@@ -30,20 +32,20 @@ function card(overrides: Partial<PlanCard> = {}): PlanCard {
 
 describe('planPriceLabel', () => {
   it('scrive il prezzo al mese', () => {
-    expect(planPriceLabel(card(), null)).toBe('€ 29/mese');
+    expect(planPriceLabel(card(), null, 'monthly', itDict)).toBe('€ 29/mese');
   });
 
   it('a prezzo zero dice "Gratis", non "€ 0"', () => {
-    expect(planPriceLabel(card({ priceMonthly: 0 }), null)).toBe('Gratis');
+    expect(planPriceLabel(card({ priceMonthly: 0 }), null, 'monthly', itDict)).toBe('Gratis');
   });
 
   it('usa il prezzo riservato quando il negozio ne ha uno', () => {
-    expect(planPriceLabel(card({ partnerMonthly: 24 }), 3)).toBe('€ 24/mese');
+    expect(planPriceLabel(card({ partnerMonthly: 24 }), 3, 'monthly', itDict)).toBe('€ 24/mese');
   });
 
   it('sull annuale scrive il prezzo dell anno', () => {
-    expect(planPriceLabel(card(), null, 'yearly')).toBe('€ 290/anno');
-    expect(planPriceLabel(card({ partnerYearly: 240 }), 3, 'yearly')).toBe('€ 240/anno');
+    expect(planPriceLabel(card(), null, 'yearly', itDict)).toBe('€ 290/anno');
+    expect(planPriceLabel(card({ partnerYearly: 240 }), 3, 'yearly', itDict)).toBe('€ 240/anno');
   });
 });
 
@@ -69,22 +71,22 @@ describe('planSavingBadge', () => {
   it('scrive quanto si risparmia in un anno, centesimi compresi', () => {
     // 29x12 - 290 = 58. I centesimi si scrivono sempre: e' denaro, e "€ 58"
     // accanto a "€ 58,50" sembrerebbe un arrotondamento.
-    expect(planSavingBadge(card())).toBe('Risparmi € 58,00');
+    expect(planSavingBadge(card(), itDict)).toBe('Risparmi € 58,00');
   });
 
   it('conta sul prezzo riservato, che e quello che il negozio paga', () => {
-    expect(planSavingBadge(card({ partnerMonthly: 24, partnerYearly: 240 }))).toBe(
+    expect(planSavingBadge(card({ partnerMonthly: 24, partnerYearly: 240 }), itDict)).toBe(
       'Risparmi € 48,00',
     );
   });
 
   it('sul gratuito non c e nessun badge', () => {
-    expect(planSavingBadge(card({ priceMonthly: 0, priceYearly: 0 }))).toBeNull();
+    expect(planSavingBadge(card({ priceMonthly: 0, priceYearly: 0 }), itDict)).toBeNull();
   });
 
   it('se l annuale non conviene, non lo si annuncia', () => {
-    expect(planSavingBadge(card({ priceMonthly: 10, priceYearly: 120 }))).toBeNull();
-    expect(planSavingBadge(card({ priceMonthly: 10, priceYearly: 130 }))).toBeNull();
+    expect(planSavingBadge(card({ priceMonthly: 10, priceYearly: 120 }), itDict)).toBeNull();
+    expect(planSavingBadge(card({ priceMonthly: 10, priceYearly: 130 }), itDict)).toBeNull();
   });
 });
 
