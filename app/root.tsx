@@ -1,5 +1,6 @@
 import type { LinksFunction, LoaderFunctionArgs } from '@remix-run/node';
 import { json } from '@remix-run/node';
+import { useEffect } from 'react';
 import {
   Link,
   Links,
@@ -123,8 +124,45 @@ export function Layout({ children }: { children: React.ReactNode }) {
   );
 }
 
+/**
+ * Quanto si aspetta prima di ricaricare una seconda volta per lo stesso motivo.
+ * Se il file mancasse davvero — non per un rilascio appena andato online — un
+ * ricaricamento immediato girerebbe all'infinito.
+ */
+const ASSET_RELOAD_KEY = 'coreward:asset-reload';
+const ASSET_RELOAD_GRACE_MS = 15_000;
+
+/**
+ * L'app si ricarica da sola quando il suo codice non c'e' piu'.
+ *
+ * Ogni rilascio produce file con nomi nuovi, e la scheda rimasta aperta continua
+ * a chiedere quelli di prima. Cambiando sezione, il pezzo di codice di quella
+ * pagina rispondeva 404: la navigazione interna falliva, il browser ripiegava su
+ * una richiesta normale senza i parametri di Shopify e il merchant finiva sulla
+ * pagina di accesso — o davanti a una risposta grezza — invece che nella tab che
+ * aveva chiesto.
+ *
+ * Vite avvisa quando un pezzo non si carica: qui si ricarica la pagina, che
+ * torna con i nomi giusti. Una volta sola per volta, per non entrare in un giro
+ * senza fine se il file manca per davvero.
+ */
+function useReloadOnStaleAssets(): void {
+  useEffect(() => {
+    function onPreloadError(event: Event) {
+      event.preventDefault();
+      const last = Number(window.sessionStorage.getItem(ASSET_RELOAD_KEY) ?? 0);
+      if (Date.now() - last < ASSET_RELOAD_GRACE_MS) return;
+      window.sessionStorage.setItem(ASSET_RELOAD_KEY, String(Date.now()));
+      window.location.reload();
+    }
+    window.addEventListener('vite:preloadError', onPreloadError);
+    return () => window.removeEventListener('vite:preloadError', onPreloadError);
+  }, []);
+}
+
 export default function App() {
   const { apiKey, canSeePlanTab } = useLoaderData<typeof loader>();
+  useReloadOnStaleAssets();
 
   return (
         <AppProvider isEmbeddedApp apiKey={apiKey} theme="light">

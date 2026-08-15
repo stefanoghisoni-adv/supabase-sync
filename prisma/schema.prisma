@@ -54,6 +54,12 @@ model Shop {
   // Confrontato con connectionVerifiedAt dice se la conferma vale per il
   // collegamento di adesso o per uno precedente.
   planConfirmedAt   DateTime?          @map("plan_confirmed_at")
+  // Quando il controllo delle altre fonti di eventi ha dato una risposta.
+  // Anche questo confrontato con connectionVerifiedAt: dice se il controllo
+  // vale per il collegamento di adesso. Senza, il passo risultava da fare a
+  // ogni apertura dell'app — la risposta arriva da una richiesta al browser, e
+  // il browser riparte da zero ogni volta.
+  trackingCheckedAt DateTime?          @map("tracking_checked_at")
   billingCycle      String?            @map("billing_cycle")
   installedAt       DateTime           @default(now()) @map("installed_at")
   uninstalledAt     DateTime?          @map("uninstalled_at")

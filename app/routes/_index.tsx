@@ -283,6 +283,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
       // scrive l'attivazione, gratuita o a pagamento che sia. Al passo del
       // piano serve a sapere se chiedere una scelta o una conferma.
       planChosen: shop.planStartedAt !== null,
+      // Il controllo delle altre fonti di eventi risulta gia' fatto per questo
+      // collegamento? La risposta arriva da una richiesta del browser, che
+      // riparte da zero a ogni apertura: senza saperlo qui, la configurazione
+      // risultava incompleta per i primi secondi e i passi ricomparivano sopra
+      // una dashboard gia' pronta.
+      trackingCheckedForConnection:
+        shop.trackingCheckedAt != null &&
+        shop.supabaseConfig?.connectionVerifiedAt != null &&
+        shop.trackingCheckedAt >= shop.supabaseConfig.connectionVerifiedAt,
       // La conferma vale per il collegamento di adesso? Confermare e' un gesto
       // che riguarda questa configurazione: dopo un ri-collegamento il passo
       // torna a chiederlo, come fa gia' la sincronizzazione.
@@ -452,7 +461,7 @@ interface ProductHistoryResponse {
 }
 
 export default function Dashboard() {
-  const { shop, plan, supabaseConnected, supabaseAccountConnected, customersEnabled, authorization, syncState, planChanged, currentMaxProducts, previousMaxProducts, previousCustomersEnabled, customersTableCreated, customersUpgradePlan, trackingAuthorization, schemaUpdatePending, planOptions, sync, recentRuns, planChosen, planConfirmedForConnection, planCards, discountIntervals, serverSideAnswer, serverSidePlatforms } =
+  const { shop, plan, supabaseConnected, supabaseAccountConnected, customersEnabled, authorization, syncState, planChanged, currentMaxProducts, previousMaxProducts, previousCustomersEnabled, customersTableCreated, customersUpgradePlan, trackingAuthorization, schemaUpdatePending, planOptions, sync, recentRuns, planChosen, planConfirmedForConnection, trackingCheckedForConnection, planCards, discountIntervals, serverSideAnswer, serverSidePlatforms } =
     useLoaderData<typeof loader>();
   const blocked = authorization !== 'ENABLED';
 
@@ -732,7 +741,10 @@ export default function Dashboard() {
   // chiude quando il controllo e' finito, non quando il merchant ha fatto
   // qualcosa. E' un'informazione, non un compito — e per un canale collegato al
   // solo catalogo non c'e' niente da fare.
-  const trackingChecked = supabaseConnected && conflictsFetcher.data != null;
+  // Il controllo e' fatto se il server lo sa gia' (apertura successiva) oppure
+  // se la risposta e' appena arrivata (la prima volta).
+  const trackingChecked =
+    supabaseConnected && (trackingCheckedForConnection || conflictsFetcher.data != null);
 
   // Il piano e' deciso quando c'e' una scelta alle spalle e la sincronizzazione
   // di questa connessione e' arrivata in fondo. Le due cose contano a parte:
