@@ -1,16 +1,5 @@
 import { useMemo, useState } from 'react';
-import {
-  Box,
-  Button,
-  Icon,
-  InlineStack,
-  Labelled,
-  OptionList,
-  Popover,
-  Spinner,
-  Text,
-  TextField,
-} from '@shopify/polaris';
+import { Box, Button, Icon, OptionList, Popover, TextField } from '@shopify/polaris';
 import { SearchIcon } from '@shopify/polaris-icons';
 import { LOCALES, LOCALE_LABELS, needsSearch, type Locale } from '~/lib/i18n/locales';
 import { useT } from '~/lib/i18n/context';
@@ -34,6 +23,10 @@ export interface LanguageSelectProps {
  * Da dieci lingue in su compare anche un campo di ricerca: due si scorrono,
  * trenta si cercano. La soglia la decide `needsSearch`, cosi' aggiungendo
  * lingue il campo arriva da solo.
+ *
+ * L'etichetta non e' qui: il comando vive su una riga con il suo nome a
+ * sinistra, come le altre righe della card, e quella riga la compone chi lo
+ * usa.
  */
 export function LanguageSelect({ value, onChange, saving, disabled }: LanguageSelectProps) {
   const t = useT();
@@ -54,15 +47,6 @@ export function LanguageSelect({ value, onChange, saving, disabled }: LanguageSe
   const searchable = needsSearch();
 
   return (
-    <Labelled
-      id="language-select"
-      label={
-        <InlineStack gap="200" blockAlign="center">
-          <Text as="span">{t.language.label}</Text>
-          {saving && <Spinner size="small" accessibilityLabel={t.language.saving} />}
-        </InlineStack>
-      }
-    >
       <Popover
         active={active}
         // Popover largo quanto l'attivatore: pulsante e menu combaciano.
@@ -80,6 +64,9 @@ export function LanguageSelect({ value, onChange, saving, disabled }: LanguageSe
             fullWidth
             textAlign="left"
             disabled={disabled || saving}
+            // L'etichetta visibile sta accanto, sulla riga: qui serve solo a
+            // chi il pulsante lo sente leggere invece di vederlo.
+            accessibilityLabel={t.language.label}
           >
             {LOCALE_LABELS[value]}
           </Button>
@@ -115,6 +102,5 @@ export function LanguageSelect({ value, onChange, saving, disabled }: LanguageSe
           />
         </Popover.Pane>
       </Popover>
-    </Labelled>
   );
 }

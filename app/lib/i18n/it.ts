@@ -31,8 +31,6 @@ export const it = {
     /** Testo del campo di ricerca, quando le lingue sono molte. */
     searchPlaceholder: 'Cerca una lingua…',
     saving: 'Salvataggio…',
-    /** Detto una volta, sotto al selettore. */
-    followsAdmin: 'Senza una scelta, l’app segue la lingua del tuo admin Shopify.',
   },
 
   settings: {

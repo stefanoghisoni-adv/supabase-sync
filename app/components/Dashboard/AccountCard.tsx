@@ -1,4 +1,4 @@
-import { Card, BlockStack, Divider, Text, Button } from '@shopify/polaris';
+import { Card, BlockStack, Box, Divider, InlineStack, Text, Button } from '@shopify/polaris';
 import { MetricRow } from './MetricRow';
 import { planLabel, syncStatusBadge } from './account-format';
 import { useNavLoading } from './nav-loading';
@@ -75,16 +75,26 @@ export function AccountCard({
 
         {/* La lingua sta qui e non in una card sua: e' una preferenza
             dell'account, come il piano, e una card intera per una tendina
-            sarebbe piu' cornice che contenuto. */}
+            sarebbe piu' cornice che contenuto.
+
+            Stessa impaginazione delle righe sopra — nome a sinistra, valore a
+            destra — cosi' la card continua a leggersi per colonne invece di
+            spezzarsi in due blocchi. Il comando non prende tutta la riga: e'
+            una tendina di poche voci, e larga quanto la card sembrerebbe il
+            campo principale della pagina. */}
         <Divider />
-        <LanguageSelect
-          value={locale}
-          onChange={onLocaleChange}
-          saving={localeSaving}
-        />
-        <Text as="p" tone="subdued" variant="bodySm">
-          {t.language.followsAdmin}
-        </Text>
+        <InlineStack align="space-between" blockAlign="center" gap="300" wrap={false}>
+          <Text as="span" variant="bodyMd">
+            {t.language.label}
+          </Text>
+          <Box minWidth="45%">
+            <LanguageSelect
+              value={locale}
+              onChange={onLocaleChange}
+              saving={localeSaving}
+            />
+          </Box>
+        </InlineStack>
       </BlockStack>
     </Card>
   );

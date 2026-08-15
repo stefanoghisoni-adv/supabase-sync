@@ -28,7 +28,6 @@ export const en: typeof it = {
     label: 'Language',
     searchPlaceholder: 'Search for a language…',
     saving: 'Saving…',
-    followsAdmin: 'Without a choice, the app follows your Shopify admin language.',
   },
 
   settings: {
