@@ -24,6 +24,11 @@ export const en: typeof it = {
     notConnected: 'Not connected',
   },
 
+  nav: {
+    /** L'unica voce di menu finche' la configurazione e' aperta. */
+    configuration: 'Configuration',
+  },
+
   language: {
     label: 'Language',
     searchPlaceholder: 'Search for a language…',

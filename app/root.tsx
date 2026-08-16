@@ -27,7 +27,8 @@ import { prisma } from './db.server';
 import { canAccessPlanTab } from './components/Billing/plan-access';
 import { adminAppUrl, reloadWholePage } from './utils/admin-page';
 import { FALLBACK_LOCALE, localeFromTag, resolveLocale } from './lib/i18n/locales';
-import { I18nProvider } from './lib/i18n/context';
+import { I18nProvider, dictionaryFor } from './lib/i18n/context';
+import { isSetupComplete } from './lib/setup/setup-state.server';
 
 // Rete di sicurezza del tema chiaro, in linea nel documento e DOPO i fogli di
 // stile: force-light.css fa il lavoro completo, ma e' un file esterno, e se per
@@ -87,6 +88,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
     return json({
       apiKey,
       canSeePlanTab: canAccessPlanTab(shop?.currentPlan),
+      // Finche' la configurazione e' aperta il menu ha una voce sola: le altre
+      // pagine parlano di dati che ancora non esistono, e offrirle significa
+      // invitare a uscire da meta' di un lavoro. Si legge qui perche' e' qui
+      // che vive il menu.
+      setupComplete: await isSetupComplete(session.shop),
       // La lingua sta in root perche' la usa tutta l'app, menu compreso. La
       // scelta del merchant vince su tutto; senza una scelta si segue l'admin.
       locale: resolveLocale(shop?.locale, declared ?? shop?.detectedLocale),
@@ -105,6 +111,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
       canSeePlanTab: true,
       adminAppUrl: null,
       locale: FALLBACK_LOCALE,
+      // Non sapendo a che punto sia, si mostra il menu intero: nascondere
+      // pagine per un guasto nostro sarebbe peggio del guasto.
+      setupComplete: true,
     });
   }
 }
@@ -183,8 +192,20 @@ function useReloadOnStaleAssets(): void {
 }
 
 export default function App() {
-  const { apiKey, canSeePlanTab, locale } = useLoaderData<typeof loader>();
+  const { apiKey, canSeePlanTab, locale, setupComplete } = useLoaderData<typeof loader>();
   useReloadOnStaleAssets();
+
+  // Le voci del menu vivono fuori dal provider della lingua — la NavMenu e' un
+  // fratello, non un figlio — quindi il dizionario si prende qui, dalla lingua
+  // gia' risolta dal loader.
+  const strings = dictionaryFor(locale);
+  const menu = {
+    home: setupComplete ? strings.common.dashboard : strings.nav.configuration,
+    productIssues: strings.common.productIssues,
+    logs: strings.common.logs,
+    plan: strings.common.plan,
+    settings: strings.common.settings,
+  };
 
   return (
       <I18nProvider locale={locale}>
@@ -195,14 +216,22 @@ export default function App() {
                 un secondo link alla stessa pagina, che e' quello visibile —
                 senza, per tornare alla dashboard bisogna cliccare il nome. */}
             <Link to="/" rel="home">
-              Dashboard
+              {menu.home}
             </Link>
-            <Link to="/">Dashboard</Link>
-            <Link to="/products/issues">Prodotti non idonei</Link>
-            <Link to="/logs">Logs</Link>
-            {/* Nascosta sui piani senza nulla da acquistare (lifetime). */}
-            {canSeePlanTab && <Link to="/plan">Piano</Link>}
-            <Link to="/settings/supabase">Impostazioni</Link>
+            <Link to="/">{menu.home}</Link>
+            {/* Durante la configurazione il menu si ferma qui: le altre pagine
+                mostrerebbero numeri che ancora non esistono, e offrirle mentre
+                c'e' un passo aperto e' un invito a uscire da meta' lavoro. Non
+                e' solo una scelta di menu — le rotte stesse rimandano qui. */}
+            {setupComplete && (
+              <>
+                <Link to="/products/issues">{menu.productIssues}</Link>
+                <Link to="/logs">{menu.logs}</Link>
+                {/* Nascosta sui piani senza nulla da acquistare (lifetime). */}
+                {canSeePlanTab && <Link to="/plan">{menu.plan}</Link>}
+                <Link to="/settings/supabase">{menu.settings}</Link>
+              </>
+            )}
           </NavMenu>
           <Outlet />
         </AppProvider>

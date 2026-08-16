@@ -26,6 +26,11 @@ export const it = {
     notConnected: 'Non collegato',
   },
 
+  nav: {
+    /** L'unica voce di menu finche' la configurazione e' aperta. */
+    configuration: 'Configurazione',
+  },
+
   language: {
     label: 'Lingua',
     /** Testo del campo di ricerca, quando le lingue sono molte. */

@@ -4,6 +4,7 @@
 // aggiorna": e' quel pulsante a scriverli su Shopify E su Supabase, a togliere
 // dall'elenco le varianti risolte e ad aggiornare il conteggio dei prodotti
 // sincronizzabili.
+import { requireSetupComplete } from '~/lib/setup/require-setup.server';
 import type { ActionFunctionArgs, LoaderFunctionArgs } from '@remix-run/node';
 import { json } from '@remix-run/node';
 import { useLoaderData, useFetcher } from '@remix-run/react';
@@ -53,6 +54,11 @@ const PER_PAGE = 20;
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const { session } = await authenticate.admin(request);
+
+  // Questa pagina esiste a configurazione conclusa: prima parlerebbe di dati
+  // che non ci sono ancora. Chi ci arriva da un indirizzo salvato torna dove
+  // il lavoro e' rimasto.
+  await requireSetupComplete(session.shop);
 
   const shop = await prisma.shop.findUnique({
     where: { shopDomain: session.shop },

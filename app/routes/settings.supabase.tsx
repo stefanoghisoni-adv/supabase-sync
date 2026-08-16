@@ -1,3 +1,4 @@
+import { requireSetupComplete } from '~/lib/setup/require-setup.server';
 import type { LoaderFunctionArgs } from '@remix-run/node';
 import { json } from '@remix-run/node';
 import { useFetcher, useLoaderData, useRevalidator } from '@remix-run/react';
@@ -27,6 +28,11 @@ import { useCallback, useEffect } from 'react';
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const { session } = await authenticate.admin(request);
+
+  // Questa pagina esiste a configurazione conclusa: prima parlerebbe di dati
+  // che non ci sono ancora. Chi ci arriva da un indirizzo salvato torna dove
+  // il lavoro e' rimasto.
+  await requireSetupComplete(session.shop);
 
   const shop = await prisma.shop.findUnique({
     where: { shopDomain: session.shop },
