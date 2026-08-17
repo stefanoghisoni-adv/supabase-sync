@@ -13,8 +13,9 @@ import { BASE_CURRENCY } from './money';
  *
  * Quindi la regola e' una sola: si passa a un'altra valuta quando il listino
  * esiste per intero in quella valuta, e quel listino diventa insieme cio' che
- * si mostra e cio' che si addebita. Altrimenti si resta alla valuta base — un
- * prezzo in euro e' comprensibile ovunque, un prezzo sbagliato no.
+ * si mostra e cio' che si addebita. Altrimenti si resta alla valuta base, che
+ * e' anche quella della scheda dell'App Store: il merchant ritrova nell'app il
+ * prezzo che ha letto prima di installare.
  */
 
 /** Un piano per come serve qui: il nome e i prezzi del listino base. */
@@ -32,7 +33,7 @@ export interface PlanPriceRow {
   priceYearly: number;
 }
 
-/** Gratis in euro e' gratis ovunque: per questi piani non serve nessuna riga. */
+/** Gratis in una valuta e' gratis in tutte: per questi piani non serve una riga. */
 function isFree(plan: PricedPlan): boolean {
   return !(plan.priceMonthly > 0) && !(plan.priceYearly > 0);
 }
