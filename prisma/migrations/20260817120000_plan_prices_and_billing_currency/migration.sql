@@ -14,10 +14,20 @@ CREATE TABLE IF NOT EXISTS "plan_prices" (
 CREATE UNIQUE INDEX IF NOT EXISTS "plan_prices_plan_name_currency_key"
   ON "plan_prices" ("plan_name", "currency");
 
-ALTER TABLE "plan_prices"
-  ADD CONSTRAINT "plan_prices_plan_name_fkey"
-  FOREIGN KEY ("plan_name") REFERENCES "plans" ("plan_name")
-  ON DELETE CASCADE ON UPDATE CASCADE;
+-- Rieseguibile: il vincolo si aggiunge solo se non c'e' gia', cosi' lanciare
+-- il file due volte (o su un database dove era gia' passato) non si ferma a
+-- meta'.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'plan_prices_plan_name_fkey'
+  ) THEN
+    ALTER TABLE "plan_prices"
+      ADD CONSTRAINT "plan_prices_plan_name_fkey"
+      FOREIGN KEY ("plan_name") REFERENCES "plans" ("plan_name")
+      ON DELETE CASCADE ON UPDATE CASCADE;
+  END IF;
+END $$;
 
 -- Valuta dell'addebito: un importo senza valuta non risponde alla domanda
 -- "quanto ho pagato". Le righe gia' scritte sono tutte in euro.
