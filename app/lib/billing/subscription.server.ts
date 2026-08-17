@@ -46,8 +46,16 @@ export interface AppSubscriptionSummary {
 export interface CreateSubscriptionOptions {
   /** Nome esatto dalla colonna `plan_name`: e' quello che il merchant vede in fattura. */
   planName: string;
-  /** Prezzo di LISTINO nel ciclo scelto, in EUR. Lo sconto viaggia a parte. */
+  /** Prezzo di LISTINO nel ciclo scelto. Lo sconto viaggia a parte. */
   price: number;
+  /**
+   * In che valuta e' quel prezzo.
+   *
+   * La stessa che il merchant ha visto sulla card: Shopify fattura nella valuta
+   * che gli diciamo, e dirgliene una diversa da quella mostrata significa
+   * addebitare una cifra che il merchant non ha mai letto.
+   */
+  currency: string;
   /** Ogni quanto si paga. */
   interval: 'monthly' | 'yearly';
   /** Null = nessuna prova. */
@@ -66,7 +74,7 @@ export interface CreateSubscriptionOptions {
    * addebito.
    */
   discount?: {
-    /** Quanto si toglie al prezzo di listino, in EUR. */
+    /** Quanto si toglie al prezzo di listino, nella stessa valuta. */
     amount: number;
     /** Per quanti cicli vale. null = per sempre. */
     intervals: number | null;
@@ -314,7 +322,7 @@ export async function createAppSubscription(
           appRecurringPricingDetails: {
             // L'importo viaggia come stringa: e' un Decimal lato Shopify e un
             // float qui perderebbe i centesimi su certi prezzi.
-            price: { amount: opts.price.toFixed(2), currencyCode: 'EUR' },
+            price: { amount: opts.price.toFixed(2), currencyCode: opts.currency },
             interval: opts.interval === 'yearly' ? 'ANNUAL' : 'EVERY_30_DAYS',
             ...(discountDetails(opts.discount) ?? {}),
           },

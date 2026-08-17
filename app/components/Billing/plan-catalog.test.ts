@@ -6,7 +6,6 @@ import { en as enDict } from '~/lib/i18n/en';
 import {
   buildPlanCards,
   buildPlanFeatures,
-  formatPrice,
   FEATURE_ORDER,
   type PlanRow,
 } from './plan-catalog';
@@ -144,15 +143,5 @@ describe('buildPlanFeatures', () => {
         }
       }
     }
-  });
-});
-
-describe('formatPrice', () => {
-  it('gli interi restano interi', () => {
-    expect(formatPrice(0)).toBe('0');
-    expect(formatPrice(29)).toBe('29');
-  });
-  it('i decimali si scrivono con la virgola', () => {
-    expect(formatPrice(9.9)).toBe('9,90');
   });
 });

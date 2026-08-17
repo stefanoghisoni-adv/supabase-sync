@@ -30,22 +30,31 @@ function card(overrides: Partial<PlanCard> = {}): PlanCard {
   };
 }
 
+/** Intl separa cifra e simbolo con uno spazio unificatore: qui si confronta. */
+const nb = (text: string) => text.replace(/\u00a0/g, ' ');
+
 describe('planPriceLabel', () => {
   it('scrive il prezzo al mese', () => {
-    expect(planPriceLabel(card(), null, 'monthly', itDict)).toBe('€ 29/mese');
+    expect(nb(planPriceLabel(card(), null, 'monthly', itDict, 'EUR', 'it'))).toBe('29 €/mese');
   });
 
   it('a prezzo zero dice "Gratis", non "€ 0"', () => {
-    expect(planPriceLabel(card({ priceMonthly: 0 }), null, 'monthly', itDict)).toBe('Gratis');
+    expect(planPriceLabel(card({ priceMonthly: 0 }), null, 'monthly', itDict, 'EUR', 'it')).toBe(
+      'Gratis',
+    );
   });
 
   it('usa il prezzo riservato quando il negozio ne ha uno', () => {
-    expect(planPriceLabel(card({ partnerMonthly: 24 }), 3, 'monthly', itDict)).toBe('€ 24/mese');
+    expect(
+      nb(planPriceLabel(card({ partnerMonthly: 24 }), 3, 'monthly', itDict, 'EUR', 'it')),
+    ).toBe('24 €/mese');
   });
 
   it('sull annuale scrive il prezzo dell anno', () => {
-    expect(planPriceLabel(card(), null, 'yearly', itDict)).toBe('€ 290/anno');
-    expect(planPriceLabel(card({ partnerYearly: 240 }), 3, 'yearly', itDict)).toBe('€ 240/anno');
+    expect(nb(planPriceLabel(card(), null, 'yearly', itDict, 'EUR', 'it'))).toBe('290 €/anno');
+    expect(
+      nb(planPriceLabel(card({ partnerYearly: 240 }), 3, 'yearly', itDict, 'EUR', 'it')),
+    ).toBe('240 €/anno');
   });
 });
 
@@ -69,24 +78,24 @@ describe('yearlySaving', () => {
 
 describe('planSavingBadge', () => {
   it('scrive quanto si risparmia in un anno, centesimi compresi', () => {
-    // 29x12 - 290 = 58. I centesimi si scrivono sempre: e' denaro, e "€ 58"
-    // accanto a "€ 58,50" sembrerebbe un arrotondamento.
-    expect(planSavingBadge(card(), itDict)).toBe('Risparmi € 58,00');
+    // 29x12 - 290 = 58. I centesimi si scrivono sempre: e' denaro, e "58 €"
+    // accanto a "58,50 €" sembrerebbe un arrotondamento.
+    expect(nb(planSavingBadge(card(), itDict, 'EUR', 'it') as string)).toBe('Risparmi 58,00 €');
   });
 
   it('conta sul prezzo riservato, che e quello che il negozio paga', () => {
-    expect(planSavingBadge(card({ partnerMonthly: 24, partnerYearly: 240 }), itDict)).toBe(
-      'Risparmi € 48,00',
-    );
+    expect(
+      nb(planSavingBadge(card({ partnerMonthly: 24, partnerYearly: 240 }), itDict, 'EUR', 'it') as string),
+    ).toBe('Risparmi 48,00 €');
   });
 
   it('sul gratuito non c e nessun badge', () => {
-    expect(planSavingBadge(card({ priceMonthly: 0, priceYearly: 0 }), itDict)).toBeNull();
+    expect(planSavingBadge(card({ priceMonthly: 0, priceYearly: 0 }), itDict, 'EUR', 'it')).toBeNull();
   });
 
   it('se l annuale non conviene, non lo si annuncia', () => {
-    expect(planSavingBadge(card({ priceMonthly: 10, priceYearly: 120 }), itDict)).toBeNull();
-    expect(planSavingBadge(card({ priceMonthly: 10, priceYearly: 130 }), itDict)).toBeNull();
+    expect(planSavingBadge(card({ priceMonthly: 10, priceYearly: 120 }), itDict, 'EUR', 'it')).toBeNull();
+    expect(planSavingBadge(card({ priceMonthly: 10, priceYearly: 130 }), itDict, 'EUR', 'it')).toBeNull();
   });
 });
 

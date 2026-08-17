@@ -529,4 +529,24 @@ export class ShopifyAPIClient {
       primaryDomain: data.shop?.primaryDomain?.host ?? null,
     };
   }
+
+  /**
+   * La valuta in cui Shopify fattura QUESTO merchant.
+   *
+   * Non e' `shop.currencyCode`, che e' la valuta con cui il negozio vende ai
+   * suoi clienti: qui interessa quella dei conti del merchant, che e' anche
+   * quella in cui gli arriva la fattura dell'app.
+   *
+   * Query a se' e non in coda a getShopInfo: e' una domanda che l'API puo'
+   * rifiutare (versione, permessi), e un rifiuto non deve portarsi via anche il
+   * dominio e il fuso orario, che servono a cose ben piu' visibili.
+   */
+  async getBillingCurrency(): Promise<string | null> {
+    const data = await this.graphql<{
+      shopBillingPreferences: { currency: string | null } | null;
+    }>('{ shopBillingPreferences { currency } }');
+
+    const currency = data.shopBillingPreferences?.currency ?? null;
+    return currency ? currency.trim().toUpperCase() : null;
+  }
 }

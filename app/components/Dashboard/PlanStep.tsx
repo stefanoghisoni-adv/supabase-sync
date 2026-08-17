@@ -1,4 +1,4 @@
-import { useT } from '~/lib/i18n/context';
+import { useT, useLocale } from '~/lib/i18n/context';
 import {
   Badge,
   Banner,
@@ -13,7 +13,7 @@ import {
   Text,
 } from '@shopify/polaris';
 import type { PlanCard } from '~/components/Billing/plan-catalog';
-import { formatPrice } from '~/components/Billing/plan-catalog';
+import { formatMoney } from '~/lib/billing/money';
 import { PlanFeatureList } from '~/components/Billing/PlanFeatureList';
 import type { BillingInterval } from '~/lib/billing/partner-pricing';
 import { planPriceLabel, planSavingBadge, yearlySaving } from './plan-step';
@@ -23,6 +23,11 @@ export interface PlanStepProps {
   cards: PlanCard[];
   /** Per quanti cicli vale il prezzo riservato del partner, se ce n'e' uno. */
   discountIntervals: number | null;
+  /**
+   * La valuta in cui sono scritti i prezzi delle card — la stessa in cui il
+   * negozio verra' addebitato. Arriva con i prezzi e non si separa mai da loro.
+   */
+  currency: string;
   /** Mensile o annuale: cambia tutti i prezzi insieme. */
   interval: BillingInterval;
   onIntervalChange: (interval: BillingInterval) => void;
@@ -59,6 +64,7 @@ export interface PlanStepProps {
 export function PlanStep({
   cards,
   discountIntervals,
+  currency,
   interval,
   onIntervalChange,
   selected,
@@ -72,6 +78,7 @@ export function PlanStep({
   error,
 }: PlanStepProps) {
   const t = useT();
+  const locale = useLocale();
   const hasChoice = cards.length > 0;
   const saving = yearlySaving(cards);
   const isCurrent = (card: PlanCard) =>
@@ -107,7 +114,7 @@ export function PlanStep({
             </ButtonGroup>
             {interval === 'monthly' && saving != null && (
               <Text as="span" tone="subdued">
-                {t.planStep.yearlyHint(formatPrice(saving))}
+                {t.planStep.yearlyHint(formatMoney(saving, currency, locale))}
               </Text>
             )}
           </InlineStack>
@@ -167,16 +174,16 @@ export function PlanStep({
 
                         <BlockStack gap="150">
                           <Text as="p" variant="headingLg">
-                            {planPriceLabel(card, discountIntervals, interval, t)}
+                            {planPriceLabel(card, discountIntervals, interval, t, currency, locale)}
                           </Text>
                           {/* Quanto fa risparmiare l'annuale su questo piano,
                               sotto il prezzo a cui si riferisce. Nasce dal
                               testo: dove non c'e' risparmio — il gratuito — il
                               badge non esiste, invece di comparire vuoto. */}
-                          {planSavingBadge(card, t) && (
+                          {planSavingBadge(card, t, currency, locale) && (
                             <InlineStack>
                               <Badge tone="info">
-                                {planSavingBadge(card, t) as string}
+                                {planSavingBadge(card, t, currency, locale) as string}
                               </Badge>
                             </InlineStack>
                           )}

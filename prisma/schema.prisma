@@ -11,21 +11,21 @@ datasource db {
 // Field names must match the adapter's expected shape; columns are snake_cased
 // for consistency with the rest of the schema.
 model Session {
-  id            String    @id
-  shop          String
-  state         String
-  isOnline      Boolean   @default(false) @map("is_online")
-  scope         String?
-  expires       DateTime?
-  accessToken   String    @map("access_token")
-  userId        BigInt?   @map("user_id")
-  firstName     String?   @map("first_name")
-  lastName      String?   @map("last_name")
-  email         String?
-  accountOwner  Boolean   @default(false) @map("account_owner")
-  locale        String?
-  collaborator  Boolean?  @default(false)
-  emailVerified Boolean?  @default(false) @map("email_verified")
+  id                  String    @id
+  shop                String
+  state               String
+  isOnline            Boolean   @default(false) @map("is_online")
+  scope               String?
+  expires             DateTime?
+  accessToken         String    @map("access_token")
+  userId              BigInt?   @map("user_id")
+  firstName           String?   @map("first_name")
+  lastName            String?   @map("last_name")
+  email               String?
+  accountOwner        Boolean   @default(false) @map("account_owner")
+  locale              String?
+  collaborator        Boolean?  @default(false)
+  emailVerified       Boolean?  @default(false) @map("email_verified")
   // Token a scadenza: dal 1 aprile 2026 Shopify rifiuta i token perpetui per le
   // app nuove. L'access token vive un'ora e viene rinnovato con il refresh token,
   // che la libreria usa da sola quando mancano meno di 5 minuti alla scadenza.
@@ -36,47 +36,52 @@ model Session {
 }
 
 model Shop {
-  id                String             @id @default(uuid())
-  shopDomain        String             @unique @map("shop_domain")
-  accessToken       String             @map("access_token")
-  scopes            String
+  id                    String             @id @default(uuid())
+  shopDomain            String             @unique @map("shop_domain")
+  accessToken           String             @map("access_token")
+  scopes                String
   // Nessun default: il piano iniziale si legge dal listino (freePlanName), cosi'
   // rinominare un piano non lascia indietro i negozi nuovi. Sul database c'e'
   // una foreign key verso plans.plan_name che rifiuta i nomi fuori listino.
-  currentPlan       String             @map("current_plan")
-  activeChargeId    String?            @map("active_charge_id")
-  trialEndsAt       DateTime?          @map("trial_ends_at")
-  isInTrial         Boolean            @default(true) @map("is_in_trial")
-  planStartedAt     DateTime?          @map("plan_started_at")
+  currentPlan           String             @map("current_plan")
+  activeChargeId        String?            @map("active_charge_id")
+  trialEndsAt           DateTime?          @map("trial_ends_at")
+  isInTrial             Boolean            @default(true) @map("is_in_trial")
+  planStartedAt         DateTime?          @map("plan_started_at")
   // Quando il merchant ha confermato il piano dal passo della configurazione.
   // Distinto da planStartedAt, che segna l'attivazione di un abbonamento:
   // confermare il piano che si ha gia' non attiva niente, ma chiude un passo.
   // Confrontato con connectionVerifiedAt dice se la conferma vale per il
   // collegamento di adesso o per uno precedente.
-  planConfirmedAt   DateTime?          @map("plan_confirmed_at")
+  planConfirmedAt       DateTime?          @map("plan_confirmed_at")
   // Quando il controllo delle altre fonti di eventi ha dato una risposta.
   // Anche questo confrontato con connectionVerifiedAt: dice se il controllo
   // vale per il collegamento di adesso. Senza, il passo risultava da fare a
   // ogni apertura dell'app — la risposta arriva da una richiesta al browser, e
   // il browser riparte da zero ogni volta.
-  trackingCheckedAt DateTime?          @map("tracking_checked_at")
+  trackingCheckedAt     DateTime?          @map("tracking_checked_at")
   // Lingua scelta dal merchant in Impostazioni. null = si segue quella del suo
   // admin Shopify, che e' il comportamento normale: la lingua non si chiede,
   // la si eredita. Una scelta esplicita invece vince sempre.
-  locale            String?
+  locale                String?
   // L'ultima lingua che Shopify ci ha dichiarato per questo admin. La manda in
   // coda alla URL a ogni apertura, ma non alle navigazioni interne: senza
   // ricordarla, a meta' sessione l'app cambierebbe lingua da sola.
-  detectedLocale    String?            @map("detected_locale")
-  billingCycle      String?            @map("billing_cycle")
-  installedAt       DateTime           @default(now()) @map("installed_at")
-  uninstalledAt     DateTime?          @map("uninstalled_at")
+  detectedLocale        String?            @map("detected_locale")
+  // Valuta in cui Shopify fattura QUESTO merchant, dichiarata da lui
+  // (shopBillingPreferences): non e' quella con cui vende ai suoi clienti. La
+  // si usa per prezzi e addebiti solo se il listino esiste per intero in quella
+  // valuta (vedi lib/billing/currency), altrimenti si resta alla valuta base.
+  billingCurrency       String?            @map("billing_currency")
+  billingCycle          String?            @map("billing_cycle")
+  installedAt           DateTime           @default(now()) @map("installed_at")
+  uninstalledAt         DateTime?          @map("uninstalled_at")
   // Autorizzazione all'uso dell'app, gestita manualmente dall'owner su Supabase:
   // ENABLED (uso normale), PENDING (trial scaduto: tutto sospeso, banner warning),
   // DISABLED (ban: tutto bloccato, banner danger, fatturazione sospesa).
   // Enum e non testo libero: il Table Editor di Supabase mostra i soli valori
   // ammessi e un refuso diventa impossibile a livello di database.
-  authorization     AuthorizationState @default(ENABLED)
+  authorization         AuthorizationState @default(ENABLED)
   // Autorizzazione al TRACCIAMENTO, indipendente da quella sopra: un negozio a
   // cui l'app e' sospesa puo' continuare a leggere i dati gia' sincronizzati
   // (fermi, ma utilizzabili), e viceversa si puo' fermare il solo tracciamento
@@ -84,17 +89,17 @@ model Shop {
   trackingAuthorization AuthorizationState @default(ENABLED) @map("tracking_authorization")
   // Fuso orario IANA del negozio (es. Europe/Rome), letto da Shopify e
   // memorizzato: rende le date del log identiche su server e client.
-  ianaTimezone      String?            @map("iana_timezone")
+  ianaTimezone          String?            @map("iana_timezone")
   // Dominio principale del negozio, quello su cui navigano i clienti (es.
   // negozio.it). Coincide con shopDomain finche' non ne viene collegato uno
   // proprio. Si ricontrolla all'apertura dell'app e si aggiorna se cambia.
-  primaryDomain     String?            @map("primary_domain")
+  primaryDomain         String?            @map("primary_domain")
   // Piano con cui e' stata eseguita l'ultima sync completata. Confrontandolo con
   // currentPlan si capisce se il piano e' cambiato e c'e' altro da sincronizzare.
-  lastSyncedPlan    String?            @map("last_synced_plan")
+  lastSyncedPlan        String?            @map("last_synced_plan")
   // Istante in cui il banner di cambio piano e' stato mostrato la prima volta:
   // garantisce che non riappaia dopo la chiusura dell'app.
-  planBannerShownAt DateTime?          @map("plan_banner_shown_at")
+  planBannerShownAt     DateTime?          @map("plan_banner_shown_at")
 
   // Token-proxy per le letture di tracciamento (Stape/GTM). Persistito solo come
   // hash (lookup) + cifrato (per mostrarlo in Impostazioni), mai in chiaro.
@@ -107,20 +112,20 @@ model Shop {
   // Il riferimento e' il NOME del partner, non un id opaco: la riga si legge
   // ("webeing") mentre la si modifica a mano nel Table Editor, che e' come la
   // si assegna. Stessa scelta gia' fatta per shops.current_plan → plans.plan_name.
-  partnerName       String?            @map("partner_name")
-  discountIntervals Int?               @map("discount_intervals")
+  partnerName       String? @map("partner_name")
+  discountIntervals Int?    @map("discount_intervals")
 
-  partner           Partner?           @relation(fields: [partnerName], references: [name], onDelete: SetNull, onUpdate: Cascade)
-  supabaseConfig    SupabaseConfig?
-  supabaseOAuthToken SupabaseOAuthToken?
-  billingCharges    BillingCharge[]
-  syncJobs          SyncJob[]
-  customFields      CustomField[]
-  fieldMappings     FieldMapping[]
-  eligibilitySnapshots ProductEligibilitySnapshot[]
-  customerDataAccessLogs CustomerDataAccessLog[]
+  partner                  Partner?                     @relation(fields: [partnerName], references: [name], onDelete: SetNull, onUpdate: Cascade)
+  supabaseConfig           SupabaseConfig?
+  supabaseOAuthToken       SupabaseOAuthToken?
+  billingCharges           BillingCharge[]
+  syncJobs                 SyncJob[]
+  customFields             CustomField[]
+  fieldMappings            FieldMapping[]
+  eligibilitySnapshots     ProductEligibilitySnapshot[]
+  customerDataAccessLogs   CustomerDataAccessLog[]
   dismissedTrackingSources DismissedTrackingSource[]
-  trackingSetup     TrackingSetup?
+  trackingSetup            TrackingSetup?
 
   @@index([shopDomain])
   @@map("shops")
@@ -156,27 +161,27 @@ enum AuthorizationState {
 }
 
 model SupabaseConfig {
-  id                     String   @id @default(uuid())
-  shopId                 String   @unique @map("shop_id")
-  supabaseUrl            String   @map("supabase_url")
-  supabasePublicKey      String   @map("supabase_public_key")
-  supabaseServiceRoleKey String   @map("supabase_service_role_key")
-  supabaseProjectRef     String?  @map("supabase_project_ref")
-  tableNameProducts      String   @default("products") @map("table_name_products")
-  tableNameCustomers     String   @default("customers") @map("table_name_customers")
+  id                     String    @id @default(uuid())
+  shopId                 String    @unique @map("shop_id")
+  supabaseUrl            String    @map("supabase_url")
+  supabasePublicKey      String    @map("supabase_public_key")
+  supabaseServiceRoleKey String    @map("supabase_service_role_key")
+  supabaseProjectRef     String?   @map("supabase_project_ref")
+  tableNameProducts      String    @default("products") @map("table_name_products")
+  tableNameCustomers     String    @default("customers") @map("table_name_customers")
   // Nessun campo per "sincronizzazione attiva": e' automatica e sempre attiva
   // finche' il progetto e' collegato (vedi lib/sync/sync-active). La colonna
   // sync_enabled resta nel database, non la legge piu' nessuno.
-  syncIntervalHours      Int      @default(24) @map("sync_interval_hours")
+  syncIntervalHours      Int       @default(24) @map("sync_interval_hours")
   connectionVerifiedAt   DateTime? @map("connection_verified_at")
   // Versione dello schema applicata al database del merchant. Quando l'app ne
   // pretende una piu' alta (LATEST_SCHEMA_VERSION), l'aggiornamento parte da
   // solo alla prima occasione utile — sincronizzazione o apertura della
   // dashboard — senza che il merchant debba toccare tabelle o reinstallare
   // nulla. 0 = collegamento anteriore a questo meccanismo.
-  schemaVersion          Int      @default(0) @map("schema_version")
-  createdAt              DateTime @default(now()) @map("created_at")
-  updatedAt              DateTime @updatedAt @map("updated_at")
+  schemaVersion          Int       @default(0) @map("schema_version")
+  createdAt              DateTime  @default(now()) @map("created_at")
+  updatedAt              DateTime  @updatedAt @map("updated_at")
 
   shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
 
@@ -184,21 +189,45 @@ model SupabaseConfig {
 }
 
 model Plan {
-  id                     String   @id @default(uuid())
-  planName               String   @unique @map("plan_name")
-  priceMonthly           Decimal  @map("price_monthly") @db.Decimal(10, 2)
-  priceYearly            Decimal  @map("price_yearly") @db.Decimal(10, 2)
-  maxProducts            Int?     @map("max_products")
-  maxCustomers           Int?     @map("max_customers")
-  maxSyncFrequencyHours  Float    @map("max_sync_frequency_hours")
-  customFieldsLimit      Int?     @map("custom_fields_limit")
-  supportLevel           String   @map("support_level")
-  customersSyncEnabled   Boolean  @default(false) @map("customers_sync_enabled")
+  id                    String   @id @default(uuid())
+  planName              String   @unique @map("plan_name")
+  priceMonthly          Decimal  @map("price_monthly") @db.Decimal(10, 2)
+  priceYearly           Decimal  @map("price_yearly") @db.Decimal(10, 2)
+  maxProducts           Int?     @map("max_products")
+  maxCustomers          Int?     @map("max_customers")
+  maxSyncFrequencyHours Float    @map("max_sync_frequency_hours")
+  customFieldsLimit     Int?     @map("custom_fields_limit")
+  supportLevel          String   @map("support_level")
+  customersSyncEnabled  Boolean  @default(false) @map("customers_sync_enabled")
   // Giorni di prova prima che l'app passi automaticamente in PENDING (null = nessun limite).
-  trialDays              Int?     @map("trial_days")
-  createdAt              DateTime @default(now()) @map("created_at")
+  trialDays             Int?     @map("trial_days")
+  createdAt             DateTime @default(now()) @map("created_at")
+
+  prices PlanPrice[]
 
   @@map("plans")
+}
+
+/// Il listino in una valuta diversa da quella base.
+///
+/// I prezzi in `plans` sono in euro. Un negozio che Shopify fattura in dollari
+/// vede e paga in dollari solo se qui ci sono i prezzi di TUTTI i piani a
+/// pagamento in dollari: prezzi decisi, non convertiti al cambio del giorno —
+/// un prezzo che cambia da solo fra la card e la fattura non e' un prezzo.
+///
+/// I piani gratuiti non hanno bisogno di una riga: zero e' zero in ogni valuta.
+model PlanPrice {
+  id           String  @id @default(uuid())
+  planName     String  @map("plan_name")
+  /// Sigla ISO come la scrive Shopify: "USD", "GBP".
+  currency     String
+  priceMonthly Decimal @map("price_monthly") @db.Decimal(10, 2)
+  priceYearly  Decimal @map("price_yearly") @db.Decimal(10, 2)
+
+  plan Plan @relation(fields: [planName], references: [planName], onDelete: Cascade, onUpdate: Cascade)
+
+  @@unique([planName, currency])
+  @@map("plan_prices")
 }
 
 /// Con chi e' in rapporto il negozio: un'agenzia con cui collaboriamo, oppure
@@ -250,12 +279,12 @@ model PartnerPlanPrice {
 /// dove si trovava: se domani lo stesso strumento ricompare altrove, resta
 /// quello che il merchant ha gia' valutato.
 model DismissedTrackingSource {
-  id      String   @id @default(uuid())
-  shopId  String   @map("shop_id")
+  id          String   @id @default(uuid())
+  shopId      String   @map("shop_id")
   /// 'channel' oppure 'theme'.
-  kind    String
+  kind        String
   /// Nome dello strumento: "Meta", "Google Analytics 4", …
-  name    String
+  name        String
   dismissedAt DateTime @default(now()) @map("dismissed_at")
 
   shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
@@ -265,19 +294,24 @@ model DismissedTrackingSource {
 }
 
 model BillingCharge {
-  id                String    @id @default(uuid())
-  shopId            String    @map("shop_id")
-  shopifyChargeId   BigInt?   @unique @map("shopify_charge_id")
-  planType          String    @map("plan_type")
-  price             Decimal?  @db.Decimal(10, 2)
-  billingCycle      String?   @map("billing_cycle")
-  status            String
-  trialDays         Int       @default(7) @map("trial_days")
-  trialEndsAt       DateTime? @map("trial_ends_at")
-  confirmationUrl   String?   @map("confirmation_url")
-  activatedAt       DateTime? @map("activated_at")
-  cancelledAt       DateTime? @map("cancelled_at")
-  createdAt         DateTime  @default(now()) @map("created_at")
+  id              String    @id @default(uuid())
+  shopId          String    @map("shop_id")
+  shopifyChargeId BigInt?   @unique @map("shopify_charge_id")
+  planType        String    @map("plan_type")
+  price           Decimal?  @db.Decimal(10, 2)
+  /// In che valuta e' quella cifra. Un importo senza valuta, sulla riga a cui
+  /// si guarda quando un merchant chiede conto di un addebito, non risponde
+  /// alla domanda. null = le righe scritte prima che i piani avessero valute
+  /// diverse, che sono tutte in euro.
+  currency        String?
+  billingCycle    String?   @map("billing_cycle")
+  status          String
+  trialDays       Int       @default(7) @map("trial_days")
+  trialEndsAt     DateTime? @map("trial_ends_at")
+  confirmationUrl String?   @map("confirmation_url")
+  activatedAt     DateTime? @map("activated_at")
+  cancelledAt     DateTime? @map("cancelled_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
 
   shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
 
@@ -286,24 +320,24 @@ model BillingCharge {
 }
 
 model SyncJob {
-  id              String    @id @default(uuid())
-  shopId          String    @map("shop_id")
-  jobType         String    @map("job_type")
-  status          String
-  startedAt       DateTime  @default(now()) @map("started_at")
-  completedAt     DateTime? @map("completed_at")
-  productsSynced  Int       @default(0) @map("products_synced")
-  variantsSynced  Int       @default(0) @map("variants_synced")
-  customersSynced Int       @default(0) @map("customers_synced")
+  id                 String    @id @default(uuid())
+  shopId             String    @map("shop_id")
+  jobType            String    @map("job_type")
+  status             String
+  startedAt          DateTime  @default(now()) @map("started_at")
+  completedAt        DateTime? @map("completed_at")
+  productsSynced     Int       @default(0) @map("products_synced")
+  variantsSynced     Int       @default(0) @map("variants_synced")
+  customersSynced    Int       @default(0) @map("customers_synced")
   // Conteggi dettagliati per categoria di evento. Stanno qui perché il dettaglio
   // vero (SyncJobEvent) viene troncato a 500 righe per categoria per job: senza
   // questi il modal non può scrivere "mostrate 500 di 3.412".
-  productsAdded      Int @default(0) @map("products_added")
-  productsRemoved    Int @default(0) @map("products_removed")
-  customersAdded     Int @default(0) @map("customers_added")
-  customersUpdated   Int @default(0) @map("customers_updated")
-  customersSuspended Int @default(0) @map("customers_suspended")
-  errors          Json?
+  productsAdded      Int       @default(0) @map("products_added")
+  productsRemoved    Int       @default(0) @map("products_removed")
+  customersAdded     Int       @default(0) @map("customers_added")
+  customersUpdated   Int       @default(0) @map("customers_updated")
+  customersSuspended Int       @default(0) @map("customers_suspended")
+  errors             Json?
 
   shop   Shop           @relation(fields: [shopId], references: [id], onDelete: Cascade)
   events SyncJobEvent[]
@@ -330,12 +364,12 @@ model CustomField {
 }
 
 model FieldMapping {
-  id             String  @id @default(uuid())
-  shopId         String  @map("shop_id")
-  shopifyField   String  @map("shopify_field")
-  enabled        Boolean @default(false)
-  syncToColumn   String? @map("sync_to_column")
-  appliesTo      String  @map("applies_to")
+  id           String  @id @default(uuid())
+  shopId       String  @map("shop_id")
+  shopifyField String  @map("shopify_field")
+  enabled      Boolean @default(false)
+  syncToColumn String? @map("sync_to_column")
+  appliesTo    String  @map("applies_to")
 
   shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
 
@@ -408,10 +442,10 @@ model SyncJobEvent {
 // I prodotti non passano di qui: non sono dati personali, e le vetrine li
 // leggono a ogni pagina.
 model CustomerDataAccessLog {
-  id     String  @id @default(uuid())
+  id        String   @id @default(uuid())
   // Nullo quando il token non e' riconducibile a nessun negozio: il tentativo
   // va registrato lo stesso, ed e' anzi quello piu' interessante.
-  shopId String? @map("shop_id")
+  shopId    String?  @map("shop_id")
   // Esito leggibile: 'allowed', 'denied_no_token', 'denied_invalid_token',
   // 'denied_not_configured', 'denied_suspended', 'denied_table',
   // 'denied_consent', 'upstream_error'.

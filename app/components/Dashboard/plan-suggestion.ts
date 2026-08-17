@@ -1,4 +1,6 @@
 import { isSelectablePlan } from '~/components/Billing/plan-access';
+import { formatMoney } from '~/lib/billing/money';
+import type { Locale } from '~/lib/i18n/locales';
 
 /**
  * Quale piano proporre a chi ha piu' prodotti di quanti il suo ne sincronizzi.
@@ -80,6 +82,9 @@ export interface PlanComparisonRow {
 export function planComparisonRows(
   currentPlan: PlanForSuggestion,
   nextPlan: PlanForSuggestion,
+  /** Valuta dei prezzi qui sopra: arriva con loro, non si indovina. */
+  currency: string,
+  locale: Locale,
 ): PlanComparisonRow[] {
   const rows: PlanComparisonRow[] = [
     {
@@ -94,14 +99,14 @@ export function planComparisonRows(
     },
     {
       label: 'Costo mensile',
-      current: priceLabel(currentPlan.priceMonthly),
-      next: priceLabel(nextPlan.priceMonthly),
+      current: priceLabel(currentPlan.priceMonthly, currency, locale),
+      next: priceLabel(nextPlan.priceMonthly, currency, locale),
     },
   ];
 
   return rows.filter((row) => row.current !== row.next);
 }
 
-function priceLabel(price: number): string {
-  return price === 0 ? 'Gratuito' : `${price} € / mese`;
+function priceLabel(price: number, currency: string, locale: Locale): string {
+  return price === 0 ? 'Gratuito' : `${formatMoney(price, currency, locale)} / mese`;
 }

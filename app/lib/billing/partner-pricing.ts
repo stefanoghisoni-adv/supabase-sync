@@ -86,18 +86,11 @@ export function priceForInterval(
  * In valuta e non in percentuale: i prezzi riservati sono decisi come cifre
  * tonde, e una percentuale ricavata all'indietro darebbe numeri come "26,3%"
  * che non corrispondono a niente di concordato.
- */
-export function savingBadge(price: EffectivePrice, currency = '€'): string | null {
-  if (price.discountAmount <= 0) return null;
-  return `− ${currency} ${formatAmount(price.discountAmount)}`;
-}
-
-/**
- * Importo con i centesimi sempre scritti.
  *
- * Anche quando la cifra e' tonda: e' un valore di denaro, e "€ 5" accanto a
- * "€ 4,10" fa sembrare il primo un'approssimazione invece di un importo esatto.
+ * L'importo arriva gia' scritto (`formatMoneyExact`): quale valuta e quali
+ * convenzioni usare lo sa chi ha in mano il negozio, non questa funzione.
  */
-export function formatAmount(amount: number): string {
-  return amount.toLocaleString('it-IT', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+export function savingBadge(price: EffectivePrice, amount: string): string | null {
+  if (price.discountAmount <= 0) return null;
+  return `− ${amount}`;
 }

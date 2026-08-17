@@ -1,12 +1,9 @@
 import type { Dictionary } from '~/lib/i18n/context';
 import type { PlanCard } from '~/components/Billing/plan-catalog';
-import { formatPrice } from '~/components/Billing/plan-catalog';
+import { formatMoney, formatMoneyExact } from '~/lib/billing/money';
+import type { Locale } from '~/lib/i18n/locales';
 import { isSelectablePlan } from '~/components/Billing/plan-access';
-import {
-  effectivePrice,
-  formatAmount,
-  type BillingInterval,
-} from '~/lib/billing/partner-pricing';
+import { effectivePrice, type BillingInterval } from '~/lib/billing/partner-pricing';
 import { samePlanName } from '~/lib/billing/plan-name';
 
 /**
@@ -17,12 +14,19 @@ import { samePlanName } from '~/lib/billing/plan-name';
  * passo deve far scegliere in dieci secondi, non spiegare il listino.
  */
 
-/** "€ 29/mese", "€ 290/anno", oppure "Gratis" quando non c'e' niente da pagare. */
+/**
+ * "29 €/mese", "$29/month", oppure "Gratis" quando non c'e' niente da pagare.
+ *
+ * La valuta arriva da fuori insieme ai prezzi: e' quella in cui il negozio
+ * verra' addebitato, non una scelta di questa funzione.
+ */
 export function planPriceLabel(
   card: PlanCard,
   discountIntervals: number | null,
   interval: BillingInterval,
   t: Pick<Dictionary, 'planStep'>,
+  currency: string,
+  locale: Locale,
 ): string {
   const yearly = interval === 'yearly';
   const price = effectivePrice(
@@ -31,7 +35,7 @@ export function planPriceLabel(
     discountIntervals,
   );
   if (!(price.payablePrice > 0)) return t.planStep.free;
-  const amount = formatPrice(price.payablePrice);
+  const amount = formatMoney(price.payablePrice, currency, locale);
   return yearly ? t.planStep.perYear(amount) : t.planStep.perMonth(amount);
 }
 
@@ -122,11 +126,13 @@ export function planYearlySaving(card: PlanCard): number | null {
   return saving > 0 ? saving : null;
 }
 
-/** "Risparmi € 58,00", o niente se non c'e' un risparmio da annunciare. */
+/** "Risparmi 58,00 €", o niente se non c'e' un risparmio da annunciare. */
 export function planSavingBadge(
   card: PlanCard,
   t: Pick<Dictionary, 'planStep'>,
+  currency: string,
+  locale: Locale,
 ): string | null {
   const saving = planYearlySaving(card);
-  return saving == null ? null : t.planStep.saving(formatAmount(saving));
+  return saving == null ? null : t.planStep.saving(formatMoneyExact(saving, currency, locale));
 }

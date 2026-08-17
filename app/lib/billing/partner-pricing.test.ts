@@ -3,7 +3,6 @@ import {
   effectivePrice,
   priceForInterval,
   savingBadge,
-  formatAmount,
 } from './partner-pricing';
 
 describe('effectivePrice', () => {
@@ -79,19 +78,13 @@ describe('savingBadge', () => {
   it('scrive il risparmio in valuta, non in percentuale', () => {
     // I prezzi riservati si decidono come cifre tonde: una percentuale ricavata
     // all'indietro darebbe "26,3%", che non corrisponde a niente di concordato.
-    expect(savingBadge(effectivePrice(19, 14, 3))).toBe('− € 5,00');
-    expect(savingBadge(effectivePrice(79, 59, null))).toBe('− € 20,00');
+    // L'importo arriva gia' scritto: qui si prova solo che il badge lo porti
+    // con il segno davanti.
+    expect(savingBadge(effectivePrice(19, 14, 3), '5,00 €')).toBe('− 5,00 €');
+    expect(savingBadge(effectivePrice(79, 59, null), '20,00 €')).toBe('− 20,00 €');
   });
 
   it('senza sconto non c e nessun badge', () => {
-    expect(savingBadge(effectivePrice(19, null, null))).toBeNull();
-  });
-});
-
-describe('formatAmount', () => {
-  it('i centesimi si scrivono sempre, anche su cifre tonde', () => {
-    // "€ 5" accanto a "€ 4,10" farebbe sembrare il primo un'approssimazione.
-    expect(formatAmount(5)).toBe('5,00');
-    expect(formatAmount(4.1)).toBe('4,10');
+    expect(savingBadge(effectivePrice(19, null, null), '5,00 €')).toBeNull();
   });
 });

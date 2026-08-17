@@ -255,13 +255,16 @@ export const it = {
       'Confermi il piano attivo, oppure ne scegli un altro: la sincronizzazione parte subito dopo.',
     monthly: 'Mensile',
     yearly: 'Annuale',
-    yearlyHint: (amount: string) => `Con l’annuale risparmi fino a €${amount} l’anno`,
-    saving: (amount: string) => `Risparmi € ${amount}`,
+    // Gli importi arrivano gia' scritti nella valuta del negozio: qui non si
+    // aggiunge nessun simbolo, o si finirebbe per dire euro a chi paga in
+    // dollari.
+    yearlyHint: (amount: string) => `Con l’annuale risparmi fino a ${amount} l’anno`,
+    saving: (amount: string) => `Risparmi ${amount}`,
     current: 'Attuale',
     recommended: 'Consigliato',
     free: 'Gratis',
-    perMonth: (price: string) => `€ ${price}/mese`,
-    perYear: (price: string) => `€ ${price}/anno`,
+    perMonth: (price: string) => `${price}/mese`,
+    perYear: (price: string) => `${price}/anno`,
     yourPlan: 'Il tuo piano:',
     confirmAndSync: 'Conferma e sincronizza',
     syncing: 'Sincronizzazione in corso: prosegue in background, puoi chiudere questa pagina.',

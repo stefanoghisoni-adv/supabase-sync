@@ -73,7 +73,7 @@ describe('planComparisonRows', () => {
   const pro = PLANS[1];
 
   it('confronta prodotti, clienti e costo', () => {
-    const rows = planComparisonRows(free, pro);
+    const rows = planComparisonRows(free, pro, 'EUR', 'it');
     expect(rows.map((r) => r.label)).toEqual([
       'Prodotti sincronizzabili',
       'Clienti sincronizzabili',
@@ -82,7 +82,11 @@ describe('planComparisonRows', () => {
     expect(rows[0]).toEqual({ label: 'Prodotti sincronizzabili', current: '50', next: '200' });
     expect(rows[1].current).toBe('Non inclusi');
     expect(rows[1].next).toBe('500');
-    expect(rows[2]).toEqual({ label: 'Costo mensile', current: 'Gratuito', next: '19 € / mese' });
+    expect({ ...rows[2], next: rows[2].next.replace(/\u00a0/g, ' ') }).toEqual({
+      label: 'Costo mensile',
+      current: 'Gratuito',
+      next: '19 € / mese',
+    });
   });
 
   it('tiene fuori le voci che non cambiano', () => {
@@ -90,7 +94,7 @@ describe('planComparisonRows', () => {
     // l'aggiornamento meno utile di quanto sia.
     const business = PLANS[2];
     const enterprise = PLANS[3];
-    const rows = planComparisonRows(business, enterprise);
+    const rows = planComparisonRows(business, enterprise, 'EUR', 'it');
     expect(rows.map((r) => r.label)).not.toContain('Sincronizzazione clienti');
     expect(rows.every((r) => r.current !== r.next)).toBe(true);
   });

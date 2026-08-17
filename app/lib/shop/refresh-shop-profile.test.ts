@@ -2,14 +2,15 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const shopUpdate = vi.fn();
 const getShopInfo = vi.fn();
+const getBillingCurrency = vi.fn();
 
 vi.mock('~/db.server', () => ({
   prisma: { shop: { update: (...a: unknown[]) => shopUpdate(...a) } },
 }));
 
 vi.mock('~/lib/shopify-api.server', () => ({
-  ShopifyAPIClient: Object.assign(vi.fn(() => ({ getShopInfo })), {
-    forShop: vi.fn(async () => ({ getShopInfo })),
+  ShopifyAPIClient: Object.assign(vi.fn(() => ({ getShopInfo, getBillingCurrency })), {
+    forShop: vi.fn(async () => ({ getShopInfo, getBillingCurrency })),
   }),
 }));
 
@@ -25,6 +26,7 @@ const shop = (over: Record<string, unknown> = {}) => ({
   accessToken: 'token',
   ianaTimezone: 'Europe/Rome',
   primaryDomain: 'negozio.myshopify.com',
+  billingCurrency: 'EUR',
   ...over,
 });
 
@@ -33,6 +35,9 @@ describe('refreshShopProfile', () => {
     vi.clearAllMocks();
     clearShopProfileChecks();
     shopUpdate.mockResolvedValue({});
+    // La valuta di fatturazione, di suo, non cambia mai: chi vuole provarla la
+    // dichiara nel proprio test.
+    getBillingCurrency.mockResolvedValue('EUR');
   });
 
   it('dominio collegato dopo l’installazione → si aggiorna', () => {
@@ -103,5 +108,38 @@ describe('triggerShopProfileRefresh', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(getShopInfo).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('valuta di fatturazione', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearShopProfileChecks();
+    shopUpdate.mockResolvedValue({});
+    getShopInfo.mockResolvedValue({
+      ianaTimezone: 'Europe/Rome',
+      primaryDomain: 'negozio.myshopify.com',
+    });
+  });
+
+  it('il negozio cambia paese: la valuta nuova si registra', async () => {
+    getBillingCurrency.mockResolvedValue('USD');
+
+    await refreshShopProfile(shop());
+
+    expect(shopUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { billingCurrency: 'USD' } }),
+    );
+  });
+
+  it("Shopify non risponde: si tiene l'ultima nota, il resto si aggiorna lo stesso", async () => {
+    getBillingCurrency.mockRejectedValue(new Error('403'));
+    getShopInfo.mockResolvedValue({ ianaTimezone: 'Europe/Rome', primaryDomain: 'negozio.it' });
+
+    await refreshShopProfile(shop());
+
+    expect(shopUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { primaryDomain: 'negozio.it' } }),
+    );
   });
 });

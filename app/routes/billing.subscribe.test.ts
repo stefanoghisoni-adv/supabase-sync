@@ -4,6 +4,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const findUniqueShop = vi.fn();
 const updateShop = vi.fn();
 const findPlanMock = vi.fn();
+const findManyPlans = vi.fn();
+const findManyPlanPrices = vi.fn();
 const createCharge = vi.fn();
 const updateManyCharges = vi.fn();
 
@@ -24,7 +26,11 @@ vi.mock('~/db.server', () => ({
       findUnique: (...a: unknown[]) => findUniqueShop(...a),
       update: (...a: unknown[]) => updateShop(...a),
     },
-    plan: { findFirst: (...a: unknown[]) => findPlanMock(...a) },
+    plan: {
+      findFirst: (...a: unknown[]) => findPlanMock(...a),
+      findMany: (...a: unknown[]) => findManyPlans(...a),
+    },
+    planPrice: { findMany: (...a: unknown[]) => findManyPlanPrices(...a) },
     billingCharge: {
       create: (...a: unknown[]) => createCharge(...a),
       updateMany: (...a: unknown[]) => updateManyCharges(...a),
@@ -65,6 +71,12 @@ describe('/billing/subscribe', () => {
     delete process.env.SHOPIFY_BILLING_TEST;
     findUniqueShop.mockResolvedValue({ ...SHOP });
     isDevelopmentStore.mockResolvedValue(false);
+    // Senza listino in altre valute si addebita in euro: e' il caso normale, e
+    // quello che quasi tutti i test qui sotto raccontano.
+    findManyPlans.mockResolvedValue([
+      { planName: 'Pro', priceMonthly: 29, priceYearly: 290 },
+    ]);
+    findManyPlanPrices.mockResolvedValue([]);
   });
 
   it('metodo diverso da POST → 405', async () => {
@@ -179,6 +191,41 @@ describe('/billing/subscribe', () => {
     expect(
       Buffer.from(returnUrl.searchParams.get('host') ?? '', 'base64').toString('utf8'),
     ).toBe('admin.shopify.com/store/test-shop');
+  });
+
+  it('il negozio paga nella sua valuta quando il listino esiste in quella valuta', async () => {
+    findUniqueShop.mockResolvedValue({ ...SHOP, billingCurrency: 'USD' });
+    findPlanMock.mockResolvedValue({ planName: 'Pro', priceMonthly: 29, trialDays: 7 });
+    findManyPlanPrices.mockResolvedValue([
+      { planName: 'Pro', currency: 'USD', priceMonthly: 32, priceYearly: 320 },
+    ]);
+    createAppSubscription.mockResolvedValue({
+      confirmationUrl: 'https://shopify/confirm/1',
+      subscriptionGid: 'gid://shopify/AppSubscription/1234',
+      chargeId: 1234n,
+    });
+
+    await call('Pro');
+
+    // Prezzo e valuta insieme: e' la coppia che il merchant ha letto sulla card.
+    expect(createAppSubscription.mock.calls[0][1].currency).toBe('USD');
+    expect(createAppSubscription.mock.calls[0][1].price).toBe(32);
+  });
+
+  it('senza listino nella sua valuta si addebita in euro, non un prezzo inventato', async () => {
+    findUniqueShop.mockResolvedValue({ ...SHOP, billingCurrency: 'USD' });
+    findPlanMock.mockResolvedValue({ planName: 'Pro', priceMonthly: 29, trialDays: 7 });
+    findManyPlanPrices.mockResolvedValue([]);
+    createAppSubscription.mockResolvedValue({
+      confirmationUrl: 'https://shopify/confirm/1',
+      subscriptionGid: 'gid://shopify/AppSubscription/1234',
+      chargeId: 1234n,
+    });
+
+    await call('Pro');
+
+    expect(createAppSubscription.mock.calls[0][1].currency).toBe('EUR');
+    expect(createAppSubscription.mock.calls[0][1].price).toBe(29);
   });
 
   it('negozio di sviluppo: addebito di prova', async () => {

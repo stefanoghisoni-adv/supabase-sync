@@ -8,6 +8,7 @@ interface ShopProfile {
   accessToken: string;
   ianaTimezone: string | null;
   primaryDomain: string | null;
+  billingCurrency: string | null;
 }
 
 /**
@@ -22,7 +23,7 @@ export async function refreshShopProfile(shop: ShopProfile): Promise<void> {
   const client = await ShopifyAPIClient.forShop(shop.shopDomain);
   const info = await client.getShopInfo();
 
-  const data: { ianaTimezone?: string; primaryDomain?: string } = {};
+  const data: { ianaTimezone?: string; primaryDomain?: string; billingCurrency?: string } = {};
 
   if (!shop.ianaTimezone && info.ianaTimezone) {
     data.ianaTimezone = info.ianaTimezone;
@@ -33,6 +34,15 @@ export async function refreshShopProfile(shop: ShopProfile): Promise<void> {
       `[shop-profile] shop ${shop.id}: dominio principale ${shop.primaryDomain ?? '—'} → ${next}`,
     );
     data.primaryDomain = next;
+  }
+
+  // La valuta di fatturazione cambia raramente ma non mai (il merchant sposta
+  // il negozio di paese). Si chiede a parte: se l'API non risponde restiamo
+  // all'ultima nota, che e' meglio di nessuna — e il resto del profilo si
+  // aggiorna lo stesso.
+  const billingCurrency = await client.getBillingCurrency().catch(() => null);
+  if (billingCurrency && billingCurrency !== shop.billingCurrency) {
+    data.billingCurrency = billingCurrency;
   }
 
   if (Object.keys(data).length === 0) return;

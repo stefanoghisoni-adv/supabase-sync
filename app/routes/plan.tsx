@@ -23,7 +23,11 @@ import {
 import { SettingsIcon } from '@shopify/polaris-icons';
 import { authenticate } from '~/shopify.server';
 import { prisma } from '~/db.server';
-import { buildPlanCards, formatPrice, type PlanCard } from '~/components/Billing/plan-catalog';
+import { buildPlanCards, type PlanCard } from '~/components/Billing/plan-catalog';
+import { BASE_CURRENCY, formatMoney, formatMoneyExact } from '~/lib/billing/money';
+import { useLocale } from '~/lib/i18n/context';
+import type { Locale } from '~/lib/i18n/locales';
+import { resolveShopPricing } from '~/lib/billing/shop-pricing.server';
 import {
   effectivePrice,
   savingBadge,
@@ -32,8 +36,10 @@ import {
 } from '~/lib/billing/partner-pricing';
 
 /** Testo del risparmio, o niente: decide anche se il badge esiste. */
-function savingLabel(price: EffectivePrice): string | null {
-  return price.discountAmount > 0 ? savingBadge(price) : null;
+function savingLabel(price: EffectivePrice, currency: string, locale: Locale): string | null {
+  return price.discountAmount > 0
+    ? savingBadge(price, formatMoneyExact(price.discountAmount, currency, locale))
+    : null;
 }
 import { shouldHighlightRecommended } from '~/components/Billing/plan-highlight';
 import { canAccessPlanTab } from '~/components/Billing/plan-access';
@@ -72,6 +78,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         cards: [] as PlanCard[],
         discountIntervals: null,
         partnerLabel: null,
+        currency: BASE_CURRENCY,
       },
       { status: 403 },
     );
@@ -102,7 +109,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
     ]),
   );
 
-  const cards = buildPlanCards(
+  // Valuta del negozio e listino gia' scritto in quella valuta: i prezzi che si
+  // leggono qui sono gli stessi che /billing/subscribe ricalcola per la fattura.
+  const pricing = await resolveShopPricing(
     plans.map((plan) => ({
       planName: plan.planName,
       priceMonthly: Number(plan.priceMonthly),
@@ -113,8 +122,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
       customersSyncEnabled: plan.customersSyncEnabled,
       supportLevel: plan.supportLevel,
     })),
-    reserved,
+    { billingCurrency: shop?.billingCurrency, hasReservedPrice: partnerPrices.length > 0 },
   );
+
+  const cards = buildPlanCards(pricing.plans, reserved);
 
   return json({
     currentPlan,
@@ -126,6 +137,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
     // Nome per esteso del partner, da mostrare nel riquadro informativo. Si
     // legge da partners.label e non dal nome tecnico: "WeBeing", non "webeing".
     partnerLabel: partnerLabel,
+    // La valuta viaggia con i prezzi: le card non devono indovinarla.
+    currency: pricing.currency,
   });
 }
 
@@ -136,8 +149,9 @@ type SubscribeResponse =
   | { error: string };            // messaggio già in italiano, da mostrare in un Banner
 
 export default function Plan() {
-  const { currentPlan, blocked, cards, discountIntervals, partnerLabel } =
+  const { currentPlan, blocked, cards, discountIntervals, partnerLabel, currency } =
     useLoaderData<typeof loader>();
+  const locale = useLocale();
 
   // Quanto si risparmia al massimo scegliendo l'annuale, sul listino che il
   // merchant vede davvero (riservato se ce l'ha). Serve alla riga accanto al
@@ -357,7 +371,8 @@ export default function Plan() {
               l'unica ragione per sceglierlo, e nessuno moltiplica per dodici. */}
           {interval === 'monthly' && yearlySaving != null && (
             <Text as="span" tone="subdued">
-              Con l&apos;annuale risparmi fino a €{formatPrice(yearlySaving)} l&apos;anno
+              Con l&apos;annuale risparmi fino a {formatMoney(yearlySaving, currency, locale)}{' '}
+              l&apos;anno
             </Text>
           )}
           {interval === 'yearly' && discountIntervals != null && (
@@ -421,7 +436,7 @@ export default function Plan() {
                             fondo si sollevavano rispetto a quelli delle altre. */}
                         <InlineStack gap="200" blockAlign="baseline" wrap={false}>
                           <Text as="span" variant="heading3xl">
-                            €{formatPrice(price.payablePrice)}
+                            {formatMoney(price.payablePrice, currency, locale)}
                           </Text>
                           <Text as="span" tone="subdued">
                             {interval === 'yearly' ? '/anno' : '/mese'}
@@ -430,7 +445,7 @@ export default function Plan() {
                               ha modo di sapere quanto valga la condizione riservata. */}
                           {price.discountAmount > 0 && (
                             <Text as="span" tone="subdued" textDecorationLine="line-through">
-                              € {formatPrice(price.listPrice)}
+                              {formatMoney(price.listPrice, currency, locale)}
                             </Text>
                           )}
                         </InlineStack>
@@ -443,9 +458,11 @@ export default function Plan() {
                           // quella riga a decidere dove comincia l'elenco, e su
                           // card affiancate deve cominciare alla stessa quota.
                           <Box minHeight="20px">
-                            {savingLabel(price) && (
+                            {savingLabel(price, currency, locale) && (
                               <InlineStack>
-                                <Badge tone="info">{savingLabel(price) as string}</Badge>
+                                <Badge tone="info">
+                                  {savingLabel(price, currency, locale) as string}
+                                </Badge>
                               </InlineStack>
                             )}
                           </Box>

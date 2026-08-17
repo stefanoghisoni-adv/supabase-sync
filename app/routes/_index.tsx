@@ -73,6 +73,10 @@ import {
   type ServerSideAnswer,
 } from '~/components/Dashboard/tracking-platforms';
 import { preselectedPlan, recommendedPlan } from '~/components/Dashboard/plan-step';
+import { resolveShopPricing } from '~/lib/billing/shop-pricing.server';
+import { LanguageSelect } from '~/components/Dashboard/LanguageSelect';
+import { useLocale } from '~/lib/i18n/context';
+import type { Locale } from '~/lib/i18n/locales';
 
 /**
  * Larghezza del contenitore durante la configurazione.
@@ -173,6 +177,23 @@ export async function loader({ request }: LoaderFunctionArgs) {
         : Promise.resolve([]),
       prisma.trackingSetup.findUnique({ where: { shopId: shop.id } }),
     ]);
+
+    // In che valuta parlare a questo negozio, e il listino gia' riscritto in
+    // quella valuta. Da qui in giu' nessuno tocca piu' i prezzi: quelli mostrati
+    // nelle card e quelli che finiscono in fattura escono dalla stessa lista.
+    const pricing = await resolveShopPricing(
+      plans.map((p) => ({
+        planName: p.planName,
+        priceMonthly: Number(p.priceMonthly),
+        priceYearly: Number(p.priceYearly),
+        maxProducts: p.maxProducts,
+        maxCustomers: p.maxCustomers,
+        maxSyncFrequencyHours: p.maxSyncFrequencyHours,
+        customersSyncEnabled: p.customersSyncEnabled,
+        supportLevel: p.supportLevel,
+      })),
+      { billingCurrency: shop.billingCurrency, hasReservedPrice: partnerPrices.length > 0 },
+    );
 
     const plan = plans.find((p) => samePlanName(p.planName, shop.currentPlan)) ?? null;
 
@@ -310,17 +331,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
       planPickable: canAccessPlanTab(shop.currentPlan),
       // Le card del listino come le vede la tab Piano, prezzi riservati
       // compresi: il terzo passo ne fa un elenco a scelta singola.
+      // La valuta va al client insieme ai prezzi: e' l'unico modo perche' le
+      // card non debbano indovinare come scrivere le cifre che ricevono.
+      currency: pricing.currency,
       planCards: buildPlanCards(
-        plans.map((p) => ({
-          planName: p.planName,
-          priceMonthly: Number(p.priceMonthly),
-          priceYearly: Number(p.priceYearly),
-          maxProducts: p.maxProducts,
-          maxCustomers: p.maxCustomers,
-          maxSyncFrequencyHours: p.maxSyncFrequencyHours,
-          customersSyncEnabled: p.customersSyncEnabled,
-          supportLevel: p.supportLevel,
-        })),
+        pricing.plans,
         Object.fromEntries(
           partnerPrices.map((p) => [
             p.planName,
@@ -346,10 +361,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
       // Listino completo: serve al banner che propone il piano giusto a chi ha
       // piu' prodotti di quanti il suo ne sincronizzi. Sono poche righe e le
       // abbiamo gia' in memoria: passarle costa meno di una seconda richiesta.
-      planOptions: plans.map((p) => ({
+      planOptions: pricing.plans.map((p) => ({
         planName: p.planName,
-        priceMonthly: Number(p.priceMonthly),
-        priceYearly: Number(p.priceYearly),
+        priceMonthly: p.priceMonthly,
+        priceYearly: p.priceYearly,
         maxProducts: p.maxProducts,
         maxCustomers: p.maxCustomers,
         customersSyncEnabled: p.customersSyncEnabled,
@@ -462,7 +477,7 @@ interface ProductHistoryResponse {
 }
 
 export default function Dashboard() {
-  const { shop, plan, supabaseConnected, supabaseAccountConnected, customersEnabled, authorization, syncState, planChanged, currentMaxProducts, previousMaxProducts, previousCustomersEnabled, customersTableCreated, customersUpgradePlan, trackingAuthorization, schemaUpdatePending, planOptions, sync, recentRuns, planChosen, planConfirmedForConnection, trackingCheckedForConnection, planCards, discountIntervals, serverSideAnswer, serverSidePlatforms } =
+  const { shop, plan, supabaseConnected, supabaseAccountConnected, customersEnabled, authorization, syncState, planChanged, currentMaxProducts, previousMaxProducts, previousCustomersEnabled, customersTableCreated, customersUpgradePlan, trackingAuthorization, schemaUpdatePending, planOptions, sync, recentRuns, planChosen, planConfirmedForConnection, trackingCheckedForConnection, planCards, discountIntervals, currency, serverSideAnswer, serverSidePlatforms } =
     useLoaderData<typeof loader>();
   const blocked = authorization !== 'ENABLED';
   const t = useT();
@@ -566,6 +581,28 @@ export default function Dashboard() {
   // mentre la sync è in corso — anche se prosegue in background a pagina chiusa —
   // e resta disabilitato dopo il completamento (le successive sono automatiche).
   const revalidator = useRevalidator();
+
+  // La lingua durante la configurazione. Il selettore vive nella barra del
+  // titolo perche' Impostazioni li' non e' raggiungibile — e la lingua e' la
+  // sola cosa che serve poter cambiare prima ancora di aver capito cosa fa
+  // l'app: chi non legge l'italiano non arriva al primo passo. La scelta vale
+  // per tutta l'app, quindi si rilegge il dato di root, che e' dove la lingua
+  // vive.
+  const locale = useLocale();
+  const localeFetcher = useFetcher<{ ok?: boolean }>();
+  const changeLocale = useCallback(
+    (next: Locale) => {
+      localeFetcher.submit({ locale: next }, { method: 'POST', action: '/api/locale' });
+    },
+    [localeFetcher],
+  );
+  useEffect(() => {
+    if (localeFetcher.state === 'idle' && localeFetcher.data?.ok) revalidator.revalidate();
+    // revalidator fuori dalle dipendenze: revalidate() ne cambia lo stato, e
+    // averlo qui rifarebbe partire l'effetto all'infinito.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [localeFetcher.state, localeFetcher.data]);
+
   const syncFetcher = useFetcher<{ queued?: boolean; error?: string }>();
   const [justQueued, setJustQueued] = useState(false);
 
@@ -999,6 +1036,7 @@ export default function Dashboard() {
         <PlanStep
           cards={planCards}
           discountIntervals={discountIntervals}
+          currency={currency}
           interval={billingInterval}
           onIntervalChange={setBillingInterval}
           selected={selectedPlan}
@@ -1019,17 +1057,32 @@ export default function Dashboard() {
     <Page
       fullWidth
       title={t.dashboard.title}
-      secondaryActions={[
-        {
-          content: t.common.settings,
-          icon: SettingsIcon,
-          url: '/settings/supabase',
-          accessibilityLabel: t.common.settings,
-          onAction: settingsNav.start,
-          disabled: settingsNav.loading,
-          loading: settingsNav.loading,
-        },
-      ]}
+      // Durante la configurazione la barra porta la sola lingua: Impostazioni
+      // parlerebbe di un progetto che non c'e' ancora, ed e' fra le pagine che
+      // in questa fase non si raggiungono. A configurazione conclusa il
+      // selettore torna dov'e' di casa, nella card Account.
+      secondaryActions={
+        setupComplete
+          ? [
+              {
+                content: t.common.settings,
+                icon: SettingsIcon,
+                url: '/settings/supabase',
+                accessibilityLabel: t.common.settings,
+                onAction: settingsNav.start,
+                disabled: settingsNav.loading,
+                loading: settingsNav.loading,
+              },
+            ]
+          : (
+              <LanguageSelect
+                variant="header"
+                value={locale}
+                onChange={changeLocale}
+                saving={localeFetcher.state !== 'idle'}
+              />
+            )
+      }
     >
       <BlockStack gap="500">
         {/* Gli avvisi stanno in una pila propria, stretta: sono una lista da

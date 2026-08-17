@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Box, Button, Icon, OptionList, Popover, TextField } from '@shopify/polaris';
-import { SearchIcon } from '@shopify/polaris-icons';
+import { LanguageIcon, SearchIcon } from '@shopify/polaris-icons';
 import { LOCALES, LOCALE_LABELS, needsSearch, type Locale } from '~/lib/i18n/locales';
 import { useT } from '~/lib/i18n/context';
 
@@ -10,6 +10,17 @@ export interface LanguageSelectProps {
   /** La scelta e' in viaggio verso il server. */
   saving?: boolean;
   disabled?: boolean;
+  /**
+   * Dove sta il comando.
+   *
+   * `field`: su una riga della card, con il suo nome a sinistra — largo quanto
+   * la riga, come gli altri campi.
+   * `header`: da solo nella barra del titolo, dove nessuna etichetta lo
+   * annuncia. Li' porta un mappamondo e il nome della lingua, che è il modo in
+   * cui un selettore di lingua si riconosce senza leggere niente — e prende la
+   * larghezza che gli serve, non tutta quella disponibile.
+   */
+  variant?: 'field' | 'header';
 }
 
 /**
@@ -28,7 +39,13 @@ export interface LanguageSelectProps {
  * sinistra, come le altre righe della card, e quella riga la compone chi lo
  * usa.
  */
-export function LanguageSelect({ value, onChange, saving, disabled }: LanguageSelectProps) {
+export function LanguageSelect({
+  value,
+  onChange,
+  saving,
+  disabled,
+  variant = 'field',
+}: LanguageSelectProps) {
   const t = useT();
   const [active, setActive] = useState(false);
   const [query, setQuery] = useState('');
@@ -45,13 +62,19 @@ export function LanguageSelect({ value, onChange, saving, disabled }: LanguageSe
   }, [options, query]);
 
   const searchable = needsSearch();
+  const inHeader = variant === 'header';
 
   return (
       <Popover
         active={active}
-        // Popover largo quanto l'attivatore: pulsante e menu combaciano.
-        fullWidth
+        // Nella riga della card il menu combacia con l'attivatore; nella barra
+        // del titolo il pulsante e' stretto, e un menu della sua larghezza
+        // taglierebbe i nomi delle lingue.
+        fullWidth={!inHeader}
         preferredPosition="below"
+        // Il comando sta all'estremo destro della barra: il menu si apre verso
+        // l'interno della pagina, non oltre il bordo.
+        preferredAlignment={inHeader ? 'right' : undefined}
         onClose={() => {
           setActive(false);
           setQuery('');
@@ -61,8 +84,9 @@ export function LanguageSelect({ value, onChange, saving, disabled }: LanguageSe
             id="language-select"
             onClick={() => setActive((open) => !open)}
             disclosure
-            fullWidth
-            textAlign="left"
+            icon={inHeader ? LanguageIcon : undefined}
+            fullWidth={!inHeader}
+            textAlign={inHeader ? undefined : 'left'}
             disabled={disabled || saving}
             // L'etichetta visibile sta accanto, sulla riga: qui serve solo a
             // chi il pulsante lo sente leggere invece di vederlo.

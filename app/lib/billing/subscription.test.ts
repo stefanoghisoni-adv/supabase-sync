@@ -101,6 +101,7 @@ describe('createAppSubscription', () => {
     const result = await createAppSubscription(admin, {
       planName: 'Pro',
       price: 29,
+      currency: 'EUR',
       interval: 'monthly',
       trialDays: 7,
       returnUrl: 'https://app.example.com/billing/callback?plan=Pro',
@@ -135,6 +136,7 @@ describe('createAppSubscription', () => {
     await createAppSubscription(admin, {
       planName: 'Starter',
       price: 9.9,
+      currency: 'EUR',
       interval: 'monthly',
       trialDays: null,
       returnUrl: 'https://app.example.com/billing/callback',
@@ -169,6 +171,7 @@ describe('createAppSubscription', () => {
       createAppSubscription(admin, {
         planName: 'Pro',
         price: 29,
+        currency: 'EUR',
         interval: 'monthly',
         trialDays: null,
         returnUrl: 'https://app.example.com/billing/callback',
@@ -192,6 +195,7 @@ describe('createAppSubscription', () => {
       createAppSubscription(admin, {
         planName: 'Pro',
         price: 29,
+        currency: 'EUR',
         interval: 'monthly',
         trialDays: null,
         returnUrl: 'https://app.example.com/billing/callback',
@@ -207,6 +211,7 @@ describe('createAppSubscription', () => {
       createAppSubscription(admin, {
         planName: 'Pro',
         price: 29,
+        currency: 'EUR',
         interval: 'monthly',
         trialDays: null,
         returnUrl: 'https://app.example.com/billing/callback',
@@ -228,6 +233,7 @@ describe('createAppSubscription', () => {
       createAppSubscription(admin, {
         planName: 'Pro',
         price: 29,
+        currency: 'EUR',
         interval: 'monthly',
         trialDays: null,
         returnUrl: 'https://app.example.com/billing/callback',

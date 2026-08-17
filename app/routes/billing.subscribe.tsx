@@ -19,6 +19,7 @@ import {
   type BillingInterval,
 } from '~/lib/billing/partner-pricing';
 import { samePlanName } from '~/lib/billing/plan-name';
+import { resolveShopPricing } from '~/lib/billing/shop-pricing.server';
 
 // Avvio del cambio di piano. Qui NON si attiva niente: l'abbonamento nasce in
 // attesa di conferma e diventa effettivo solo in /billing/callback, dopo che
@@ -100,11 +101,6 @@ export async function action({ request }: ActionFunctionArgs) {
   const interval: BillingInterval =
     String(form.get('interval') ?? '').trim().toLowerCase() === 'yearly' ? 'yearly' : 'monthly';
 
-  const listPrice = priceForInterval(
-    { priceMonthly: Number(plan.priceMonthly), priceYearly: Number(plan.priceYearly) },
-    interval,
-  );
-
   // Listino riservato del partner a cui il negozio appartiene, se ce n'e' uno.
   // Il prezzo lo si risolve QUI e non nel browser: e' quello che finisce in
   // fattura, e non puo' dipendere da cosa il client dichiara di aver visto.
@@ -116,7 +112,31 @@ export async function action({ request }: ActionFunctionArgs) {
       })
     : null;
 
-  const pricing = effectivePrice(
+  // In che valuta si addebita, e a che prezzo in quella valuta. E' la stessa
+  // risposta che ha prodotto le card: un prezzo mostrato in una valuta e
+  // addebitato in un'altra non e' un dettaglio, e' una cifra che il merchant
+  // non ha mai accettato.
+  const allPlans = await prisma.plan.findMany();
+  const pricing = await resolveShopPricing(
+    allPlans.map((p) => ({
+      planName: p.planName,
+      priceMonthly: Number(p.priceMonthly),
+      priceYearly: Number(p.priceYearly),
+    })),
+    { billingCurrency: shop.billingCurrency, hasReservedPrice: partnerPrice != null },
+  );
+  const pricedPlan =
+    pricing.plans.find((p) => samePlanName(p.planName, plan.planName)) ?? {
+      priceMonthly: Number(plan.priceMonthly),
+      priceYearly: Number(plan.priceYearly),
+    };
+
+  const listPrice = priceForInterval(
+    { priceMonthly: pricedPlan.priceMonthly, priceYearly: pricedPlan.priceYearly },
+    interval,
+  );
+
+  const effective = effectivePrice(
     listPrice,
     partnerPrice ? priceForInterval(
       { priceMonthly: Number(partnerPrice.priceMonthly), priceYearly: Number(partnerPrice.priceYearly) },
@@ -125,7 +145,7 @@ export async function action({ request }: ActionFunctionArgs) {
     shop.discountIntervals,
   );
 
-  const price = pricing.payablePrice;
+  const price = effective.payablePrice;
 
   try {
     // Piano gratuito: non c'e' niente da far confermare, quindi si chiude subito
@@ -182,13 +202,14 @@ export async function action({ request }: ActionFunctionArgs) {
       // A Shopify va il prezzo di LISTINO, con lo sconto a parte: e' l'unico
       // modo perche' allo scadere dei cicli concordati il prezzo pieno riparta
       // da solo.
-      price: pricing.listPrice,
+      price: effective.listPrice,
+      currency: pricing.currency,
       interval,
       trialDays: plan.trialDays,
       returnUrl,
       test,
-      discount: pricing.discountAmount > 0
-        ? { amount: pricing.discountAmount, intervals: pricing.discountIntervals }
+      discount: effective.discountAmount > 0
+        ? { amount: effective.discountAmount, intervals: effective.discountIntervals }
         : null,
     });
 
@@ -204,7 +225,8 @@ export async function action({ request }: ActionFunctionArgs) {
         // avrebbe registrato il prezzo di un mese, e a un negozio con prezzo
         // riservato il listino invece della cifra concordata. E' la riga su cui
         // si guarda quando un merchant chiede conto di un addebito.
-        price: pricing.payablePrice,
+        price: effective.payablePrice,
+        currency: pricing.currency,
         billingCycle: interval,
         status: 'pending',
         trialDays: plan.trialDays ?? 0,

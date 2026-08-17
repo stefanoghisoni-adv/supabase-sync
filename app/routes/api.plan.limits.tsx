@@ -3,6 +3,8 @@ import { json } from '@remix-run/node';
 import { authenticate } from '~/shopify.server';
 import { prisma } from '~/db.server';
 import { samePlanName } from '~/lib/billing/plan-name';
+import { BASE_CURRENCY } from '~/lib/billing/money';
+import { resolveShopPricing } from '~/lib/billing/shop-pricing.server';
 
 /**
  * Piano in uso e listino, per l'avviso sul limite prodotti.
@@ -19,9 +21,29 @@ export async function loader({ request }: LoaderFunctionArgs) {
     where: { shopDomain: session.shop },
     include: { supabaseConfig: true },
   });
-  if (!shop) return json({ connected: false, currentPlan: null, plans: [] });
+  if (!shop) {
+    return json({ connected: false, currentPlan: null, plans: [], currency: BASE_CURRENCY });
+  }
 
   const plans = await prisma.plan.findMany();
+
+  // Anche qui i prezzi escono nella valuta del negozio: l'avviso propone un
+  // piano e ne scrive il costo, e un costo in una valuta che il merchant non
+  // usa e' peggio di nessun costo.
+  const reserved = shop.partnerName
+    ? await prisma.partnerPlanPrice.count({ where: { partnerName: shop.partnerName } })
+    : 0;
+  const pricing = await resolveShopPricing(
+    plans.map((p) => ({
+      planName: p.planName,
+      priceMonthly: Number(p.priceMonthly),
+      priceYearly: Number(p.priceYearly),
+      maxProducts: p.maxProducts,
+      maxCustomers: p.maxCustomers,
+      customersSyncEnabled: p.customersSyncEnabled,
+    })),
+    { billingCurrency: shop.billingCurrency, hasReservedPrice: reserved > 0 },
+  );
 
   return json({
     // Il tetto prodotti parla di una sincronizzazione che senza database non
@@ -30,24 +52,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
     // puo' valere in una e non nelle altre.
     connected: !!shop.supabaseConfig?.connectionVerifiedAt,
     currentPlanName: shop.currentPlan,
-    plans: plans.map((p) => ({
-      planName: p.planName,
-      priceMonthly: Number(p.priceMonthly),
-      priceYearly: Number(p.priceYearly),
-      maxProducts: p.maxProducts,
-      maxCustomers: p.maxCustomers,
-      customersSyncEnabled: p.customersSyncEnabled,
-    })),
-    currentPlan:
-      plans
-        .filter((p) => samePlanName(p.planName, shop.currentPlan))
-        .map((p) => ({
-          planName: p.planName,
-          priceMonthly: Number(p.priceMonthly),
-          priceYearly: Number(p.priceYearly),
-          maxProducts: p.maxProducts,
-          maxCustomers: p.maxCustomers,
-          customersSyncEnabled: p.customersSyncEnabled,
-        }))[0] ?? null,
+    currency: pricing.currency,
+    plans: pricing.plans,
+    currentPlan: pricing.plans.find((p) => samePlanName(p.planName, shop.currentPlan)) ?? null,
   });
 }

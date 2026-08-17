@@ -11,6 +11,8 @@ import {
   Text,
 } from '@shopify/polaris';
 import { planLabel } from './account-format';
+import { BASE_CURRENCY } from '~/lib/billing/money';
+import { useLocale } from '~/lib/i18n/context';
 import {
   planComparisonRows,
   suggestPlanForProducts,
@@ -35,6 +37,8 @@ interface LimitsResponse {
   currentPlanName?: string | null;
   currentPlan?: PlanForSuggestion | null;
   plans?: PlanForSuggestion[];
+  /** Valuta in cui sono scritti i prezzi qui sopra. */
+  currency?: string;
 }
 
 interface ReadinessResponse {
@@ -52,6 +56,7 @@ interface ReadinessResponse {
  */
 export function ProductOverflowBanner({ disabled }: ProductOverflowBannerProps) {
   const [confirming, setConfirming] = useState(false);
+  const locale = useLocale();
   const fetcher = useFetcher<SubscribeResponse>();
   const submitting = fetcher.state !== 'idle';
 
@@ -102,7 +107,12 @@ export function ProductOverflowBanner({ disabled }: ProductOverflowBannerProps) 
 
   const nextLabel = planLabel(suggestedPlan.planName);
   const excluded = currentPlan.maxProducts == null ? 0 : totalProducts - currentPlan.maxProducts;
-  const rows = planComparisonRows(currentPlan, suggestedPlan);
+  const rows = planComparisonRows(
+    currentPlan,
+    suggestedPlan,
+    limits.data?.currency ?? BASE_CURRENCY,
+    locale,
+  );
   const error = fetcher.data && 'error' in fetcher.data ? fetcher.data.error : null;
 
   return (

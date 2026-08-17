@@ -119,13 +119,3 @@ export function buildPlanCards(
       };
     });
 }
-
-/** Prezzo come va scritto sulla card: "29", "0", "9,90". */
-export function formatPrice(priceMonthly: number): string {
-  return Number.isInteger(priceMonthly)
-    ? String(priceMonthly)
-    : priceMonthly.toLocaleString('it-IT', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      });
-}
