@@ -121,7 +121,9 @@ export function PreferencesSelect({
   return (
     <Popover
       active={active}
-      fullWidth={!inHeader}
+      // Mai largo quanto l'attivatore: qui dentro ci stanno due colonne, e sulla
+      // riga della card l'attivatore e' meta' riga — le colonne finivano
+      // tagliate. Il riquadro si dimensiona sul contenuto.
       preferredPosition="below"
       preferredAlignment={inHeader ? 'right' : undefined}
       onClose={() => setActive(false)}

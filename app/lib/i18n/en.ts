@@ -30,7 +30,7 @@ export const en: typeof it = {
   },
 
   language: {
-    label: 'Language',
+    label: 'Language/currency',
     currency: 'Currency',
     searchPlaceholder: 'Search for a language…',
     saving: 'Saving…',
@@ -155,7 +155,9 @@ export const en: typeof it = {
       failed: 'Could not connect to Supabase. Try again.',
       popupsBlocked: 'Allow pop-ups to connect Supabase.',
       connectedWith: (email: string) => `Account connected with ${email}.`,
-      connectedNoEmail: 'Account connected.',
+      connectedRow: 'Account connected with',
+    noEmail: '—',
+    connectedNoEmail: 'Account connected.',
       loadingEmail: 'Loading the email connected to the account',
       windowTitle: 'Finish signing in from the Supabase window',
       windowBody:
@@ -200,6 +202,7 @@ export const en: typeof it = {
       limitAfter:
         ', or pause an existing project from the Supabase dashboard: paused projects take up no slot.',
       connectedTo: 'Database connected:',
+      manage: 'Manage',
       change: 'Change database',
       disconnect: 'Disconnect',
     },

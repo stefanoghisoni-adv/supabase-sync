@@ -32,7 +32,7 @@ export const it = {
   },
 
   language: {
-    label: 'Lingua',
+    label: 'Lingua/valuta',
     currency: 'Valuta',
     /** Testo del campo di ricerca, quando le lingue sono molte. */
     searchPlaceholder: 'Cerca una lingua…',
@@ -159,7 +159,9 @@ export const it = {
       failed: 'Collegamento a Supabase non riuscito. Riprova.',
       popupsBlocked: 'Consenti i popup per collegare Supabase.',
       connectedWith: (email: string) => `Account connesso con ${email}.`,
-      connectedNoEmail: 'Account connesso.',
+      connectedRow: 'Account connesso con',
+    noEmail: '—',
+    connectedNoEmail: 'Account connesso.',
       loadingEmail: 'Carico l’email connessa all’account',
       windowTitle: 'Completa l’accesso nella finestra di Supabase',
       windowBody:
@@ -205,6 +207,7 @@ export const it = {
       limitAfter:
         ', oppure metti in pausa un progetto esistente dalla dashboard Supabase: i progetti in pausa non occupano nessuno slot.',
       connectedTo: 'Database collegato:',
+      manage: 'Gestisci',
       change: 'Cambia database',
       disconnect: 'Disconnetti',
     },

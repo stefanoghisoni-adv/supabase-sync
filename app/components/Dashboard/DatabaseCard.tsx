@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import {
   Card,
   BlockStack,
@@ -26,6 +26,15 @@ export interface DatabaseCardProps {
    * risposta dell'API, non una pagina.
    */
   dashboardUrl: string | null;
+  /**
+   * Le righe del collegamento — account e database — in cima alla card.
+   *
+   * Stavano in una card a parte, che pero' ripeteva lo "Stato" gia' scritto
+   * qui: due riquadri per la stessa cosa. Le compone chi ha i dati, questa card
+   * si limita a dar loro il posto giusto: prima di tutto il resto, perche'
+   * dicono a cosa si riferiscono i valori sotto.
+   */
+  header?: ReactNode;
 }
 
 /**
@@ -153,6 +162,7 @@ export function DatabaseCard({
   readKey,
   databaseUrl,
   dashboardUrl,
+  header,
 }: DatabaseCardProps) {
   const t = useT();
   return (
@@ -161,6 +171,12 @@ export function DatabaseCard({
         <Text as="h2" variant="headingMd">
           {t.database.title}
         </Text>
+        {header && (
+          <>
+            {header}
+            <Divider />
+          </>
+        )}
         <MetricRow
           label={t.database.status}
           badge={{

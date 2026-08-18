@@ -13,6 +13,14 @@ export interface SupabaseAccountConnectProps {
   projectName?: string | null;
   projectUrl?: string | null;
   onDisconnected?: (mode: DisconnectMode) => void;
+  /**
+   * Come si presenta a collegamento fatto.
+   *
+   * `block`: una frase e sotto il comando, come nel passo della
+   * configurazione. `row`: una riga di card — nome a sinistra, email e comando
+   * a destra — per stare in mezzo alle altre righe della card Database.
+   */
+  variant?: 'block' | 'row';
   /** Negozio non ENABLED: nessuna azione disponibile. */
   disabled?: boolean;
   // Notifica il parent lo stato del flusso (guida il badge del passo:
@@ -36,6 +44,7 @@ export function SupabaseAccountConnect({
   onDisconnected,
   disabled,
   onStatusChange,
+  variant = 'block',
 }: SupabaseAccountConnectProps) {
   const t = useT();
   const revalidator = useRevalidator();
@@ -256,6 +265,33 @@ export function SupabaseAccountConnect({
         </InlineStack>
       );
     }
+    const disconnectButton = (
+      <DisconnectSupabase
+        projectName={projectName}
+        projectUrl={projectUrl}
+        disabled={disabled}
+        onDisconnected={onDisconnected}
+      />
+    );
+
+    if (variant === 'row') {
+      return (
+        <InlineStack align="space-between" blockAlign="center" gap="300" wrap={false}>
+          <Text as="span" variant="bodyMd">
+            {t.connect.account.connectedRow}
+          </Text>
+          {/* Email e comando dallo stesso lato: la riga si legge "chi" e
+              subito accanto "come si toglie". */}
+          <InlineStack gap="300" blockAlign="center" wrap={false}>
+            <Text as="span" tone="subdued" truncate>
+              {accountEmail ?? t.connect.account.noEmail}
+            </Text>
+            {disconnectButton}
+          </InlineStack>
+        </InlineStack>
+      );
+    }
+
     return (
       // Lo scollegamento sta qui e non nel passo del database: e' l'accesso a
       // Supabase che si revoca, e dopo non c'e' piu' nessun database da
@@ -268,14 +304,7 @@ export function SupabaseAccountConnect({
             ? t.connect.account.connectedWith(accountEmail)
             : t.connect.account.connectedNoEmail}
         </Text>
-        <InlineStack>
-          <DisconnectSupabase
-            projectName={projectName}
-            projectUrl={projectUrl}
-            disabled={disabled}
-            onDisconnected={onDisconnected}
-          />
-        </InlineStack>
+        <InlineStack>{disconnectButton}</InlineStack>
       </BlockStack>
     );
   }

@@ -23,7 +23,6 @@ import { syncIsActive } from '~/lib/sync/sync-active';
 import { loadSyncTiming } from '~/lib/sync/sync-timing.server';
 import { projectDashboardUrl } from '~/lib/supabase-management.server';
 import { SyncCard } from '~/components/Dashboard/SyncCard';
-import { ConnectionCard } from '~/components/Dashboard/ConnectionCard';
 import { SupabaseAccountConnect } from '~/components/Dashboard/SupabaseAccountConnect';
 import { SupabaseProjectConnect } from '~/components/Dashboard/SupabaseProjectConnect';
 import { normalizeAuthorization } from '~/utils/authorization.server';
@@ -212,55 +211,60 @@ export default function SupabaseSettings() {
               columns={{ xs: 1, md: 'minmax(0, 35fr) minmax(0, 65fr)' }}
               gap="400"
             >
-              <AccountCard
-                planName={account.planName}
-                productsSyncActive={account.productsSyncActive}
-                customersSyncActive={account.customersSyncActive}
-                customersUpgradePlan={account.customersUpgradePlan}
-                preferences={{
-                  locale: root?.locale ?? 'en',
-                  currency: root?.currency ?? 'USD',
-                }}
-                locales={root?.locales ?? []}
-                currencies={root?.currencies ?? []}
-                onPreferencesChange={changeLocale}
-                localeSaving={localeFetcher.state !== 'idle'}
-              />
+              {/* A sinistra le due card corte, impilate: cosi' la colonna
+                  stretta si riempie e quella larga puo' crescere in altezza
+                  senza lasciare un vuoto accanto. */}
+              <BlockStack gap="400">
+                <AccountCard
+                  planName={account.planName}
+                  productsSyncActive={account.productsSyncActive}
+                  customersSyncActive={account.customersSyncActive}
+                  customersUpgradePlan={account.customersUpgradePlan}
+                  preferences={{
+                    locale: root?.locale ?? 'en',
+                    currency: root?.currency ?? 'USD',
+                  }}
+                  locales={root?.locales ?? []}
+                  currencies={root?.currencies ?? []}
+                  onPreferencesChange={changeLocale}
+                  localeSaving={localeFetcher.state !== 'idle'}
+                />
+                <SyncCard
+                  frequencyHours={sync.frequencyHours}
+                  lastSync={sync.lastSync}
+                  nextSync={sync.nextSync}
+                  timeZone={sync.timeZone}
+                />
+              </BlockStack>
+
               <DatabaseCard
                 connected={account.connected}
                 appUrl={config?.proxyBaseUrl || null}
                 readKey={config?.readToken ?? null}
                 databaseUrl={config?.databaseUrl ?? null}
                 dashboardUrl={config?.dashboardUrl ?? null}
+                header={
+                  account.connected ? (
+                    <BlockStack gap="300">
+                      <SupabaseAccountConnect
+                        connected
+                        variant="row"
+                        projectName={config?.projectRef ?? undefined}
+                        projectUrl={config?.databaseUrl ?? undefined}
+                      />
+                      <SupabaseProjectConnect
+                        connected
+                        variant="menu"
+                        projectName={config?.projectRef ?? undefined}
+                        projectUrl={config?.databaseUrl ?? undefined}
+                        authorization={authorization}
+                      />
+                    </BlockStack>
+                  ) : undefined
+                }
               />
             </InlineGrid>
 
-            <SyncCard
-              frequencyHours={sync.frequencyHours}
-              lastSync={sync.lastSync}
-              nextSync={sync.nextSync}
-              timeZone={sync.timeZone}
-            />
-
-            {/* Account e database: cambiarli o staccarli. Stava in dashboard,
-                dove pero' e' un comando che si usa una volta ogni tanto in
-                mezzo a numeri che si guardano ogni giorno. Qui sta accanto ai
-                dati del collegamento, che e' dove lo si va a cercare. */}
-            {account.connected && (
-              <ConnectionCard>
-                <SupabaseAccountConnect
-                  connected
-                  projectName={config?.projectRef ?? undefined}
-                  projectUrl={config?.databaseUrl ?? undefined}
-                />
-                <SupabaseProjectConnect
-                  connected
-                  projectName={config?.projectRef ?? undefined}
-                  projectUrl={config?.databaseUrl ?? undefined}
-                  authorization={authorization}
-                />
-              </ConnectionCard>
-            )}
 
           </BlockStack>
         </Layout.Section>

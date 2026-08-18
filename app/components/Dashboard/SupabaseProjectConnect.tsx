@@ -2,6 +2,7 @@ import { useT } from '~/lib/i18n/context';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useFetcher, useRevalidator } from '@remix-run/react';
 import {
+  ActionList,
   BlockStack,
   Box,
   Button,
@@ -36,6 +37,15 @@ export interface SupabaseProjectConnectProps {
   disabled?: boolean;
   // Stato di autorizzazione: guida il banner nello stato "collegato".
   authorization?: 'ENABLED' | 'PENDING' | 'DISABLED';
+  /**
+   * Come si presenta a database collegato.
+   *
+   * `buttons`: il nome del database e sotto i due comandi, come nel passo
+   * della configurazione. `menu`: una riga di card — nome a sinistra, valore e
+   * una tendina "Gestisci" a destra — per stare fra le righe della card
+   * Database, dove due pulsanti in fila spezzerebbero l'incolonnamento.
+   */
+  variant?: 'buttons' | 'menu';
   // Disconnessione riuscita: il parent mostra il banner di conferma in cima alla
   // dashboard. Qui non lo si puo' fare, il componente viene rimontato subito dopo.
 }
@@ -53,6 +63,7 @@ export function SupabaseProjectConnect({
   projectUrl,
   disabled,
   authorization = 'ENABLED',
+  variant = 'buttons',
 }: SupabaseProjectConnectProps) {
   const t = useT();
   const revalidator = useRevalidator();
@@ -60,6 +71,7 @@ export function SupabaseProjectConnect({
   const selectFetcher = useFetcher<{ ok?: boolean; error?: string }>();
 
   const [selectedRef, setSelectedRef] = useState<string>('');
+  const [manageOpen, setManageOpen] = useState(false);
   const [query, setQuery] = useState('');
 
   // Creazione di un nuovo progetto.
@@ -296,6 +308,62 @@ export function SupabaseProjectConnect({
         ) : authorization === 'PENDING' ? (
           <Banner tone="warning">{t.connect.database.syncSuspended}</Banner>
         ) : null}
+        {variant === 'menu' ? (
+          <InlineStack align="space-between" blockAlign="center" gap="300" wrap={false}>
+            <Text as="span" variant="bodyMd">
+              {t.connect.database.connectedTo}
+            </Text>
+            <InlineStack gap="300" blockAlign="center" wrap={false}>
+              <Text as="span" tone="subdued" truncate>
+                {projectName ?? '—'}
+              </Text>
+              {/* Una tendina e non due pulsanti: in una card fatta di righe
+                  incolonnate, due comandi in fila spostano il valore e rompono
+                  la colonna. Le due strade restano entrambe, dentro. */}
+              <Popover
+                active={manageOpen}
+                onClose={() => setManageOpen(false)}
+                activator={
+                  <Button
+                    disclosure
+                    onClick={() => setManageOpen((open) => !open)}
+                    loading={limitsChecking}
+                    disabled={disabled}
+                  >
+                    {t.connect.database.manage}
+                  </Button>
+                }
+              >
+                <ActionList
+                  actionRole="menuitem"
+                  items={[
+                    {
+                      content: t.connect.database.create,
+                      icon: PlusIcon,
+                      // Spento quando il piano Supabase non consente altri
+                      // progetti: resta al suo posto per dire cosa non si puo'
+                      // fare, invece di sparire senza spiegazioni.
+                      disabled: limitsChecking || planLimitHit,
+                      onAction: () => {
+                        setManageOpen(false);
+                        setChanging(true);
+                        setShowCreate(true);
+                      },
+                    },
+                    {
+                      content: t.connect.database.change,
+                      onAction: () => {
+                        setManageOpen(false);
+                        setChanging(true);
+                      },
+                    },
+                  ]}
+                />
+              </Popover>
+            </InlineStack>
+          </InlineStack>
+        ) : (
+          <>
         {projectName && (
           <Text as="p" tone="subdued">
             {t.connect.database.connectedTo} <strong>{projectName}</strong>
@@ -325,6 +393,8 @@ export function SupabaseProjectConnect({
             {t.connect.database.change}
           </Button>
         </InlineStack>
+          </>
+        )}
 
       </BlockStack>
     );
