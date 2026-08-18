@@ -288,17 +288,10 @@ export function SupabaseProjectConnect({
           </Text>
         )}
         <InlineStack gap="200">
-          {/* Cambiare database non e' scollegarsi: si torna alla scelta, e
-              quello di adesso resta collegato finche' non se ne conferma un
-              altro. Scollegarsi e' un'altra cosa e sta nel passo sopra, con
-              l'account. */}
-          <Button onClick={() => setChanging(true)} disabled={disabled}>
-            {t.connect.database.change}
-          </Button>
-          {/* La seconda strada, accanto alla prima: crearne uno nuovo invece di
-              sceglierne un altro. Spento quando il piano Supabase non consente
-              altri progetti — resta al suo posto per dire cosa non si puo'
-              fare, invece di sparire senza spiegazioni. */}
+          {/* Crearne uno nuovo viene prima: e' la strada di chi non ha ancora
+              il database che gli serve. Spento quando il piano Supabase non
+              consente altri progetti — resta al suo posto per dire cosa non si
+              puo' fare, invece di sparire senza spiegazioni. */}
           <Button
             icon={PlusIcon}
             onClick={() => {
@@ -309,6 +302,13 @@ export function SupabaseProjectConnect({
             disabled={disabled || limitsChecking || planLimitHit}
           >
             {t.connect.database.create}
+          </Button>
+          {/* Cambiare database non e' scollegarsi: si torna alla scelta, e
+              quello di adesso resta collegato finche' non se ne conferma un
+              altro. Scollegarsi e' un'altra cosa e sta nel passo sopra, con
+              l'account. */}
+          <Button onClick={() => setChanging(true)} disabled={disabled}>
+            {t.connect.database.change}
           </Button>
         </InlineStack>
 
