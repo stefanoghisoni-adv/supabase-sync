@@ -546,16 +546,23 @@ export default function ProblemProducts() {
                       {t.issues.intro.after}
                     </Text>
                   )}
-                  <TextField
-                    label={t.issues.search}
-                    labelHidden
-                    value={query}
-                    onChange={setQuery}
-                    autoComplete="off"
-                    placeholder={t.issues.searchPlaceholder}
-                    clearButton
-                    onClearButtonClick={() => setQuery('')}
-                  />
+                  {/* Tre quarti della colonna, allineata a destra: a piena
+                      larghezza il campo pesava come la descrizione accanto, e
+                      una ricerca non e' il contenuto principale della card. */}
+                  <InlineStack align="end">
+                    <Box width="75%">
+                      <TextField
+                        label={t.issues.search}
+                        labelHidden
+                        value={query}
+                        onChange={setQuery}
+                        autoComplete="off"
+                        placeholder={t.issues.searchPlaceholder}
+                        clearButton
+                        onClearButtonClick={() => setQuery('')}
+                      />
+                    </Box>
+                  </InlineStack>
                 </InlineGrid>
               </BlockStack>
             </Box>
