@@ -253,7 +253,13 @@ export default function App() {
   return (
       <I18nProvider locale={locale}>
         <AppProvider isEmbeddedApp apiKey={apiKey} theme="light">
-          <NavMenu>
+          {/* `key`: il menu dell'admin non e' React, e' l'elemento
+              <ui-nav-menu> che App Bridge legge quando compare. Cambiando i
+              link dentro un elemento gia' in pagina l'admin non se ne accorge —
+              a configurazione conclusa il menu restava a una voce sola finche'
+              non si ricaricava. Con una chiave diversa React sostituisce
+              l'elemento, e il menu viene riletto da capo. */}
+          <NavMenu key={setupComplete ? 'menu-full' : 'menu-setup'}>
             {/* rel="home" e' la radice dell'app: l'admin la usa per il nome
                 dell'app in cima al menu e non la elenca come voce. Serve quindi
                 un secondo link alla stessa pagina, che e' quello visibile —

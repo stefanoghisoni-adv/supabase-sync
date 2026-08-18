@@ -51,9 +51,6 @@ export function SyncCard({ frequencyHours, lastSync, nextSync, timeZone }: SyncC
         {countdown && (
           <MetricRow label={t.sync.next} badge={{ content: t.sync.inLabel(countdown) }} />
         )}
-        <Text as="p" tone="subdued" variant="bodySm">
-          {t.sync.fromPlan}
-        </Text>
       </BlockStack>
     </Card>
   );

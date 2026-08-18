@@ -589,8 +589,6 @@ export const it = {
     last: 'Ultima',
     next: 'Prossima',
     inLabel: (countdown: string) => `Tra ${countdown}`,
-    fromPlan:
-      'La frequenza è quella prevista dal tuo piano: con un piano superiore i dati si aggiornano più spesso.',
     every: {
       minutes: (n: number) => `Ogni ${n} minuti`,
       hour: 'Ogni ora',

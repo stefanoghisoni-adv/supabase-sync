@@ -59,7 +59,6 @@ import {
 } from '~/lib/shop/refresh-shop-profile.server';
 import { useNavLoading } from '~/components/Dashboard/nav-loading';
 import { SyncCard } from '~/components/Dashboard/SyncCard';
-import { ConnectionCard } from '~/components/Dashboard/ConnectionCard';
 import { RecentRunsCard } from '~/components/Dashboard/RecentRunsCard';
 import { loadSyncRuns, syncTimingFrom } from '~/lib/sync/sync-timing.server';
 import { buildPlanCards } from '~/components/Billing/plan-catalog';
@@ -1263,25 +1262,6 @@ export default function Dashboard() {
             nextSync={sync.nextSync}
             timeZone={shop.ianaTimezone}
           />
-          <ConnectionCard>
-            {/* Gli stessi componenti dei passi: a collegamento fatto si
-                riducono all'account, al nome del database e ai pulsanti per
-                cambiarlo o staccarlo, con la conferma di sempre. */}
-            <SupabaseAccountConnect
-              connected
-              projectName={shop.supabaseConfig?.supabaseProjectRef ?? undefined}
-              projectUrl={shop.supabaseConfig?.supabaseUrl ?? undefined}
-              onDisconnected={setDisconnectDone}
-              disabled={blocked}
-            />
-            <SupabaseProjectConnect
-              connected
-              projectName={shop.supabaseConfig?.supabaseProjectRef ?? undefined}
-              projectUrl={shop.supabaseConfig?.supabaseUrl ?? undefined}
-              disabled={blocked}
-              authorization={authorization}
-            />
-          </ConnectionCard>
         </InlineGrid>
 
         {/* Il grafico prende i due terzi e accanto gli sta il registro in

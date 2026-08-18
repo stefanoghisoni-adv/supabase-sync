@@ -553,8 +553,6 @@ export const en: typeof it = {
     last: 'Last',
     next: 'Next',
     inLabel: (countdown: string) => `In ${countdown}`,
-    fromPlan:
-      'The frequency comes with your plan: on a higher plan your data refreshes more often.',
     every: {
       minutes: (n: number) => `Every ${n} minutes`,
       hour: 'Every hour',

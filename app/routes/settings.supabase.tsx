@@ -23,6 +23,10 @@ import { syncIsActive } from '~/lib/sync/sync-active';
 import { loadSyncTiming } from '~/lib/sync/sync-timing.server';
 import { projectDashboardUrl } from '~/lib/supabase-management.server';
 import { SyncCard } from '~/components/Dashboard/SyncCard';
+import { ConnectionCard } from '~/components/Dashboard/ConnectionCard';
+import { SupabaseAccountConnect } from '~/components/Dashboard/SupabaseAccountConnect';
+import { SupabaseProjectConnect } from '~/components/Dashboard/SupabaseProjectConnect';
+import { normalizeAuthorization } from '~/utils/authorization.server';
 import { useT } from '~/lib/i18n/context';
 import type { Preferences } from '~/components/Dashboard/PreferencesSelect';
 import { useCallback, useEffect } from 'react';
@@ -88,9 +92,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
     timeZone: shop?.ianaTimezone ?? null,
   };
 
+  // Stato di autorizzazione e riferimento del progetto: li usa il riquadro
+  // della connessione, che da qui in poi vive su questa pagina.
+  const authorization = normalizeAuthorization(shop?.authorization);
+
   const config = shop?.supabaseConfig;
   if (!config) {
-    return json({ account, config: null, sync });
+    return json({ account, config: null, sync, authorization });
   }
 
   // Le letture di tracciamento non passano più dalla anon key del merchant ma
@@ -105,6 +113,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   return json({
     account,
     sync,
+    authorization,
     config: {
       readToken,
       proxyBaseUrl,
@@ -113,6 +122,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       // pagina da guardare (la dashboard di Supabase) e l'indirizzo a cui il
       // progetto risponde, che aperto in un browser da' una risposta dell'API.
       databaseUrl: config.supabaseUrl,
+      projectRef: config.supabaseProjectRef,
       dashboardUrl: config.supabaseProjectRef
         ? projectDashboardUrl(config.supabaseProjectRef)
         : null,
@@ -125,7 +135,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 // automatica e non ha impostazioni, la chiave di lettura viene emessa una volta
 // al collegamento del progetto e le chiavi del progetto non si toccano da qui.
 export default function SupabaseSettings() {
-  const { account, config, sync } = useLoaderData<typeof loader>();
+  const { account, config, sync, authorization } = useLoaderData<typeof loader>();
   const t = useT();
   // Lingua e valuta vivono in root: sono una scelta sola e valgono per tutta
   // l'app, non per questa pagina.
@@ -231,6 +241,26 @@ export default function SupabaseSettings() {
               nextSync={sync.nextSync}
               timeZone={sync.timeZone}
             />
+
+            {/* Account e database: cambiarli o staccarli. Stava in dashboard,
+                dove pero' e' un comando che si usa una volta ogni tanto in
+                mezzo a numeri che si guardano ogni giorno. Qui sta accanto ai
+                dati del collegamento, che e' dove lo si va a cercare. */}
+            {account.connected && (
+              <ConnectionCard>
+                <SupabaseAccountConnect
+                  connected
+                  projectName={config?.projectRef ?? undefined}
+                  projectUrl={config?.databaseUrl ?? undefined}
+                />
+                <SupabaseProjectConnect
+                  connected
+                  projectName={config?.projectRef ?? undefined}
+                  projectUrl={config?.databaseUrl ?? undefined}
+                  authorization={authorization}
+                />
+              </ConnectionCard>
+            )}
 
           </BlockStack>
         </Layout.Section>
