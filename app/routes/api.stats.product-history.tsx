@@ -4,6 +4,7 @@ import { json } from '@remix-run/node';
 import { authenticate } from '~/shopify.server';
 import { prisma } from '~/db.server';
 import { buildMonthSeries, monthLabel } from '~/lib/stats/history-series';
+import { localeForShop } from '~/lib/i18n/server';
 import { findPlanByName } from '~/lib/billing/find-plan.server';
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -35,7 +36,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   return json({
     points: buildMonthSeries(previous ? [previous, ...inMonth] : inMonth, now),
-    monthLabel: monthLabel(now),
+    monthLabel: monthLabel(now, await localeForShop(session.shop)),
     // Primo giorno del mese mostrato: al grafico serve per scrivere la data per
     // esteso nel riquadro del punto, dove il solo giorno non basterebbe.
     monthStart: monthStart.toISOString(),

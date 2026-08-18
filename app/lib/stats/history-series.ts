@@ -1,4 +1,5 @@
 import type { ProductEligibilitySnapshot } from '@prisma/client';
+import type { Locale } from '~/lib/i18n/locales';
 
 export interface HistoryPoint {
   /** Giorno del mese, da 1 all'ultimo. */
@@ -7,24 +8,21 @@ export interface HistoryPoint {
   count: number | null;
 }
 
-const MONTH_NAMES = [
-  'Gennaio',
-  'Febbraio',
-  'Marzo',
-  'Aprile',
-  'Maggio',
-  'Giugno',
-  'Luglio',
-  'Agosto',
-  'Settembre',
-  'Ottobre',
-  'Novembre',
-  'Dicembre',
-];
-
-/** Etichetta del mese mostrato dal grafico, es. "Agosto 2026". */
-export function monthLabel(today: Date): string {
-  return `${MONTH_NAMES[today.getUTCMonth()]} ${today.getUTCFullYear()}`;
+/**
+ * Etichetta del mese mostrato dal grafico: "Agosto 2026", "August 2026".
+ *
+ * I nomi dei mesi non si tengono in un elenco nostro: sono la cosa che ogni
+ * lingua sa gia' scrivere da se', e un elenco per lingua andrebbe rifatto a
+ * ogni lingua nuova. In italiano la maiuscola iniziale la mettiamo noi — Intl
+ * scrive "agosto", ma qui e' il titolo di un grafico.
+ */
+export function monthLabel(today: Date, locale: Locale): string {
+  const written = new Intl.DateTimeFormat(locale === 'it' ? 'it-IT' : 'en-US', {
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(today);
+  return written.charAt(0).toUpperCase() + written.slice(1);
 }
 
 /**
@@ -105,6 +103,7 @@ export function buildMonthSeries(
 export function pointDateLabel(
   dayKey: string | number,
   monthStart: string | null | undefined,
+  locale: Locale,
 ): string {
   const raw = String(dayKey);
   const day = Number(raw);
@@ -115,6 +114,15 @@ export function pointDateLabel(
   if (Number.isNaN(start.getTime())) return raw;
 
   // Il mese per esteso, come nel sottotitolo della card: una data si legge
-  // meglio di tre numeri separati da barre.
-  return `${day} ${MONTH_NAMES[start.getUTCMonth()]} ${start.getUTCFullYear()}`;
+  // meglio di tre numeri separati da barre. Il giorno lo mettiamo noi perche'
+  // quello vero e' il numero sull'asse, non la data di `monthStart`.
+  const withDay = new Date(
+    Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), day),
+  );
+  return new Intl.DateTimeFormat(locale === 'it' ? 'it-IT' : 'en-US', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(withDay);
 }

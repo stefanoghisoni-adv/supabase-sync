@@ -13,6 +13,7 @@ import { LineChart, PolarisVizProvider, TooltipContent } from '@shopify/polaris-
 import { FONT_FAMILY } from '@shopify/polaris-viz-core';
 import type { DataSeries } from '@shopify/polaris-viz-core';
 import { pointDateLabel } from '~/lib/stats/history-series';
+import { useLocale, useT } from '~/lib/i18n/context';
 import { AXIS_PADDING_SERIES, ELIGIBLE_COLOR } from './EligibilityChart';
 
 // Lo stesso arancione della linea tratteggiata: il numero sull'asse e la soglia
@@ -133,6 +134,8 @@ function LimitTickLabel({ y, value }: { y: number; value: number }) {
  * serie sono dichiarati invece che ereditati dal tema.
  */
 function ChartLegend({ hasLimit }: { hasLimit: boolean }) {
+  const t = useT();
+
   return (
     <div
       style={{
@@ -142,8 +145,8 @@ function ChartLegend({ hasLimit }: { hasLimit: boolean }) {
         paddingBlockStart: 'var(--p-space-300)',
       }}
     >
-      <LegendItem color={ELIGIBLE_COLOR} label="Prodotti sincronizzabili" />
-      {hasLimit && <LegendItem color={LIMIT_COLOR} label="Limite del piano" dashed />}
+      <LegendItem color={ELIGIBLE_COLOR} label={t.chart.title} />
+      {hasLimit && <LegendItem color={LIMIT_COLOR} label={t.chart.planLimit} dashed />}
     </div>
   );
 }
@@ -190,6 +193,8 @@ export default function EligibilityChartCanvas({
   limit,
   monthStart,
 }: Props) {
+  const locale = useLocale();
+
   return (
     // polaris-viz richiede un contenitore con altezza esplicita per disegnare.
     // L'altezza non e' piu' un numero fisso ma quella che il corpo della card
@@ -214,7 +219,7 @@ export default function EligibilityChartCanvas({
             renderTooltipContent: (tooltip) => (
               <TooltipContent
                 theme={tooltip.theme}
-                title={pointDateLabel(tooltip.title ?? '', monthStart)}
+                title={pointDateLabel(tooltip.title ?? '', monthStart, locale)}
                 data={tooltip.data.map((series) => ({
                   shape: series.shape,
                   name: series.name,

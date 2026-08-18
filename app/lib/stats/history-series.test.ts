@@ -14,11 +14,11 @@ function snapshot(day: string, eligibleCount: number): ProductEligibilitySnapsho
 
 describe('monthLabel', () => {
   it('mese e anno in chiaro', () => {
-    expect(monthLabel(new Date('2026-08-01T12:00:00Z'))).toBe('Agosto 2026');
+    expect(monthLabel(new Date('2026-08-01T12:00:00Z'), 'it')).toBe('Agosto 2026');
   });
   it('legge il mese in UTC', () => {
     // In fuso positivo i getter locali direbbero "1 settembre".
-    expect(monthLabel(new Date('2026-08-31T23:30:00Z'))).toBe('Agosto 2026');
+    expect(monthLabel(new Date('2026-08-31T23:30:00Z'), 'it')).toBe('Agosto 2026');
   });
 });
 
@@ -139,21 +139,23 @@ describe('pointDateLabel', () => {
   const monthStart = '2026-08-01T00:00:00.000Z';
 
   it('il giorno diventa la data per esteso', () => {
-    expect(pointDateLabel(1, monthStart)).toBe('1 Agosto 2026');
-    expect(pointDateLabel('31', monthStart)).toBe('31 Agosto 2026');
+    // Mese minuscolo: e' come l'italiano scrive una data dentro una frase, ed
+    // e' la forma che Intl produce.
+    expect(pointDateLabel(1, monthStart, 'it')).toBe('1 agosto 2026');
+    expect(pointDateLabel('31', monthStart, 'it')).toBe('31 agosto 2026');
   });
 
-  it('il mese e’ scritto come nel sottotitolo della card', () => {
-    expect(pointDateLabel(3, '2026-01-01T00:00:00.000Z')).toBe('3 Gennaio 2026');
-    expect(pointDateLabel(15, '2026-12-01T00:00:00.000Z')).toBe('15 Dicembre 2026');
+  it('ogni lingua scrive la data a modo suo', () => {
+    expect(pointDateLabel(3, '2026-01-01T00:00:00.000Z', 'it')).toBe('3 gennaio 2026');
+    expect(pointDateLabel(15, '2026-12-01T00:00:00.000Z', 'en')).toBe('December 15, 2026');
   });
 
   it('senza mese o con un giorno illeggibile resta il numero nudo', () => {
     // Meglio un numero nudo di una data inventata.
-    expect(pointDateLabel(7, null)).toBe('7');
-    expect(pointDateLabel(7, 'non-una-data')).toBe('7');
-    expect(pointDateLabel('Prodotti', monthStart)).toBe('Prodotti');
-    expect(pointDateLabel(0, monthStart)).toBe('0');
-    expect(pointDateLabel(32, monthStart)).toBe('32');
+    expect(pointDateLabel(7, null, 'it')).toBe('7');
+    expect(pointDateLabel(7, 'non-una-data', 'it')).toBe('7');
+    expect(pointDateLabel('Prodotti', monthStart, 'it')).toBe('Prodotti');
+    expect(pointDateLabel(0, monthStart, 'it')).toBe('0');
+    expect(pointDateLabel(32, monthStart, 'it')).toBe('32');
   });
 });

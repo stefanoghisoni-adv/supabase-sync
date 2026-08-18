@@ -250,16 +250,21 @@ export function ErrorBoundary() {
   // a chi invece vuole fare upgrade.
   const canSeePlanTab = rootData?.canSeePlanTab ?? true;
   const adminUrl = rootData?.adminAppUrl ?? null;
+  // Anche la pagina d'errore parla la lingua del merchant. Qui non c'e' il
+  // provider — Remix rende questa al posto dell'app — quindi il dizionario si
+  // prende dalla lingua che il loader di root aveva gia' risolto, e se e'
+  // saltato anche quello resta la lingua di riserva.
+  const strings = dictionaryFor(rootData?.locale ?? FALLBACK_LOCALE);
 
-  let title = 'Si è verificato un errore';
-  let detail = 'Errore sconosciuto';
+  let title = strings.errorPage.title;
+  let detail = strings.errorPage.unknown;
   // Un errore di rete lato client ("Failed to fetch") non è un guasto dell'app:
   // è la connessione dell'utente caduta durante una richiesta. Va trattato come
   // transitorio e recuperabile, non con un allarme rosso da errore fatale.
   let transient = false;
 
   if (isRouteErrorResponse(error)) {
-    title = `Errore ${error.status} ${error.statusText}`;
+    title = strings.errorPage.status(error.status, error.statusText);
     detail =
       typeof error.data === 'string'
         ? error.data
@@ -268,10 +273,8 @@ export function ErrorBoundary() {
     detail = error.message;
     if (/failed to fetch|networkerror|load failed/i.test(error.message)) {
       transient = true;
-      title = 'Connessione assente';
-      detail =
-        'Il controllo della connessione non è andato a buon fine: verifica la ' +
-        'rete e aggiorna la pagina.';
+      title = strings.errorPage.offlineTitle;
+      detail = strings.errorPage.offlineBody;
     }
   }
 
@@ -283,13 +286,13 @@ export function ErrorBoundary() {
                 un secondo link alla stessa pagina, che e' quello visibile —
                 senza, per tornare alla dashboard bisogna cliccare il nome. */}
             <Link to="/" rel="home">
-              Dashboard
+              {strings.common.dashboard}
             </Link>
-            <Link to="/">Dashboard</Link>
-            <Link to="/products/issues">Prodotti non idonei</Link>
-            <Link to="/logs">Logs</Link>
-            {canSeePlanTab && <Link to="/plan">Piano</Link>}
-            <Link to="/settings/supabase">Impostazioni</Link>
+            <Link to="/">{strings.common.dashboard}</Link>
+            <Link to="/products/issues">{strings.common.productIssues}</Link>
+            <Link to="/logs">{strings.common.logs}</Link>
+            {canSeePlanTab && <Link to="/plan">{strings.common.plan}</Link>}
+            <Link to="/settings/supabase">{strings.common.settings}</Link>
           </NavMenu>
           <Page title="CoreWard">
             <BlockStack gap="400">
@@ -303,7 +306,7 @@ export function ErrorBoundary() {
                 action={
                   transient
                     ? {
-                        content: 'Aggiorna pagina',
+                        content: strings.errorPage.refresh,
                         onAction: () => reloadWholePage(adminUrl, window),
                       }
                     : undefined

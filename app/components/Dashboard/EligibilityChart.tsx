@@ -1,6 +1,7 @@
 import { useState, useEffect, lazy, Suspense, Component } from 'react';
 import type { ReactNode } from 'react';
 import { Card, Text, BlockStack, Box } from '@shopify/polaris';
+import { useT } from '~/lib/i18n/context';
 import { computeChartYMax, computeChartYTicks } from './chart-scale';
 
 // Import DINAMICO: il modulo che contiene polaris-viz non deve finire nel grafo
@@ -42,7 +43,10 @@ interface EligibilityChartProps {
 // resta usabile e al posto del grafico compare una riga di testo.
 // E' una class component perche' React non offre altro modo di intercettare un
 // errore di render; l'interfaccia che rende resta Polaris.
-class ChartErrorBoundary extends Component<{ children: ReactNode }, { failed: boolean }> {
+class ChartErrorBoundary extends Component<
+  { children: ReactNode; message: string },
+  { failed: boolean }
+> {
   state = { failed: false };
 
   static getDerivedStateFromError() {
@@ -57,7 +61,7 @@ class ChartErrorBoundary extends Component<{ children: ReactNode }, { failed: bo
     if (this.state.failed) {
       return (
         <Text as="p" tone="subdued">
-          Grafico non disponibile al momento. Ricarica la pagina per riprovare.
+          {this.props.message}
         </Text>
       );
     }
@@ -77,12 +81,14 @@ function ChartCard({
   subtitle: string;
   children: React.ReactNode;
 }) {
+  const t = useT();
+
   return (
     <div className="chart-card">
       <Card>
         <BlockStack gap="200">
           <Text as="h2" variant="headingMd">
-            Prodotti sincronizzabili
+            {t.chart.title}
           </Text>
           <Text as="p" tone="subdued">
             {subtitle}
@@ -116,6 +122,7 @@ export function EligibilityChart({
   planLimit,
   loading,
 }: EligibilityChartProps) {
+  const t = useT();
   // Il grafico esiste solo nel browser: in SSR si rende lo scheletro.
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -127,7 +134,7 @@ export function EligibilityChart({
   );
   // Finche' i dati non arrivano il mese non e' noto: il sottotitolo dice
   // comunque che cosa si stara' guardando.
-  const subtitle = monthLabel ?? 'Mese corrente';
+  const subtitle = monthLabel ?? t.chart.currentMonth;
 
   if (loading || !mounted) {
     return <ChartCard subtitle={subtitle}>{skeleton}</ChartCard>;
@@ -138,9 +145,7 @@ export function EligibilityChart({
   if (points.length === 0) {
     return (
       <ChartCard subtitle={subtitle}>
-        <Text as="p" tone="subdued">
-          Lo storico si costruisce da qui in avanti, un punto al giorno.
-        </Text>
+        <Text as="p" tone="subdued">{t.chart.building}</Text>
       </ChartCard>
     );
   }
@@ -153,7 +158,7 @@ export function EligibilityChart({
   // l'aspetto non cambia.
   const series: ChartSeries[] = [
     {
-      name: 'Prodotti sincronizzabili',
+      name: t.chart.title,
       color: ELIGIBLE_COLOR,
       data: points.map((p) => ({ key: String(p.day), value: p.count })),
     },
@@ -163,7 +168,7 @@ export function EligibilityChart({
   // Annotation di polaris-viz non espongono il colore, una serie si'.
   if (planLimit != null) {
     series.push({
-      name: 'Limite del piano',
+      name: t.chart.planLimit,
       data: points.map((p) => ({ key: String(p.day), value: planLimit })),
       color: '#FF8A00',
       styleOverride: { line: { strokeDasharray: '6 4', width: 2, hasArea: false } },
@@ -198,7 +203,7 @@ export function EligibilityChart({
 
   return (
     <ChartCard subtitle={subtitle}>
-      <ChartErrorBoundary>
+      <ChartErrorBoundary message={t.chart.unavailable}>
         <Suspense fallback={skeleton}>
           <EligibilityChartCanvas
             series={series}

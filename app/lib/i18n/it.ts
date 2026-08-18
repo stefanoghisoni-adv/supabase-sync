@@ -560,6 +560,27 @@ export const it = {
     recheckFailed: 'Ricontrollo non riuscito. Riprova.',
   },
 
+  // Il grafico dei prodotti sincronizzabili.
+  chart: {
+    title: 'Prodotti sincronizzabili',
+    currentMonth: 'Mese corrente',
+    building: 'Lo storico si costruisce da qui in avanti, un punto al giorno.',
+    unavailable: 'Grafico non disponibile al momento. Ricarica la pagina per riprovare.',
+    planLimit: 'Limite del piano',
+  },
+
+  // La pagina che compare quando qualcosa e' andato storto davvero.
+  errorPage: {
+    title: 'Si è verificato un errore',
+    unknown: 'Errore sconosciuto',
+    status: (status: number, text: string) => `Errore ${status} ${text}`,
+    offlineTitle: 'Connessione assente',
+    offlineBody:
+      'Il controllo della connessione non è andato a buon fine: verifica la rete e aggiorna la ' +
+      'pagina.',
+    refresh: 'Aggiorna pagina',
+  },
+
   sync: {
     title: 'Sincronizzazione',
     frequency: 'Frequenza',

@@ -527,6 +527,24 @@ export const en: typeof it = {
     recheckFailed: 'The recheck didn’t go through. Try again.',
   },
 
+  chart: {
+    title: 'Products synced',
+    currentMonth: 'This month',
+    building: 'The history builds up from here, one point a day.',
+    unavailable: 'The chart isn’t available right now. Reload the page to try again.',
+    planLimit: 'Plan limit',
+  },
+
+  errorPage: {
+    title: 'Something went wrong',
+    unknown: 'Unknown error',
+    status: (status: number, text: string) => `Error ${status} ${text}`,
+    offlineTitle: 'No connection',
+    offlineBody:
+      'The connection check didn’t go through: check your network and refresh the page.',
+    refresh: 'Refresh page',
+  },
+
   sync: {
     title: 'Sync',
     frequency: 'Frequency',
