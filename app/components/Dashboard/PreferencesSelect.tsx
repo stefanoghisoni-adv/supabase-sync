@@ -148,7 +148,7 @@ export function PreferencesSelect({
           all'altra taglierebbero i nomi delle lingue. */}
       <Box minWidth="380px">
         <InlineGrid columns={2}>
-          {column(t.language.label, locales, pending.locale, (next) =>
+          {column(t.language.languageColumn, locales, pending.locale, (next) =>
             setPending((p) => ({ ...p, locale: next as Locale })),
           )}
           {column(t.language.currency, currencies, pending.currency, (next) =>

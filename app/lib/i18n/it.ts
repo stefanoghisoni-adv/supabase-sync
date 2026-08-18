@@ -33,6 +33,8 @@ export const it = {
 
   language: {
     label: 'Lingua/valuta',
+    /** Titolo della colonna dentro il riquadro: li' la valuta ha la sua. */
+    languageColumn: 'Lingua',
     currency: 'Valuta',
     /** Testo del campo di ricerca, quando le lingue sono molte. */
     searchPlaceholder: 'Cerca una lingua…',
