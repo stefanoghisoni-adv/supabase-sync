@@ -75,6 +75,7 @@ import {
 } from '~/components/Dashboard/tracking-platforms';
 import { preselectedPlan, recommendedPlan } from '~/components/Dashboard/plan-step';
 import { resolveShopPricing } from '~/lib/billing/shop-pricing.server';
+import { SETUP_CONTAINER } from '~/components/Dashboard/setup-container';
 import { wantedCurrency } from '~/lib/i18n/preferences';
 import {
   PreferencesSelect,
@@ -82,21 +83,6 @@ import {
 } from '~/components/Dashboard/PreferencesSelect';
 import type { loader as rootLoader } from '~/root';
 
-/**
- * Larghezza del contenitore durante la configurazione.
- *
- * E' quella che la Page aveva prima di passare a `fullWidth`, presa
- * dall'espressione di Polaris e non da un numero copiato: resta allineata anche
- * se il tema cambia. Vale per i passi e per gli avvisi che li accompagnano —
- * un avviso largo tutto lo schermo sopra una colonna stretta sembrerebbe
- * parlare di un'altra pagina.
- */
-const SETUP_CONTAINER: CSSProperties = {
-  maxWidth:
-    'calc(var(--pg-layout-width-primary-max) + var(--pg-layout-width-secondary-max) + var(--pg-layout-width-inner-spacing-base))',
-  marginInline: 'auto',
-  width: '100%',
-};
 
 // Solo per questo store mostriamo il messaggio d'errore reale (utile in debug),
 // invece del generico "Errore interno": gli altri merchant non devono vedere

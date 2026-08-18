@@ -18,17 +18,25 @@ import {
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const { session } = await authenticate.admin(request);
-  const shop = await prisma.shop.findUnique({ where: { shopDomain: session.shop } });
+  const shop = await prisma.shop.findUnique({
+    where: { shopDomain: session.shop },
+    include: { supabaseConfig: true },
+  });
   if (!shop) throw new Response('Shop non trovato', { status: 404 });
 
   try {
     const token = await getValidAccessToken(shop.id);
     const projects = await listProjects(token);
 
-    // Stessa strategia della creazione progetto: lo slug dell'organizzazione lo
-    // ricaviamo dai progetti esistenti (scope Projects:Read, gia' concesso) e
-    // ricadiamo su listOrganizations solo per account a zero progetti.
-    let orgSlug: string | null = projects[0]?.organization_slug ?? null;
+    // L'organizzazione che conta e' quella che ospita il database collegato:
+    // un account puo' averne piu' d'una, con piani diversi, e guardando quella
+    // del primo progetto dell'elenco si finiva per leggere il piano sbagliato —
+    // e a dire "puoi crearne un altro" dove non si puo'.
+    const connectedRef = shop.supabaseConfig?.supabaseProjectRef ?? null;
+    let orgSlug: string | null =
+      projects.find((p) => p.id === connectedRef)?.organization_slug ??
+      projects[0]?.organization_slug ??
+      null;
     if (!orgSlug) {
       try {
         const orgs = await listOrganizations(token);
@@ -57,6 +65,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     // Diagnostica: sempre nei log del server, così è consultabile su Vercel.
     const diagnostic =
       `progetti=${projects.length} attivi=${activeProjects} orgSlug=${orgSlug ?? 'n/d'} ` +
+      `collegato=${connectedRef ?? 'n/d'} ` +
       `planHttp=${planResult.httpStatus ?? 'n/d'} planRaw=${planResult.rawPlan ?? 'n/d'} ` +
       `max=${maxProjects ?? 'n/d'} limitReached=${limitReached}`;
     console.log('[api.supabase.project-limits]', diagnostic);

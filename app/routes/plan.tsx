@@ -30,6 +30,7 @@ import { type BillingInterval } from '~/lib/billing/partner-pricing';
 
 import { shouldHighlightRecommended } from '~/components/Billing/plan-highlight';
 import { PlanOptionGrid } from '~/components/Dashboard/PlanOptionGrid';
+import { SETUP_CONTAINER } from '~/components/Dashboard/setup-container';
 import { preselectedPlan } from '~/components/Dashboard/plan-step';
 import { samePlanName } from '~/lib/billing/plan-name';
 import { canAccessPlanTab } from '~/components/Billing/plan-access';
@@ -251,6 +252,10 @@ export default function Plan() {
         },
       ]}
     >
+      {/* Stessa larghezza dei passi della configurazione: sono le stesse card,
+          e a larghezze diverse gli stessi quattro piani sembrano due cose
+          diverse. */}
+      <div style={SETUP_CONTAINER}>
       <BlockStack gap="500">
         {/* Banner di esito dopo il ritorno dal flusso di addebito. */}
         {outcome === 'success' && (
@@ -404,6 +409,7 @@ export default function Plan() {
           {t.plan.billedByShopify}
         </Text>
       </BlockStack>
+      </div>
 
       {/* Respiro in fondo, come le altre tab. */}
       <Box paddingBlockEnd="800" />

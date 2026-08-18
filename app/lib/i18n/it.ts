@@ -207,6 +207,8 @@ export const it = {
       limitAfter:
         ', oppure metti in pausa un progetto esistente dalla dashboard Supabase: i progetti in pausa non occupano nessuno slot.',
       connectedTo: 'Database collegato:',
+      projectsUsed: (used: number, max: number) => `${used} di ${max} usati`,
+      projectsActive: (n: number) => `${n} ${n === 1 ? 'progetto attivo' : 'progetti attivi'}`,
       manage: 'Gestisci',
       change: 'Cambia database',
       disconnect: 'Disconnetti',

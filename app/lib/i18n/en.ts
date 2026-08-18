@@ -202,6 +202,8 @@ export const en: typeof it = {
       limitAfter:
         ', or pause an existing project from the Supabase dashboard: paused projects take up no slot.',
       connectedTo: 'Database connected:',
+      projectsUsed: (used: number, max: number) => `${used} of ${max} used`,
+      projectsActive: (n: number) => `${n} ${n === 1 ? 'active project' : 'active projects'}`,
       manage: 'Manage',
       change: 'Change database',
       disconnect: 'Disconnect',
