@@ -972,6 +972,9 @@ export default function Dashboard() {
           key={supabaseAccountConnected ? 'connected' : 'disconnected'}
           connected={supabaseAccountConnected}
           disabled={blocked}
+          projectName={shop.supabaseConfig?.supabaseProjectRef ?? undefined}
+          projectUrl={shop.supabaseConfig?.supabaseUrl ?? undefined}
+          onDisconnected={setDisconnectDone}
           onStatusChange={setConnectStatus}
         />
       ),
@@ -990,7 +993,6 @@ export default function Dashboard() {
           projectUrl={shop.supabaseConfig?.supabaseUrl ?? undefined}
           disabled={blocked}
           authorization={authorization}
-          onDisconnected={setDisconnectDone}
         />
       ),
     },
@@ -1265,14 +1267,19 @@ export default function Dashboard() {
             {/* Gli stessi componenti dei passi: a collegamento fatto si
                 riducono all'account, al nome del database e ai pulsanti per
                 cambiarlo o staccarlo, con la conferma di sempre. */}
-            <SupabaseAccountConnect connected disabled={blocked} />
+            <SupabaseAccountConnect
+              connected
+              projectName={shop.supabaseConfig?.supabaseProjectRef ?? undefined}
+              projectUrl={shop.supabaseConfig?.supabaseUrl ?? undefined}
+              onDisconnected={setDisconnectDone}
+              disabled={blocked}
+            />
             <SupabaseProjectConnect
               connected
               projectName={shop.supabaseConfig?.supabaseProjectRef ?? undefined}
               projectUrl={shop.supabaseConfig?.supabaseUrl ?? undefined}
               disabled={blocked}
               authorization={authorization}
-              onDisconnected={setDisconnectDone}
             />
           </ConnectionCard>
         </InlineGrid>

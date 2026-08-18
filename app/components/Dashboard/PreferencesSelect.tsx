@@ -95,7 +95,18 @@ export function PreferencesSelect({
     // maxHeight + overflow: Polaris non espone lo scorrimento di una singola
     // colonna, e Popover.Pane ne farebbe scorrere una sola per tutto il
     // riquadro — che e' esattamente quel che non vogliamo.
-    <div style={{ maxHeight: COLUMN_MAX_HEIGHT, overflowY: 'auto' }}>
+    //
+    // overscrollBehavior: arrivato in fondo alla colonna, la rotellina non
+    // deve passare il turno alla pagina sotto. Chi sta scorrendo un elenco
+    // dentro un riquadro aperto non si aspetta di vedersi scorrere via la
+    // pagina.
+    <div
+      style={{
+        maxHeight: COLUMN_MAX_HEIGHT,
+        overflowY: 'auto',
+        overscrollBehavior: 'contain',
+      }}
+    >
       <OptionList
         title={title}
         options={options}

@@ -187,6 +187,7 @@ export const en: typeof it = {
         after: ' (only the sync stops). Either way the connection is removed.',
       },
       typeName: 'Type the project name below',
+      typeNameHelp: 'Deletion only starts if the name matches.',
       projectName: 'Project name',
       syncDisabled: 'Sync disabled.',
       syncSuspended: 'Sync suspended.',

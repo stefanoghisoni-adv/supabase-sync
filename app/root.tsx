@@ -85,6 +85,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         id: true,
         currentPlan: true,
         locale: true,
+        preferredCurrency: true,
         detectedLocale: true,
         partnerName: true,
       },

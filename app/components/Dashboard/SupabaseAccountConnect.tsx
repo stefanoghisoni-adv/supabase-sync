@@ -2,12 +2,17 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useFetcher, useRevalidator } from '@remix-run/react';
 import { BlockStack, Button, Banner, InlineStack, Spinner, Text } from '@shopify/polaris';
 import { useT } from '~/lib/i18n/context';
+import { DisconnectSupabase, type DisconnectMode } from './DisconnectSupabase';
 
 export type SupabaseConnectStatus = 'idle' | 'in_progress' | 'failed';
 
 export interface SupabaseAccountConnectProps {
   /** L'accesso a Supabase risulta gia' fatto. */
   connected: boolean;
+  /** Il progetto collegato, se ce n'e' uno: serve alla disconnessione. */
+  projectName?: string | null;
+  projectUrl?: string | null;
+  onDisconnected?: (mode: DisconnectMode) => void;
   /** Negozio non ENABLED: nessuna azione disponibile. */
   disabled?: boolean;
   // Notifica il parent lo stato del flusso (guida il badge del passo:
@@ -26,6 +31,9 @@ export interface SupabaseAccountConnectProps {
  */
 export function SupabaseAccountConnect({
   connected,
+  projectName,
+  projectUrl,
+  onDisconnected,
   disabled,
   onStatusChange,
 }: SupabaseAccountConnectProps) {
@@ -249,13 +257,26 @@ export function SupabaseAccountConnect({
       );
     }
     return (
-      <Text as="p" tone="subdued">
-        {/* Senza email la risposta e' arrivata lo stesso: si dice quel che si sa,
-            non si resta a girare su un dato che non tornera'. */}
-        {accountEmail
-          ? t.connect.account.connectedWith(accountEmail)
-          : t.connect.account.connectedNoEmail}
-      </Text>
+      // Lo scollegamento sta qui e non nel passo del database: e' l'accesso a
+      // Supabase che si revoca, e dopo non c'e' piu' nessun database da
+      // cambiare.
+      <BlockStack gap="300">
+        <Text as="p" tone="subdued">
+          {/* Senza email la risposta e' arrivata lo stesso: si dice quel che si
+              sa, non si resta a girare su un dato che non tornera'. */}
+          {accountEmail
+            ? t.connect.account.connectedWith(accountEmail)
+            : t.connect.account.connectedNoEmail}
+        </Text>
+        <InlineStack>
+          <DisconnectSupabase
+            projectName={projectName}
+            projectUrl={projectUrl}
+            disabled={disabled}
+            onDisconnected={onDisconnected}
+          />
+        </InlineStack>
+      </BlockStack>
     );
   }
 

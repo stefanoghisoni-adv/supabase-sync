@@ -11,7 +11,6 @@ import {
   InlineStack,
   Labelled,
   Listbox,
-  Modal,
   OptionList,
   Popover,
   Spinner,
@@ -20,7 +19,6 @@ import {
 } from '@shopify/polaris';
 import { SearchIcon, PlusIcon } from '@shopify/polaris-icons';
 import { groupRegionsByContinent } from '~/lib/supabase-regions';
-import { projectConfirmationName, matchesProjectName } from './disconnect-confirm';
 
 interface SupabaseProject {
   id: string;
@@ -40,7 +38,6 @@ export interface SupabaseProjectConnectProps {
   authorization?: 'ENABLED' | 'PENDING' | 'DISABLED';
   // Disconnessione riuscita: il parent mostra il banner di conferma in cima alla
   // dashboard. Qui non lo si puo' fare, il componente viene rimontato subito dopo.
-  onDisconnected?: (mode: 'delete' | 'keep') => void;
 }
 
 /**
@@ -56,24 +53,14 @@ export function SupabaseProjectConnect({
   projectUrl,
   disabled,
   authorization = 'ENABLED',
-  onDisconnected,
 }: SupabaseProjectConnectProps) {
   const t = useT();
   const revalidator = useRevalidator();
   const projectsFetcher = useFetcher<{ projects: SupabaseProject[]; error?: string }>();
   const selectFetcher = useFetcher<{ ok?: boolean; error?: string }>();
-  const disconnectFetcher = useFetcher<{ ok?: boolean }>();
 
   const [selectedRef, setSelectedRef] = useState<string>('');
   const [query, setQuery] = useState('');
-  const [showDisconnect, setShowDisconnect] = useState(false);
-  // Secondo passaggio dell'eliminazione: il nome del progetto va scritto a
-  // mano, cosi' un clic distratto non porta via tabelle e dati.
-  const [askingName, setAskingName] = useState(false);
-  const [typedName, setTypedName] = useState('');
-  // Quale azione di disconnessione e' in corso: cosi' il loader appare SOLO sul
-  // bottone cliccato ("Elimina" o "Mantieni"), mentre entrambi restano disabilitati.
-  const [disconnectMode, setDisconnectMode] = useState<'delete' | 'keep' | null>(null);
 
   // Creazione di un nuovo progetto.
   const regionsFetcher = useFetcher<{ regions: { id: string; name: string }[] }>();
@@ -113,13 +100,6 @@ export function SupabaseProjectConnect({
   const planLimitFromCreate = createFetcher.data?.code === 'plan_limit';
   const planLimitHit = Boolean(limits?.limitReached || planLimitFromCreate);
   const planLimitBillingUrl = createFetcher.data?.billingUrl ?? limits?.billingUrl ?? null;
-  const disconnecting = disconnectFetcher.state !== 'idle';
-
-  const confirmationName = projectConfirmationName({ projectName, projectUrl });
-  // Senza un nome da confrontare non si puo' chiedere conferma: in quel caso il
-  // passaggio non compare e resta il comportamento diretto.
-  const nameConfirmed =
-    confirmationName != null && matchesProjectName(typedName, confirmationName);
 
   const [regionPopoverActive, setRegionPopoverActive] = useState(false);
   // Se la richiesta delle region non arriva mai in porto (rete giù, 500), dopo
@@ -194,37 +174,12 @@ export function SupabaseProjectConnect({
     );
   }, [selectFetcher, selectedRef]);
 
-  // Chiudendo il modal si riparte dal principio: riaprirlo non deve ritrovare
-  // il campo gia' compilato dalla volta prima.
-  const closeDisconnect = useCallback(() => {
-    setShowDisconnect(false);
-    setAskingName(false);
-    setTypedName('');
-  }, []);
-
-  const disconnect = useCallback(
-    (deleteData: boolean) => {
-      setDisconnectMode(deleteData ? 'delete' : 'keep');
-      disconnectFetcher.submit(
-        { deleteData },
-        { method: 'post', action: '/api/supabase/disconnect', encType: 'application/json' },
-      );
-    },
-    [disconnectFetcher],
-  );
-
-  // Al successo di selezione o disconnessione, ricarica il loader.
+  // Scelto il database, ricarica il loader: da li' in poi la pagina parla del
+  // collegamento nuovo.
   useEffect(() => {
-    if (selectFetcher.data?.ok || disconnectFetcher.data?.ok) {
-      if (disconnectFetcher.data?.ok) {
-        // disconnectMode dice quale delle due strade e' stata presa: il testo
-        // del banner cambia se i dati sono stati eliminati o mantenuti.
-        onDisconnected?.(disconnectMode ?? 'keep');
-      }
-      revalidator.revalidate();
-    }
+    if (selectFetcher.data?.ok) revalidator.revalidate();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectFetcher.data, disconnectFetcher.data]);
+  }, [selectFetcher.data]);
 
   const projects = projectsFetcher.data?.projects;
   const projectsLoaded = projectsFetcher.state === 'idle' && projects !== undefined;
@@ -245,15 +200,17 @@ export function SupabaseProjectConnect({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showCreate]);
 
-  // Verifica i limiti del piano appena l'elenco progetti è disponibile: il
-  // controllo deve essere già concluso (o in corso, col suo loader) quando
-  // l'utente guarda il pulsante "Crea nuovo progetto".
+  // Verifica i limiti del piano appena serve saperlo: il controllo deve essere
+  // gia' concluso (o in corso, col suo loader) quando il merchant guarda il
+  // pulsante "Crea un nuovo database". Serve in due momenti — mentre sceglie
+  // fra i progetti, e a collegamento fatto, dove quel pulsante sta accanto a
+  // "Cambia database".
   useEffect(() => {
-    if (projectsLoaded && limitsFetcher.state === 'idle' && !limitsFetcher.data) {
+    if ((projectsLoaded || connected) && limitsFetcher.state === 'idle' && !limitsFetcher.data) {
       limitsFetcher.load('/api/supabase/project-limits');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectsLoaded]);
+  }, [projectsLoaded, connected]);
 
   // Quando la creazione ritorna il ref si avvia il polling.
   useEffect(() => {
@@ -333,86 +290,28 @@ export function SupabaseProjectConnect({
         <InlineStack gap="200">
           {/* Cambiare database non e' scollegarsi: si torna alla scelta, e
               quello di adesso resta collegato finche' non se ne conferma un
-              altro. Per questo il comando sta a sinistra e in tono normale —
-              accanto a una disconnessione, che invece e' definitiva. */}
-          <Button onClick={() => setChanging(true)} disabled={disabled || disconnecting}>
+              altro. Scollegarsi e' un'altra cosa e sta nel passo sopra, con
+              l'account. */}
+          <Button onClick={() => setChanging(true)} disabled={disabled}>
             {t.connect.database.change}
           </Button>
+          {/* La seconda strada, accanto alla prima: crearne uno nuovo invece di
+              sceglierne un altro. Spento quando il piano Supabase non consente
+              altri progetti — resta al suo posto per dire cosa non si puo'
+              fare, invece di sparire senza spiegazioni. */}
           <Button
-            tone="critical"
-            onClick={() => setShowDisconnect(true)}
-            loading={disconnecting}
-            disabled={disabled}
+            icon={PlusIcon}
+            onClick={() => {
+              setChanging(true);
+              setShowCreate(true);
+            }}
+            loading={limitsChecking}
+            disabled={disabled || limitsChecking || planLimitHit}
           >
-            {t.connect.database.disconnect}
+            {t.connect.database.create}
           </Button>
         </InlineStack>
 
-        <Modal
-          open={showDisconnect}
-          onClose={closeDisconnect}
-          title={t.connect.database.disconnectTitle}
-          primaryAction={{
-            content: t.connect.database.deleteData,
-            destructive: true,
-            // Primo clic: chiede di scrivere il nome del progetto. Il secondo
-            // cancella davvero, e arriva solo se il nome corrisponde.
-            onAction: () => {
-              if (confirmationName && !askingName) {
-                setAskingName(true);
-                return;
-              }
-              disconnect(true);
-            },
-            loading: disconnecting && disconnectMode === 'delete',
-            disabled: disconnecting || (askingName && !nameConfirmed),
-          }}
-          secondaryActions={[
-            {
-              content: t.connect.database.keepData,
-              onAction: () => disconnect(false),
-              loading: disconnecting && disconnectMode === 'keep',
-              disabled: disconnecting,
-            },
-            {
-              content: t.common.cancel,
-              onAction: closeDisconnect,
-              disabled: disconnecting,
-            },
-          ]}
-        >
-          <Modal.Section>
-            <BlockStack gap="400">
-              <Text as="p">
-                {t.connect.database.disconnectBody.before}
-                <strong>{t.connect.database.disconnectBody.delete}</strong>
-                {t.connect.database.disconnectBody.middle}
-                <strong>{t.connect.database.disconnectBody.keep}</strong>
-                {t.connect.database.disconnectBody.after}
-              </Text>
-
-              {askingName && (
-                <BlockStack gap="200">
-                  <Text as="p">
-                    {t.connect.database.typeName}{' '}
-                    <strong>{confirmationName}</strong>
-                  </Text>
-                  <TextField
-                    label={t.connect.database.projectName}
-                    labelHidden
-                    value={typedName}
-                    onChange={setTypedName}
-                    autoComplete="off"
-                    autoFocus
-                    placeholder={confirmationName ?? ''}
-                    disabled={disconnecting}
-                    helpText="L'eliminazione parte solo se il nome corrisponde."
-                  />
-                </BlockStack>
-              )}
-            </BlockStack>
-          </Modal.Section>
-        </Modal>
       </BlockStack>
     );
   }
@@ -552,24 +451,22 @@ export function SupabaseProjectConnect({
             onClick={() => setShowCreate(true)}
             // Loader finché non sappiamo se il piano consente un altro progetto.
             loading={limitsChecking}
-            disabled={disabled || limitsChecking || disconnecting || planLimitHit}
+            disabled={disabled || limitsChecking || planLimitHit}
           >
             {t.connect.database.create}
           </Button>
           {/* Chi sta cambiando database e' gia' collegato: qui non ha niente da
-              scollegare, ha solo da poter tornare indietro. */}
-          {changing ? (
-            <Button onClick={() => setChanging(false)} disabled={disabled}>
-              {t.common.cancel}
-            </Button>
-          ) : (
+              scollegare, ha solo da poter tornare indietro. Scollegarsi si fa
+              dal passo sopra, dov'e' l'account. */}
+          {changing && (
             <Button
-              tone="critical"
-              onClick={() => disconnect(false)}
-              loading={disconnecting}
-              disabled={disabled || disconnecting}
+              onClick={() => {
+                setChanging(false);
+                setShowCreate(false);
+              }}
+              disabled={disabled}
             >
-              {t.connect.database.disconnect}
+              {t.common.cancel}
             </Button>
           )}
         </InlineStack>

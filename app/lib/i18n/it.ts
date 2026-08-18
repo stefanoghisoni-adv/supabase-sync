@@ -192,6 +192,7 @@ export const it = {
           ' (verrà interrotta solo la sincronizzazione). In entrambi i casi il collegamento verrà rimosso.',
       },
       typeName: 'Inserisci qui sotto il nome del progetto',
+      typeNameHelp: 'L’eliminazione parte solo se il nome corrisponde.',
       projectName: 'Nome del progetto',
       syncDisabled: 'Sincronizzazione disabilitata.',
       syncSuspended: 'Sincronizzazione sospesa.',
