@@ -3,19 +3,20 @@ import {
   planButtonLabel,
   planButtonState,
   billingOutcome,
-  BILLING_SUCCESS_BANNER,
-  BILLING_ERROR_BANNER,
+  billingBanner,
 } from './plan-cta';
+import { it as itDict } from '~/lib/i18n/it';
+import { en as enDict } from '~/lib/i18n/en';
 
 describe('planButtonLabel', () => {
   it('restituisce "Piano attuale" se isCurrent è true', () => {
-    expect(planButtonLabel('Starter', true)).toBe('Piano attuale');
-    expect(planButtonLabel('Professional', true)).toBe('Piano attuale');
+    expect(planButtonLabel('Starter', true, itDict)).toBe('Piano attuale');
+    expect(planButtonLabel('Professional', true, enDict)).toBe('Current plan');
   });
 
   it('restituisce "Scegli <nome>" se isCurrent è false', () => {
-    expect(planButtonLabel('Starter', false)).toBe('Scegli Starter');
-    expect(planButtonLabel('Professional', false)).toBe('Scegli Professional');
+    expect(planButtonLabel('Starter', false, itDict)).toBe('Scegli Starter');
+    expect(planButtonLabel('Professional', false, enDict)).toBe('Choose Professional');
   });
 });
 
@@ -72,16 +73,14 @@ describe('billingOutcome', () => {
   });
 });
 
-describe('BILLING_SUCCESS_BANNER', () => {
-  it('contiene titolo e messaggio in italiano', () => {
-    expect(BILLING_SUCCESS_BANNER.title).toBe('Piano aggiornato');
-    expect(BILLING_SUCCESS_BANNER.message).toContain('Il tuo piano è attivo');
+describe('billingBanner', () => {
+  it('sceglie il banner dell esito, nella lingua di chi guarda', () => {
+    expect(billingBanner('success', itDict).title).toBe('Piano aggiornato');
+    expect(billingBanner('success', enDict).title).toBe('Plan updated');
   });
-});
 
-describe('BILLING_ERROR_BANNER', () => {
-  it('contiene titolo e messaggio in italiano', () => {
-    expect(BILLING_ERROR_BANNER.title).toBe('Cambio piano non completato');
-    expect(BILLING_ERROR_BANNER.message).toContain('non è stato completato');
+  it('il fallito dice che non e cambiato niente: e la prima domanda di chi lo legge', () => {
+    expect(billingBanner('error', itDict).message).toContain('non è stato completato');
+    expect(billingBanner('error', enDict).message).toContain('didn’t go through');
   });
 });

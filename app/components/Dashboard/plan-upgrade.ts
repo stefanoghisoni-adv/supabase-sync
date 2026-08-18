@@ -1,5 +1,9 @@
 import { planLabel } from './account-format';
 import { samePlanName } from '~/lib/billing/plan-name';
+import type { Dictionary } from '~/lib/i18n/context';
+
+/** I soli pezzi di dizionario che servono qui. */
+type Strings = Pick<Dictionary, 'syncCta' | 'planChange'>;
 
 // `lastSyncedPlan` null significa "nessuna sync completata": e' il flusso normale
 // di primo utilizzo, non un cambio di piano da segnalare.
@@ -31,27 +35,30 @@ export interface SyncCta {
  * clienti creata e popolata) parte da solo. Quando finisce, `planChanged` torna
  * falso e il pulsante si assesta da se'.
  */
-export function syncCtaState(opts: {
-  blocked: boolean;
-  inProgress: boolean;
-  completed: boolean;
-  planChanged: boolean;
-}): SyncCta {
+export function syncCtaState(
+  opts: {
+    blocked: boolean;
+    inProgress: boolean;
+    completed: boolean;
+    planChanged: boolean;
+  },
+  t: Pick<Dictionary, 'syncCta'>,
+): SyncCta {
   if (opts.inProgress) {
-    return { label: 'Sincronizzazione in corso…', disabled: true, loading: true };
+    return { label: t.syncCta.running, disabled: true, loading: true };
   }
   // Il cambio di piano viene prima di tutto il resto: appena e' rilevato il
   // recupero parte da solo, quindi il pulsante non deve mai invitare a un clic —
   // nemmeno quando l'ultima corsa e' fallita e sembrerebbe "mai completata".
   if (opts.planChanged) {
-    return { label: 'Aggiornamento in corso…', disabled: true, loading: true };
+    return { label: t.syncCta.updating, disabled: true, loading: true };
   }
   // Mai sincronizzato su questa connessione (anche dopo un ricollegamento):
   // qui il primo avvio resta manuale.
   if (!opts.completed) {
-    return { label: 'Avvia sincronizzazione', disabled: opts.blocked, loading: false };
+    return { label: t.syncCta.start, disabled: opts.blocked, loading: false };
   }
-  return { label: 'Sincronizzazione completata', disabled: true, loading: false };
+  return { label: t.syncCta.completed, disabled: true, loading: false };
 }
 
 // Finestra entro cui non si rinnesca il recupero: copre il tempo fra l'innesco
@@ -83,13 +90,13 @@ function cap(v: number | null): number {
   return v == null ? Number.POSITIVE_INFINITY : v;
 }
 
-function capLabel(v: number | null): string {
-  return v == null ? 'senza limite' : String(v);
+function capLabel(v: number | null, t: Strings): string {
+  return v == null ? t.planChange.capUnlimited : String(v);
 }
 
 // Il tetto detto per esteso, come si legge dentro una frase.
-function capPhrase(v: number | null): string {
-  return v == null ? 'senza limite di prodotti' : `${v} prodotti`;
+function capPhrase(v: number | null, t: Strings): string {
+  return v == null ? t.planChange.capPhraseUnlimited : t.planChange.capPhrase(String(v));
 }
 
 /**
@@ -147,7 +154,7 @@ export function planChangeBanner(opts: {
    * sull'upgrade non compare.
    */
   customersUpgradePlan?: string | null;
-}): PlanChangeBanner | null {
+}, t: Strings): PlanChangeBanner | null {
   const productsDowngrade = opts.planChanged && cap(opts.currentMax) < cap(opts.previousMax);
   // Clienti inclusi dal piano ma tabella ancora da creare: sta per essere
   // provveduta in automatico.
@@ -175,66 +182,43 @@ export function planChangeBanner(opts: {
   // che i clienti gia' raccolti vengano cancellati.
   if (opts.planChanged && customersLost) {
     messages.push([
-      {
-        text: 'Il nuovo limite dei prodotti sincronizzabili previsti dal piano è stato aggiornato a ',
-      },
-      { text: capPhrase(opts.currentMax), bold: true },
-      {
-        text:
-          ' e la sincronizzazione dei dati dei clienti è stata sospesa. I dati dei clienti non ' +
-          'verranno eliminati ma non saranno più aggiornati né per le informazioni dei clienti ' +
-          'né per gli ordini e i dati di profittabilità ad essi connessi.',
-      },
+      { text: t.planChange.downgradeWithCustomers.before },
+      { text: capPhrase(opts.currentMax, t), bold: true },
+      { text: t.planChange.downgradeWithCustomers.after },
     ]);
 
     if (opts.customersUpgradePlan) {
-      messages.push(
-        `Se aggiornerai di nuovo almeno a ${planLabel(opts.customersUpgradePlan)} ` +
-          'la sincronizzazione riprenderà normalmente.',
-      );
+      messages.push(t.planChange.upgradeBack(planLabel(opts.customersUpgradePlan)));
     }
 
-    return { tone: 'warning', title: 'Piano modificato', messages };
+    return { tone: 'warning', title: t.planChange.changedTitle, messages };
   }
 
   if (opts.planChanged) {
     messages.push(
       productsDowngrade
-        ? `Alcuni prodotti verranno rimossi per rispettare il limite del piano: ` +
-            `${capLabel(opts.currentMax)} prodotti sincronizzabili.`
-        : `La sincronizzazione rispetterà automaticamente i nuovi limiti del piano: ` +
-            `${capLabel(opts.currentMax)} prodotti sincronizzabili.`,
+        ? t.planChange.productsDowngrade(capLabel(opts.currentMax, t))
+        : t.planChange.productsUpdated(capLabel(opts.currentMax, t)),
     );
   }
 
   if (customersGained) {
-    messages.push(
-      'La tabella dei clienti che hanno acconsentito al marketing viene creata e ' +
-        'popolata subito, senza che tu debba fare nulla: da qui in avanti si ' +
-        'aggiorna da sola insieme alla sincronizzazione periodica dei prodotti.',
-    );
+    messages.push(t.planChange.customersGained);
   }
 
   if (customersResumed) {
-    messages.push(
-      'La sincronizzazione dei clienti riprende: i dati già raccolti tornano ad ' +
-        'aggiornarsi da soli insieme ai prodotti, senza che tu debba fare nulla.',
-    );
+    messages.push(t.planChange.customersResumed);
   }
 
   if (customersLost) {
-    messages.push(
-      'La sincronizzazione dei clienti si interrompe. I dati già raccolti non ' +
-        'vengono cancellati e restano nel tuo progetto, ma non verranno più ' +
-        'aggiornati né potranno essere usati per il tracciamento.',
-    );
+    messages.push(t.planChange.customersLost);
   }
 
   const isDowngrade = productsDowngrade || customersLost;
 
   return {
     tone: isDowngrade ? 'warning' : 'success',
-    title: isDowngrade ? 'Piano modificato' : 'Piano aggiornato',
+    title: isDowngrade ? t.planChange.changedTitle : t.planChange.updatedTitle,
     messages,
   };
 }

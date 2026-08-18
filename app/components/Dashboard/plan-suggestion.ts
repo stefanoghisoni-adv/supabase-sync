@@ -1,6 +1,9 @@
 import { isSelectablePlan } from '~/components/Billing/plan-access';
 import { formatMoney } from '~/lib/billing/money';
 import type { Locale } from '~/lib/i18n/locales';
+import type { Dictionary } from '~/lib/i18n/context';
+
+type Strings = Pick<Dictionary, 'planCompare'>;
 
 /**
  * Quale piano proporre a chi ha piu' prodotti di quanti il suo ne sincronizzi.
@@ -62,8 +65,8 @@ export function suggestPlanForProducts(
 }
 
 /** Come si scrive un tetto nel confronto fra piani. */
-export function limitLabel(limit: number | null): string {
-  return limit == null ? 'Illimitati' : String(limit);
+export function limitLabel(limit: number | null, t: Strings): string {
+  return limit == null ? t.planCompare.unlimited : String(limit);
 }
 
 export interface PlanComparisonRow {
@@ -85,28 +88,35 @@ export function planComparisonRows(
   /** Valuta dei prezzi qui sopra: arriva con loro, non si indovina. */
   currency: string,
   locale: Locale,
+  t: Strings,
 ): PlanComparisonRow[] {
   const rows: PlanComparisonRow[] = [
     {
-      label: 'Prodotti sincronizzabili',
-      current: limitLabel(currentPlan.maxProducts),
-      next: limitLabel(nextPlan.maxProducts),
+      label: t.planCompare.products,
+      current: limitLabel(currentPlan.maxProducts, t),
+      next: limitLabel(nextPlan.maxProducts, t),
     },
     {
-      label: 'Clienti sincronizzabili',
-      current: currentPlan.customersSyncEnabled ? limitLabel(currentPlan.maxCustomers) : 'Non inclusi',
-      next: nextPlan.customersSyncEnabled ? limitLabel(nextPlan.maxCustomers) : 'Non inclusi',
+      label: t.planCompare.customers,
+      current: currentPlan.customersSyncEnabled
+        ? limitLabel(currentPlan.maxCustomers, t)
+        : t.planCompare.notIncluded,
+      next: nextPlan.customersSyncEnabled
+        ? limitLabel(nextPlan.maxCustomers, t)
+        : t.planCompare.notIncluded,
     },
     {
-      label: 'Costo mensile',
-      current: priceLabel(currentPlan.priceMonthly, currency, locale),
-      next: priceLabel(nextPlan.priceMonthly, currency, locale),
+      label: t.planCompare.monthlyCost,
+      current: priceLabel(currentPlan.priceMonthly, currency, locale, t),
+      next: priceLabel(nextPlan.priceMonthly, currency, locale, t),
     },
   ];
 
   return rows.filter((row) => row.current !== row.next);
 }
 
-function priceLabel(price: number, currency: string, locale: Locale): string {
-  return price === 0 ? 'Gratuito' : `${formatMoney(price, currency, locale)} / mese`;
+function priceLabel(price: number, currency: string, locale: Locale, t: Strings): string {
+  return price === 0
+    ? t.planCompare.free
+    : t.planCompare.perMonth(formatMoney(price, currency, locale));
 }

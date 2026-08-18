@@ -311,6 +311,54 @@ export const en: typeof it = {
   },
 
   plan: {
+    currentPlan: 'Current plan',
+    choose: (plan: string) => `Choose ${plan}`,
+    successBanner: {
+      title: 'Plan updated',
+      message: 'Your plan is active: limits and sync frequency have already been applied.',
+    },
+    errorBanner: {
+      title: 'Plan change not completed',
+      message: 'The plan change didn’t go through. Nothing changed and there are no charges.',
+    },
+    title: 'Plan',
+    blocked: {
+      title: 'You don’t have access to this section',
+      body:
+        'Your plan has no limits and no renewals: there’s nothing to upgrade. Head back to the ' +
+        'dashboard to carry on.',
+    },
+    errorTitle: 'Error',
+    reserved: {
+      title: 'You have a reserved price',
+      before: 'This app has an active partnership with ',
+      after:
+        ', which is why the plans cost you less than list price — monthly and yearly alike. ' +
+        'You’ll find your price on each plan below',
+      forRenewals: (n: number) => `, for the first ${n} ${n === 1 ? 'renewal' : 'renewals'}.`,
+      end: '.',
+    },
+    intro: {
+      title: 'Pick the plan that fits your store',
+      body:
+        'More products covered, more frequent updates and customer data always in step: the ' +
+        'higher the plan, the fresher and more complete the information your tracking works on, ' +
+        'and the more dependable your campaigns and reports.',
+      keepData:
+        'Changing plan doesn’t lose what you’ve already collected: only the limits, the update ' +
+        'frequency and the included features change.',
+    },
+    monthly: 'Monthly',
+    yearly: 'Yearly',
+    yearlyHint: (amount: string) => `Going yearly saves you up to ${amount} a year`,
+    reservedFor: (n: number) =>
+      `Your reserved price applies for ${n} ${n === 1 ? 'renewal' : 'renewals'}`,
+    recommended: 'Recommended',
+    perYear: '/year',
+    perMonth: '/month',
+    billedByShopify:
+      'Billing goes through Shopify, alongside your store’s invoice, and you can change or ' +
+      'cancel your plan whenever you like.',
     features: {
       products: (amount: string) => `Up to ${amount} products`,
       productsUnlimited: 'Unlimited products',
@@ -322,6 +370,98 @@ export const en: typeof it = {
       push: 'Manual push',
       chat: 'Dedicated chat',
     },
+  },
+
+  authBanners: {
+    trackingStillOn:
+      ' Tracking stays on and keeps using the data already synced, which will no longer be updated.',
+    appDisabled: {
+      title: 'App disabled',
+      message:
+        'This store’s access to the app has been disabled: every feature and sync is suspended.',
+    },
+    trialEnded: {
+      title: 'Trial ended',
+      message:
+        'Your trial has ended: the app’s features and syncs are suspended. Upgrade your plan to turn them back on.',
+    },
+    trackingSuspended: {
+      title: 'Tracking suspended',
+      disabled:
+        'Tracking is suspended for this store: the data already synced can’t be used by your tracking tool right now. Contact support.',
+      pending:
+        'Tracking is suspended: the data already synced can’t be used by your tracking tool right now. Upgrade your plan to turn it back on.',
+    },
+  },
+
+  syncCta: {
+    running: 'Syncing…',
+    updating: 'Updating…',
+    start: 'Start sync',
+    completed: 'Sync complete',
+  },
+
+  planChange: {
+    changedTitle: 'Plan changed',
+    updatedTitle: 'Plan updated',
+    capUnlimited: 'no limit',
+    capPhraseUnlimited: 'no product limit',
+    capPhrase: (products: string) => `${products} products`,
+    downgradeWithCustomers: {
+      before: 'Your plan’s limit on synced products is now ',
+      after:
+        ' and customer data syncing has been suspended. Your customer data won’t be deleted, ' +
+        'but it will no longer be updated — neither the customer details nor the orders and ' +
+        'profitability data tied to them.',
+    },
+    upgradeBack: (plan: string) =>
+      `Upgrade to ${plan} or above again and syncing resumes as before.`,
+    productsDowngrade: (cap: string) =>
+      `Some products will be removed to stay within your plan’s limit: ${cap} products synced.`,
+    productsUpdated: (cap: string) =>
+      `Syncing will follow your plan’s new limits automatically: ${cap} products synced.`,
+    customersGained:
+      'The table of customers who opted into marketing is created and filled right away, ' +
+      'with nothing for you to do: from here on it updates by itself alongside the periodic ' +
+      'product sync.',
+    customersResumed:
+      'Customer syncing resumes: the data you already collected goes back to updating by ' +
+      'itself alongside your products, with nothing for you to do.',
+    customersLost:
+      'Customer syncing stops. The data you already collected isn’t deleted and stays in your ' +
+      'project, but it will no longer be updated and can’t be used for tracking.',
+  },
+
+  schemaUpdate: {
+    title: 'Database update available',
+    body:
+      'An update to your database tables is available. You don’t need to open your database, ' +
+      'touch tables or columns, or reconfirm the integration: one click and the update runs for ' +
+      'you. The data already synced stays where it is.',
+    action: 'Run the update on my database',
+  },
+
+  overflow: {
+    title: 'Product limit reached',
+    body: (excluded: number, plan: string) =>
+      `${excluded} ${excluded === 1 ? 'product won’t be synced' : 'products won’t be synced'} ` +
+      `because you’ve reached your plan’s limit. Counting all your products, the plan that fits ` +
+      `you best would be ${plan}.`,
+    upgradeNow: (plan: string) => `Upgrade to ${plan} now`,
+    modalTitle: (plan: string) => `You’re switching to ${plan}`,
+    confirm: 'Confirm and continue',
+    cancel: 'Cancel',
+    whatChanges: 'What changes',
+  },
+
+  planCompare: {
+    products: 'Products synced',
+    customers: 'Customers synced',
+    monthlyCost: 'Monthly cost',
+    notIncluded: 'Not included',
+    unlimited: 'Unlimited',
+    free: 'Free',
+    perMonth: (price: string) => `${price} / month`,
   },
 
   sync: {

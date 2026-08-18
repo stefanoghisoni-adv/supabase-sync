@@ -5,6 +5,7 @@ import {
   limitLabel,
   type PlanForSuggestion,
 } from './plan-suggestion';
+import { it as itDict } from '~/lib/i18n/it';
 
 // Listino reale, cosi' i casi limite sono quelli che i merchant incontrano.
 const PLANS: PlanForSuggestion[] = [
@@ -73,7 +74,7 @@ describe('planComparisonRows', () => {
   const pro = PLANS[1];
 
   it('confronta prodotti, clienti e costo', () => {
-    const rows = planComparisonRows(free, pro, 'EUR', 'it');
+    const rows = planComparisonRows(free, pro, 'USD', 'it', itDict);
     expect(rows.map((r) => r.label)).toEqual([
       'Prodotti sincronizzabili',
       'Clienti sincronizzabili',
@@ -85,7 +86,7 @@ describe('planComparisonRows', () => {
     expect({ ...rows[2], next: rows[2].next.replace(/\u00a0/g, ' ') }).toEqual({
       label: 'Costo mensile',
       current: 'Gratuito',
-      next: '19 € / mese',
+      next: '19 USD / mese',
     });
   });
 
@@ -94,13 +95,13 @@ describe('planComparisonRows', () => {
     // l'aggiornamento meno utile di quanto sia.
     const business = PLANS[2];
     const enterprise = PLANS[3];
-    const rows = planComparisonRows(business, enterprise, 'EUR', 'it');
+    const rows = planComparisonRows(business, enterprise, 'USD', 'it', itDict);
     expect(rows.map((r) => r.label)).not.toContain('Sincronizzazione clienti');
     expect(rows.every((r) => r.current !== r.next)).toBe(true);
   });
 
   it('scrive per esteso l assenza di tetto', () => {
-    expect(limitLabel(null)).toBe('Illimitati');
-    expect(limitLabel(200)).toBe('200');
+    expect(limitLabel(null, itDict)).toBe('Illimitati');
+    expect(limitLabel(200, itDict)).toBe('200');
   });
 });

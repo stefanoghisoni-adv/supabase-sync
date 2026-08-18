@@ -831,7 +831,7 @@ export default function Dashboard() {
     customersTableCreated,
     customersUpgradePlan,
     previousCustomersEnabled,
-  });
+  }, t);
   const hasPlanBanner = planBanner !== null;
 
   // Ciclo di vita del banner. Compare appena c'e' un cambio di piano da
@@ -1121,7 +1121,7 @@ export default function Dashboard() {
         {/* Banner di sospensione (non chiudibili). Uso dell'app e tracciamento
             sono due autorizzazioni indipendenti: puo' esserci l'una senza
             l'altra, e il banner lo dice invece di dare tutto per spento. */}
-        {authorizationBanners(authorization, trackingAuthorization).map((b) => (
+        {authorizationBanners(authorization, trackingAuthorization, t).map((b) => (
           <Banner key={b.id} tone={b.tone} title={b.title}>
             <Text as="p">{b.message}</Text>
           </Banner>

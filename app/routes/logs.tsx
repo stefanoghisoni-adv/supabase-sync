@@ -76,14 +76,14 @@ export default function Logs() {
   return (
     <Page
       fullWidth
-      title="Logs"
+      title={t.logs.title}
       backAction={{ url: '/' }}
       secondaryActions={[
         {
-          content: 'Impostazioni',
+          content: t.common.settings,
           icon: SettingsIcon,
           url: '/settings/supabase',
-          accessibilityLabel: 'Impostazioni',
+          accessibilityLabel: t.common.settings,
           onAction: settings.start,
           disabled: settings.loading,
           loading: settings.loading,
@@ -105,7 +105,7 @@ export default function Logs() {
           {countdown && (
             <Box paddingBlockEnd="400">
               <Banner tone="info">
-                <Text as="p">Prossima sincronizzazione tra {countdown}</Text>
+                <Text as="p">{t.logs.nextSync(countdown)}</Text>
               </Banner>
             </Box>
           )}

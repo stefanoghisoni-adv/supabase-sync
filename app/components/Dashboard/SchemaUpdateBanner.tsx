@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useFetcher, useRevalidator } from '@remix-run/react';
 import { Banner, BlockStack, InlineStack, Text, Button } from '@shopify/polaris';
+import { useT } from '~/lib/i18n/context';
 
 interface MigrateResponse {
   ok: boolean;
@@ -17,6 +18,7 @@ interface MigrateResponse {
  * merchant clicchi nulla.
  */
 export function SchemaUpdateBanner() {
+  const t = useT();
   const fetcher = useFetcher<MigrateResponse>();
   const revalidator = useRevalidator();
   const running = fetcher.state !== 'idle';
@@ -30,14 +32,9 @@ export function SchemaUpdateBanner() {
   }, [fetcher.state, fetcher.data]);
 
   return (
-    <Banner tone="warning" title="Aggiornamento del database disponibile">
+    <Banner tone="warning" title={t.schemaUpdate.title}>
       <BlockStack gap="200">
-        <Text as="p">
-          È disponibile un aggiornamento delle tabelle del tuo database. Non devi
-          accedere al database né toccare tabelle o colonne, e non devi
-          riconfermare l&apos;integrazione: basta un clic e l&apos;aggiornamento
-          viene eseguito per te. I dati già sincronizzati restano dove sono.
-        </Text>
+        <Text as="p">{t.schemaUpdate.body}</Text>
 
         {fetcher.data?.ok === false && fetcher.data.error ? (
           <Text as="p" tone="critical">
@@ -54,7 +51,7 @@ export function SchemaUpdateBanner() {
               fetcher.submit(null, { method: 'post', action: '/api/supabase/migrate' })
             }
           >
-            Esegui aggiornamento sul database
+            {t.schemaUpdate.action}
           </Button>
         </InlineStack>
       </BlockStack>

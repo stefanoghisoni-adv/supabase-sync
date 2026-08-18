@@ -25,7 +25,7 @@ import { authenticate } from '~/shopify.server';
 import { prisma } from '~/db.server';
 import { buildPlanCards, type PlanCard } from '~/components/Billing/plan-catalog';
 import { BASE_CURRENCY, formatMoney, formatMoneyExact } from '~/lib/billing/money';
-import { useLocale } from '~/lib/i18n/context';
+import { useLocale, useT } from '~/lib/i18n/context';
 import type { Locale } from '~/lib/i18n/locales';
 import { resolveShopPricing } from '~/lib/billing/shop-pricing.server';
 import {
@@ -48,8 +48,7 @@ import {
   planButtonLabel,
   planButtonState,
   billingOutcome,
-  BILLING_SUCCESS_BANNER,
-  BILLING_ERROR_BANNER,
+  billingBanner,
 } from '~/components/Billing/plan-cta';
 import { useEffect, useState } from 'react';
 import { useNavLoading } from '~/components/Dashboard/nav-loading';
@@ -152,6 +151,7 @@ export default function Plan() {
   const { currentPlan, blocked, cards, discountIntervals, partnerLabel, currency } =
     useLoaderData<typeof loader>();
   const locale = useLocale();
+  const t = useT();
 
   // Quanto si risparmia al massimo scegliendo l'annuale, sul listino che il
   // merchant vede davvero (riservato se ce l'ha). Serve alla riga accanto al
@@ -234,12 +234,13 @@ export default function Plan() {
   // Nessuna card e nessun prezzo, cosi' non si suggerisce un upgrade che non serve.
   if (blocked) {
     return (
-      <Page fullWidth title="Piano" backAction={{ url: '/', content: 'Dashboard' }}>
-        <Banner tone="critical" title="Non hai accesso a questa sezione">
-          <Text as="p">
-            Il tuo piano è senza limiti e non prevede rinnovi: non c'è nessun
-            aggiornamento da fare. Torna alla dashboard per continuare.
-          </Text>
+      <Page
+        fullWidth
+        title={t.plan.title}
+        backAction={{ url: '/', content: t.common.dashboard }}
+      >
+        <Banner tone="critical" title={t.plan.blocked.title}>
+          <Text as="p">{t.plan.blocked.body}</Text>
         </Banner>
         <Box paddingBlockEnd="800" />
       </Page>
@@ -249,14 +250,14 @@ export default function Plan() {
   return (
     <Page
       fullWidth
-      title="Piano"
-      backAction={{ url: '/', content: 'Dashboard' }}
+      title={t.plan.title}
+      backAction={{ url: '/', content: t.common.dashboard }}
       secondaryActions={[
         {
-          content: 'Impostazioni',
+          content: t.common.settings,
           icon: SettingsIcon,
           url: '/settings/supabase',
-          accessibilityLabel: 'Impostazioni',
+          accessibilityLabel: t.common.settings,
           onAction: settings.start,
           disabled: settings.loading,
           loading: settings.loading,
@@ -268,7 +269,7 @@ export default function Plan() {
         {outcome === 'success' && (
           <Banner
             tone="success"
-            title={BILLING_SUCCESS_BANNER.title}
+            title={t.plan.successBanner.title}
             onDismiss={() => {
               setSearchParams((prev) => {
                 const next = new URLSearchParams(prev);
@@ -277,13 +278,13 @@ export default function Plan() {
               });
             }}
           >
-            <Text as="p">{BILLING_SUCCESS_BANNER.message}</Text>
+            <Text as="p">{t.plan.successBanner.message}</Text>
           </Banner>
         )}
         {outcome === 'error' && (
           <Banner
             tone="warning"
-            title={BILLING_ERROR_BANNER.title}
+            title={t.plan.errorBanner.title}
             onDismiss={() => {
               setSearchParams((prev) => {
                 const next = new URLSearchParams(prev);
@@ -292,7 +293,7 @@ export default function Plan() {
               });
             }}
           >
-            <Text as="p">{BILLING_ERROR_BANNER.message}</Text>
+            <Text as="p">{t.plan.errorBanner.message}</Text>
           </Banner>
         )}
 
@@ -300,7 +301,7 @@ export default function Plan() {
         {fetcherError && (
           <Banner
             tone="critical"
-            title="Errore"
+            title={t.plan.errorTitle}
             onDismiss={() => setFetcherError(null)}
           >
             <Text as="p">{fetcherError}</Text>
@@ -316,18 +317,16 @@ export default function Plan() {
             averli gia' letti. Permanente e non chiudibile — resta vera finche'
             la collaborazione dura, e riguarda una cifra che il merchant paga. */}
         {partnerLabel && (
-          <Banner tone="info" title="Hai un prezzo riservato">
+          <Banner tone="info" title={t.plan.reserved.title}>
             <Text as="p">
-              Quest&apos;app ha una partnership attiva con{' '}
+              {t.plan.reserved.before}
               <Text as="span" fontWeight="semibold">
                 {partnerLabel}
               </Text>
-              , e per questo i piani ti
-              costano meno del listino — sia sul mensile sia sull&apos;annuale. Trovi il
-              prezzo che ti spetta su ogni piano qui sotto
+              {t.plan.reserved.after}
               {discountIntervals != null
-                ? `, per i primi ${discountIntervals} ${discountIntervals === 1 ? 'rinnovo' : 'rinnovi'}.`
-                : '.'}
+                ? t.plan.reserved.forRenewals(discountIntervals)
+                : t.plan.reserved.end}
             </Text>
           </Banner>
         )}
@@ -335,16 +334,13 @@ export default function Plan() {
         <Card>
           <BlockStack gap="200">
             <Text as="h2" variant="headingMd">
-              Scegli il piano adatto al tuo store
+              {t.plan.intro.title}
             </Text>
             <Text as="p" tone="subdued">
-              Più prodotti coperti, aggiornamenti più frequenti e dati cliente sempre
-              allineati: salendo di piano il tuo tracking lavora su informazioni più
-              fresche e complete, con campagne e report più affidabili.
+              {t.plan.intro.body}
             </Text>
             <Text as="p" tone="subdued">
-              Cambiando piano non perdi quello che hai già raccolto: cambiano solo i
-              limiti, la frequenza di aggiornamento e le funzioni incluse.
+              {t.plan.intro.keepData}
             </Text>
           </BlockStack>
         </Card>
@@ -358,27 +354,25 @@ export default function Plan() {
               pressed={interval === 'monthly'}
               onClick={() => setInterval('monthly')}
             >
-              Mensile
+              {t.plan.monthly}
             </Button>
             <Button
               pressed={interval === 'yearly'}
               onClick={() => setInterval('yearly')}
             >
-              Annuale
+              {t.plan.yearly}
             </Button>
           </ButtonGroup>
           {/* Il risparmio dell'annuale va detto, non lasciato da calcolare: e'
               l'unica ragione per sceglierlo, e nessuno moltiplica per dodici. */}
           {interval === 'monthly' && yearlySaving != null && (
             <Text as="span" tone="subdued">
-              Con l&apos;annuale risparmi fino a {formatMoney(yearlySaving, currency, locale)}{' '}
-              l&apos;anno
+              {t.plan.yearlyHint(formatMoney(yearlySaving, currency, locale))}
             </Text>
           )}
           {interval === 'yearly' && discountIntervals != null && (
             <Text as="span" tone="subdued">
-              Il prezzo riservato vale per {discountIntervals}{' '}
-              {discountIntervals === 1 ? 'rinnovo' : 'rinnovi'}
+              {t.plan.reservedFor(discountIntervals)}
             </Text>
           )}
         </InlineStack>
@@ -426,8 +420,8 @@ export default function Plan() {
                           <Text as="h2" variant="headingMd">
                             {plan.name}
                           </Text>
-                          {isHighlighted && <Badge tone="success">Consigliato</Badge>}
-                          {isCurrent && <Badge tone="info">Piano attuale</Badge>}
+                          {isHighlighted && <Badge tone="success">{t.plan.recommended}</Badge>}
+                          {isCurrent && <Badge tone="info">{t.plan.currentPlan}</Badge>}
                         </InlineStack>
 
                         {/* Prezzo, periodo, prezzo pieno barrato e risparmio: tutto
@@ -439,7 +433,7 @@ export default function Plan() {
                             {formatMoney(price.payablePrice, currency, locale)}
                           </Text>
                           <Text as="span" tone="subdued">
-                            {interval === 'yearly' ? '/anno' : '/mese'}
+                            {interval === 'yearly' ? t.plan.perYear : t.plan.perMonth}
                           </Text>
                           {/* Il prezzo pieno resta in vista: senza, il merchant non
                               ha modo di sapere quanto valga la condizione riservata. */}
@@ -488,7 +482,7 @@ export default function Plan() {
                           );
                         }}
                       >
-                        {planButtonLabel(plan.name, isCurrent)}
+                        {planButtonLabel(plan.name, isCurrent, t)}
                       </Button>
                     </div>
                   </div>
@@ -499,8 +493,7 @@ export default function Plan() {
         </InlineGrid>
 
         <Text as="p" tone="subdued" variant="bodySm" alignment="center">
-          L'addebito avviene tramite Shopify, insieme alla fattura del tuo negozio, e
-          puoi cambiare o disdire il piano quando vuoi.
+          {t.plan.billedByShopify}
         </Text>
       </BlockStack>
 

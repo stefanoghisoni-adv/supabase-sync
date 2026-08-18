@@ -6,6 +6,7 @@ import {
   syncCtaState,
   type BannerMessage,
 } from './plan-upgrade';
+import { it as itDict } from '~/lib/i18n/it';
 
 describe('hasPlanChanged', () => {
   it('nessuna sync precedente → nessun cambio da segnalare', () => {
@@ -28,14 +29,14 @@ describe('syncCtaState', () => {
   it('a piano cambiato non dice "completata" e non chiede un clic', () => {
     // E' il caso dell'upgrade: il recupero parte da solo, quindi il pulsante
     // resta disabilitato ma mostra che sta succedendo qualcosa.
-    const cta = syncCtaState({ ...base, completed: true, planChanged: true });
+    const cta = syncCtaState({ ...base, completed: true, planChanged: true }, itDict);
     expect(cta.label).not.toContain('completata');
     expect(cta.disabled).toBe(true);
     expect(cta.loading).toBe(true);
   });
 
   it('sync completata e piano invariato → completata, disabilitato', () => {
-    const cta = syncCtaState({ ...base, completed: true });
+    const cta = syncCtaState({ ...base, completed: true }, itDict);
     expect(cta).toEqual({
       label: 'Sincronizzazione completata',
       disabled: true,
@@ -44,25 +45,25 @@ describe('syncCtaState', () => {
   });
 
   it('sync in corso vince su tutto', () => {
-    const cta = syncCtaState({ ...base, inProgress: true, completed: true, planChanged: true });
+    const cta = syncCtaState({ ...base, inProgress: true, completed: true, planChanged: true }, itDict);
     expect(cta.label).toBe('Sincronizzazione in corso…');
     expect(cta.loading).toBe(true);
   });
 
   it('mai sincronizzato e piano invariato → primo avvio manuale', () => {
-    const cta = syncCtaState({ ...base });
+    const cta = syncCtaState({ ...base }, itDict);
     expect(cta).toEqual({ label: 'Avvia sincronizzazione', disabled: false, loading: false });
   });
 
   it('piano cambiato e ultima corsa non riuscita → niente clic da chiedere', () => {
     // Il recupero riparte da solo: se qui comparisse "Avvia sincronizzazione"
     // abilitato, il merchant crederebbe di dover intervenire a mano.
-    const cta = syncCtaState({ ...base, completed: false, planChanged: true });
+    const cta = syncCtaState({ ...base, completed: false, planChanged: true }, itDict);
     expect(cta).toEqual({ label: 'Aggiornamento in corso…', disabled: true, loading: true });
   });
 
   it('negozio sospeso → pulsante disabilitato', () => {
-    expect(syncCtaState({ ...base, blocked: true }).disabled).toBe(true);
+    expect(syncCtaState({ ...base, blocked: true }, itDict).disabled).toBe(true);
   });
 });
 
@@ -144,26 +145,26 @@ describe('planChangeBanner', () => {
       .map((s) => s.text);
 
   it('tetto che sale → success e nuovo limite', () => {
-    const b = planChangeBanner({ ...changed, currentMax: 400, previousMax: 50, ...noCustomers })!;
+    const b = planChangeBanner({ ...changed, currentMax: 400, previousMax: 50, ...noCustomers }, itDict)!;
     expect(b.tone).toBe('success');
     expect(text(b)).toContain('400');
   });
   it('tetto illimitato → success e "senza limite"', () => {
-    const b = planChangeBanner({ ...changed, currentMax: null, previousMax: 50, ...noCustomers })!;
+    const b = planChangeBanner({ ...changed, currentMax: null, previousMax: 50, ...noCustomers }, itDict)!;
     expect(b.tone).toBe('success');
     expect(text(b)).toContain('senza limite');
   });
   it('tetto che scende → warning e avviso di rimozione', () => {
-    const b = planChangeBanner({ ...changed, currentMax: 50, previousMax: 400, ...noCustomers })!;
+    const b = planChangeBanner({ ...changed, currentMax: 50, previousMax: 400, ...noCustomers }, itDict)!;
     expect(b.tone).toBe('warning');
     expect(text(b)).toContain('rimossi');
   });
   it('da illimitato a limitato → warning', () => {
-    const b = planChangeBanner({ ...changed, currentMax: 50, previousMax: null, ...noCustomers })!;
+    const b = planChangeBanner({ ...changed, currentMax: 50, previousMax: null, ...noCustomers }, itDict)!;
     expect(b.tone).toBe('warning');
   });
   it('tetto invariato → success', () => {
-    const b = planChangeBanner({ ...changed, currentMax: 50, previousMax: 50, ...withCustomers })!;
+    const b = planChangeBanner({ ...changed, currentMax: 50, previousMax: 50, ...withCustomers }, itDict)!;
     expect(b.tone).toBe('success');
   });
 
@@ -174,7 +175,7 @@ describe('planChangeBanner', () => {
       previousMax: 50,
       customersEnabled: true,
       customersTableCreated: false,
-    })!;
+    }, itDict)!;
     expect(b.tone).toBe('success');
     expect(b.messages).toHaveLength(2);
     expect(text(b)).toContain('acconsentito al marketing');
@@ -191,7 +192,7 @@ describe('planChangeBanner', () => {
       customersEnabled: false,
       customersTableCreated: true,
       customersUpgradePlan: 'pro',
-    })!;
+    }, itDict)!;
     expect(b.tone).toBe('warning');
     expect(b.title).toBe('Piano modificato');
     // Tetto e clienti in un paragrafo solo, l'invito a tornare indietro nell'altro.
@@ -211,7 +212,7 @@ describe('planChangeBanner', () => {
       customersEnabled: false,
       customersTableCreated: true,
       customersUpgradePlan: null,
-    })!;
+    }, itDict)!;
     expect(b.messages).toHaveLength(1);
     expect(text(b)).not.toContain('aggiornerai');
   });
@@ -223,7 +224,7 @@ describe('planChangeBanner', () => {
       previousMax: 400,
       customersEnabled: false,
       customersTableCreated: true,
-    })!;
+    }, itDict)!;
     expect(boldText(b)).toEqual(['senza limite di prodotti']);
   });
 
@@ -234,7 +235,7 @@ describe('planChangeBanner', () => {
       previousMax: 400,
       customersEnabled: false,
       customersTableCreated: true,
-    })!;
+    }, itDict)!;
     expect(text(b)).toContain('si interrompe');
     expect(text(b)).toContain('non vengono cancellati');
   });
@@ -247,12 +248,12 @@ describe('planChangeBanner', () => {
       previousMax: 400,
       customersEnabled: false,
       customersTableCreated: true,
-    })!;
+    }, itDict)!;
     expect(b.tone).toBe('warning');
   });
 
   it('clienti inclusi e tabella gia\' provveduta → nessun paragrafo sui clienti', () => {
-    const b = planChangeBanner({ ...changed, currentMax: 400, previousMax: 100, ...withCustomers })!;
+    const b = planChangeBanner({ ...changed, currentMax: 400, previousMax: 100, ...withCustomers }, itDict)!;
     expect(b.messages).toHaveLength(1);
   });
 
@@ -266,7 +267,7 @@ describe('planChangeBanner', () => {
       previousMax: 50,
       ...withCustomers,
       previousCustomersEnabled: false,
-    })!;
+    }, itDict)!;
     expect(b.tone).toBe('success');
     expect(b.title).toBe('Piano aggiornato');
     expect(text(b)).toContain('sincronizzazione dei clienti riprende');
@@ -279,7 +280,7 @@ describe('planChangeBanner', () => {
       previousMax: 100,
       ...withCustomers,
       previousCustomersEnabled: true,
-    })!;
+    }, itDict)!;
     expect(text(b)).not.toContain('riprende');
   });
 
@@ -292,7 +293,7 @@ describe('planChangeBanner', () => {
       previousMax: null,
       ...withCustomers,
       previousCustomersEnabled: null,
-    })!;
+    }, itDict)!;
     expect(text(b)).not.toContain('riprende');
   });
 
@@ -306,7 +307,7 @@ describe('planChangeBanner', () => {
       previousMax: null,
       customersEnabled: false,
       customersTableCreated: true,
-    })!;
+    }, itDict)!;
     expect(b.tone).toBe('warning');
     expect(b.messages).toHaveLength(1);
     expect(text(b)).toContain('si interrompe');
@@ -321,7 +322,7 @@ describe('planChangeBanner', () => {
       previousMax: null,
       customersEnabled: true,
       customersTableCreated: false,
-    })!;
+    }, itDict)!;
     expect(b.tone).toBe('success');
     expect(b.messages).toHaveLength(1);
     expect(text(b)).toContain('acconsentito al marketing');
@@ -334,7 +335,7 @@ describe('planChangeBanner', () => {
         currentMax: 50,
         previousMax: null,
         ...noCustomers,
-      }),
+      }, itDict),
     ).toBeNull();
     expect(
       planChangeBanner({
@@ -342,7 +343,7 @@ describe('planChangeBanner', () => {
         currentMax: 400,
         previousMax: null,
         ...withCustomers,
-      }),
+      }, itDict),
     ).toBeNull();
   });
 });

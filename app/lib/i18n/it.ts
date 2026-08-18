@@ -320,6 +320,58 @@ export const it = {
   },
 
   plan: {
+    /** Il pulsante della card, e l'esito al ritorno dall'addebito. */
+    currentPlan: 'Piano attuale',
+    choose: (plan: string) => `Scegli ${plan}`,
+    successBanner: {
+      title: 'Piano aggiornato',
+      message:
+        'Il tuo piano è attivo: limiti e frequenza di sincronizzazione sono già stati applicati.',
+    },
+    errorBanner: {
+      title: 'Cambio piano non completato',
+      message:
+        'Il cambio di piano non è stato completato. Niente è cambiato e non ci sono addebiti.',
+    },
+    /** La pagina: titolo, blocco, intestazione, ciclo di fatturazione. */
+    title: 'Piano',
+    blocked: {
+      title: 'Non hai accesso a questa sezione',
+      body:
+        'Il tuo piano è senza limiti e non prevede rinnovi: non c’è nessun aggiornamento da ' +
+        'fare. Torna alla dashboard per continuare.',
+    },
+    errorTitle: 'Errore',
+    reserved: {
+      title: 'Hai un prezzo riservato',
+      before: 'Quest’app ha una partnership attiva con ',
+      after:
+        ', e per questo i piani ti costano meno del listino — sia sul mensile sia sull’annuale. ' +
+        'Trovi il prezzo che ti spetta su ogni piano qui sotto',
+      forRenewals: (n: number) => `, per i primi ${n} ${n === 1 ? 'rinnovo' : 'rinnovi'}.`,
+      end: '.',
+    },
+    intro: {
+      title: 'Scegli il piano adatto al tuo store',
+      body:
+        'Più prodotti coperti, aggiornamenti più frequenti e dati cliente sempre allineati: ' +
+        'salendo di piano il tuo tracking lavora su informazioni più fresche e complete, con ' +
+        'campagne e report più affidabili.',
+      keepData:
+        'Cambiando piano non perdi quello che hai già raccolto: cambiano solo i limiti, la ' +
+        'frequenza di aggiornamento e le funzioni incluse.',
+    },
+    monthly: 'Mensile',
+    yearly: 'Annuale',
+    yearlyHint: (amount: string) => `Con l’annuale risparmi fino a ${amount} l’anno`,
+    reservedFor: (n: number) =>
+      `Il prezzo riservato vale per ${n} ${n === 1 ? 'rinnovo' : 'rinnovi'}`,
+    recommended: 'Consigliato',
+    perYear: '/anno',
+    perMonth: '/mese',
+    billedByShopify:
+      'L’addebito avviene tramite Shopify, insieme alla fattura del tuo negozio, e puoi ' +
+      'cambiare o disdire il piano quando vuoi.',
     features: {
       products: (amount: string) => `Fino a ${amount} prodotti`,
       productsUnlimited: 'Prodotti illimitati',
@@ -332,6 +384,108 @@ export const it = {
       push: 'Push manuale',
       chat: 'Chat dedicata',
     },
+  },
+
+  // Sospensioni: cosa dire quando l'app o il tracciamento sono fermi.
+  authBanners: {
+    trackingStillOn:
+      ' Il tracciamento resta attivo e continua a usare i dati già sincronizzati, che però non verranno più aggiornati.',
+    appDisabled: {
+      title: 'App disabilitata',
+      message:
+        "L'utilizzo dell'app è stato disabilitato per questo negozio: tutte le funzioni e le sincronizzazioni sono sospese.",
+    },
+    trialEnded: {
+      title: 'Periodo di prova terminato',
+      message:
+        'Il periodo di prova è terminato: le funzioni dell’app e le sincronizzazioni sono sospese. Aggiorna il piano per riattivarle.',
+    },
+    trackingSuspended: {
+      title: 'Tracciamento sospeso',
+      disabled:
+        'Il tracciamento è sospeso per questo negozio: i dati già sincronizzati non sono al momento utilizzabili dal tuo strumento di tracciamento. Contatta il supporto.',
+      pending:
+        'Il tracciamento è sospeso: i dati già sincronizzati non sono al momento utilizzabili dal tuo strumento di tracciamento. Aggiorna il piano per riattivarlo.',
+    },
+  },
+
+  // Il pulsante della sincronizzazione, nei suoi quattro stati.
+  syncCta: {
+    running: 'Sincronizzazione in corso…',
+    updating: 'Aggiornamento in corso…',
+    start: 'Avvia sincronizzazione',
+    completed: 'Sincronizzazione completata',
+  },
+
+  // Cosa comporta il piano appena cambiato.
+  planChange: {
+    changedTitle: 'Piano modificato',
+    updatedTitle: 'Piano aggiornato',
+    /** Il tetto dentro una frase: "200 prodotti", oppure senza tetto. */
+    capUnlimited: 'senza limite',
+    capPhraseUnlimited: 'senza limite di prodotti',
+    capPhrase: (products: string) => `${products} prodotti`,
+    // Un solo paragrafo spezzato: in mezzo va il tetto nuovo, in grassetto.
+    downgradeWithCustomers: {
+      before:
+        'Il nuovo limite dei prodotti sincronizzabili previsti dal piano è stato aggiornato a ',
+      after:
+        ' e la sincronizzazione dei dati dei clienti è stata sospesa. I dati dei clienti non ' +
+        'verranno eliminati ma non saranno più aggiornati né per le informazioni dei clienti ' +
+        'né per gli ordini e i dati di profittabilità ad essi connessi.',
+    },
+    upgradeBack: (plan: string) =>
+      `Se aggiornerai di nuovo almeno a ${plan} la sincronizzazione riprenderà normalmente.`,
+    productsDowngrade: (cap: string) =>
+      `Alcuni prodotti verranno rimossi per rispettare il limite del piano: ${cap} prodotti sincronizzabili.`,
+    productsUpdated: (cap: string) =>
+      `La sincronizzazione rispetterà automaticamente i nuovi limiti del piano: ${cap} prodotti sincronizzabili.`,
+    customersGained:
+      'La tabella dei clienti che hanno acconsentito al marketing viene creata e ' +
+      'popolata subito, senza che tu debba fare nulla: da qui in avanti si ' +
+      'aggiorna da sola insieme alla sincronizzazione periodica dei prodotti.',
+    customersResumed:
+      'La sincronizzazione dei clienti riprende: i dati già raccolti tornano ad ' +
+      'aggiornarsi da soli insieme ai prodotti, senza che tu debba fare nulla.',
+    customersLost:
+      'La sincronizzazione dei clienti si interrompe. I dati già raccolti non ' +
+      'vengono cancellati e restano nel tuo progetto, ma non verranno più ' +
+      'aggiornati né potranno essere usati per il tracciamento.',
+  },
+
+  // Aggiornamento delle tabelle del merchant, in attesa.
+  schemaUpdate: {
+    title: 'Aggiornamento del database disponibile',
+    body:
+      'È disponibile un aggiornamento delle tabelle del tuo database. Non devi accedere al ' +
+      'database né toccare tabelle o colonne, e non devi riconfermare l’integrazione: basta un ' +
+      'clic e l’aggiornamento viene eseguito per te. I dati già sincronizzati restano dove sono.',
+    action: 'Esegui aggiornamento sul database',
+  },
+
+  // Piu' prodotti di quanti il piano ne sincronizzi.
+  overflow: {
+    title: 'Limite prodotti raggiunto',
+    body: (excluded: number, plan: string) =>
+      `${excluded} ${excluded === 1 ? 'prodotto non verrà sincronizzato' : 'prodotti non verranno sincronizzati'} ` +
+      `dato che hai raggiunto il limite del tuo piano. Contando i prodotti totali, il piano più ` +
+      `in linea con le tue necessità sarebbe ${plan}.`,
+    upgradeNow: (plan: string) => `Aggiorna ora a ${plan}`,
+    modalTitle: (plan: string) => `Stai per passare a ${plan}`,
+    confirm: 'Conferma e procedi',
+    cancel: 'Annulla',
+    whatChanges: 'Cosa cambia',
+  },
+
+  // Il confronto fra il piano in uso e quello proposto.
+  planCompare: {
+    products: 'Prodotti sincronizzabili',
+    customers: 'Clienti sincronizzabili',
+    monthlyCost: 'Costo mensile',
+    notIncluded: 'Non inclusi',
+    unlimited: 'Illimitati',
+    free: 'Gratuito',
+    perMonth: (price: string) => `${price} / mese`,
   },
 
   sync: {

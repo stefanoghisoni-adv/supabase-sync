@@ -1,8 +1,16 @@
+import type { Dictionary } from '~/lib/i18n/context';
+
 // Logica del pulsante CTA nelle card dei piani: label, stato (loading/disabled) e
 // testo dei banner di esito dopo il ritorno dal flusso di addebito.
 
-export function planButtonLabel(planName: string, isCurrent: boolean): string {
-  return isCurrent ? 'Piano attuale' : `Scegli ${planName}`;
+type Strings = Pick<Dictionary, 'plan'>;
+
+export function planButtonLabel(
+  planName: string,
+  isCurrent: boolean,
+  t: Strings,
+): string {
+  return isCurrent ? t.plan.currentPlan : t.plan.choose(planName);
 }
 
 export interface PlanButtonState {
@@ -35,15 +43,8 @@ export function billingOutcome(param: string | null): BillingOutcome {
   return param === 'ok' ? 'success' : 'error';
 }
 
-// Testi dei banner mostrati dopo il ritorno dal flusso di addebito.
-export const BILLING_SUCCESS_BANNER = {
-  title: 'Piano aggiornato',
-  message:
-    'Il tuo piano è attivo: limiti e frequenza di sincronizzazione sono già stati applicati.',
-};
-
-export const BILLING_ERROR_BANNER = {
-  title: 'Cambio piano non completato',
-  message:
-    'Il cambio di piano non è stato completato. Niente è cambiato e non ci sono addebiti.',
-};
+// Testi dei banner mostrati dopo il ritorno dal flusso di addebito. Vivono nel
+// dizionario come tutto il resto: qui resta la sola scelta di quale dei due.
+export function billingBanner(outcome: Exclude<BillingOutcome, null>, t: Strings) {
+  return outcome === 'success' ? t.plan.successBanner : t.plan.errorBanner;
+}

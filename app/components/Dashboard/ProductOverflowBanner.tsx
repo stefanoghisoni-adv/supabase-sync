@@ -12,7 +12,7 @@ import {
 } from '@shopify/polaris';
 import { planLabel } from './account-format';
 import { BASE_CURRENCY } from '~/lib/billing/money';
-import { useLocale } from '~/lib/i18n/context';
+import { useLocale, useT } from '~/lib/i18n/context';
 import {
   planComparisonRows,
   suggestPlanForProducts,
@@ -57,6 +57,7 @@ interface ReadinessResponse {
 export function ProductOverflowBanner({ disabled }: ProductOverflowBannerProps) {
   const [confirming, setConfirming] = useState(false);
   const locale = useLocale();
+  const t = useT();
   const fetcher = useFetcher<SubscribeResponse>();
   const submitting = fetcher.state !== 'idle';
 
@@ -112,18 +113,15 @@ export function ProductOverflowBanner({ disabled }: ProductOverflowBannerProps) 
     suggestedPlan,
     limits.data?.currency ?? BASE_CURRENCY,
     locale,
+    t,
   );
   const error = fetcher.data && 'error' in fetcher.data ? fetcher.data.error : null;
 
   return (
     <>
-      <Banner tone="warning" title="Limite prodotti raggiunto">
+      <Banner tone="warning" title={t.overflow.title}>
         <BlockStack gap="300">
-          <Text as="p">
-            {excluded} {excluded === 1 ? 'prodotto non verrà sincronizzato' : 'prodotti non verranno sincronizzati'}{' '}
-            dato che hai raggiunto il limite del tuo piano. Contando i prodotti totali, il piano più
-            in linea con le tue necessità sarebbe {nextLabel}.
-          </Text>
+          <Text as="p">{t.overflow.body(excluded, nextLabel)}</Text>
           {error && <Text as="p" tone="critical">{error}</Text>}
           <InlineStack>
             <Button
@@ -131,7 +129,7 @@ export function ProductOverflowBanner({ disabled }: ProductOverflowBannerProps) 
               onClick={() => setConfirming(true)}
               disabled={disabled || submitting}
             >
-              {`Aggiorna ora a ${nextLabel}`}
+              {t.overflow.upgradeNow(nextLabel)}
             </Button>
           </InlineStack>
         </BlockStack>
@@ -140,15 +138,15 @@ export function ProductOverflowBanner({ disabled }: ProductOverflowBannerProps) 
       <Modal
         open={confirming}
         onClose={() => setConfirming(false)}
-        title={`Stai per passare a ${nextLabel}`}
+        title={t.overflow.modalTitle(nextLabel)}
         primaryAction={{
-          content: 'Conferma e procedi',
+          content: t.overflow.confirm,
           onAction: confirm,
           loading: submitting,
           disabled: submitting,
         }}
         secondaryActions={[
-          { content: 'Annulla', onAction: () => setConfirming(false), disabled: submitting },
+          { content: t.overflow.cancel, onAction: () => setConfirming(false), disabled: submitting },
         ]}
       >
         <Modal.Section>
@@ -159,7 +157,7 @@ export function ProductOverflowBanner({ disabled }: ProductOverflowBannerProps) 
                 posizioni diverse: la tabella smetteva di leggersi per colonne. */}
             <InlineStack gap="400" align="space-between" blockAlign="center">
               <Text as="span" variant="bodySm" tone="subdued">
-                Cosa cambia
+                {t.overflow.whatChanges}
               </Text>
               <InlineStack gap="300" blockAlign="center">
                 <Box minWidth={VALUE_COLUMN}>

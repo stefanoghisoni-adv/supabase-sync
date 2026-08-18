@@ -1,3 +1,5 @@
+import type { Dictionary } from '~/lib/i18n/context';
+
 // Cosa dire al merchant quando qualcosa e' sospeso.
 //
 // Le autorizzazioni sono due e indipendenti: l'uso dell'app e il tracciamento.
@@ -15,16 +17,12 @@ export interface AuthorizationBanner {
   message: string;
 }
 
-// Il tracciamento continua a funzionare, ma sui dati fermi all'ultima
-// sincronizzazione: e' il motivo per cui le due autorizzazioni sono separate, e
-// il merchant deve sapere che i numeri non si aggiornano piu'.
-const TRACKING_STILL_ON =
-  ' Il tracciamento resta attivo e continua a usare i dati già sincronizzati, che però non verranno più aggiornati.';
+type Strings = Pick<Dictionary, 'authBanners'>;
 
-function trackingSuspended(state: AuthState): string {
+function trackingSuspended(state: AuthState, t: Strings): string {
   return state === 'DISABLED'
-    ? 'Il tracciamento è sospeso per questo negozio: i dati già sincronizzati non sono al momento utilizzabili dal tuo strumento di tracciamento. Contatta il supporto.'
-    : 'Il tracciamento è sospeso: i dati già sincronizzati non sono al momento utilizzabili dal tuo strumento di tracciamento. Aggiorna il piano per riattivarlo.';
+    ? t.authBanners.trackingSuspended.disabled
+    : t.authBanners.trackingSuspended.pending;
 }
 
 /**
@@ -34,27 +32,29 @@ function trackingSuspended(state: AuthState): string {
 export function authorizationBanners(
   app: AuthState,
   tracking: AuthState,
+  t: Strings,
 ): AuthorizationBanner[] {
   const banners: AuthorizationBanner[] = [];
   const trackingOn = tracking === 'ENABLED';
+
+  // Il tracciamento continua a funzionare, ma sui dati fermi all'ultima
+  // sincronizzazione: e' il motivo per cui le due autorizzazioni sono separate,
+  // e il merchant deve sapere che i numeri non si aggiornano piu'.
+  const stillOn = trackingOn ? t.authBanners.trackingStillOn : '';
 
   if (app === 'DISABLED') {
     banners.push({
       id: 'app',
       tone: 'critical',
-      title: 'App disabilitata',
-      message:
-        "L'utilizzo dell'app è stato disabilitato per questo negozio: tutte le funzioni e le sincronizzazioni sono sospese." +
-        (trackingOn ? TRACKING_STILL_ON : ''),
+      title: t.authBanners.appDisabled.title,
+      message: t.authBanners.appDisabled.message + stillOn,
     });
   } else if (app === 'PENDING') {
     banners.push({
       id: 'app',
       tone: 'warning',
-      title: 'Periodo di prova terminato',
-      message:
-        'Il periodo di prova è terminato: le funzioni dell’app e le sincronizzazioni sono sospese. Aggiorna il piano per riattivarle.' +
-        (trackingOn ? TRACKING_STILL_ON : ''),
+      title: t.authBanners.trialEnded.title,
+      message: t.authBanners.trialEnded.message + stillOn,
     });
   }
 
@@ -64,8 +64,8 @@ export function authorizationBanners(
     banners.push({
       id: 'tracking',
       tone: tracking === 'DISABLED' ? 'critical' : 'warning',
-      title: 'Tracciamento sospeso',
-      message: trackingSuspended(tracking),
+      title: t.authBanners.trackingSuspended.title,
+      message: trackingSuspended(tracking, t),
     });
   }
 
