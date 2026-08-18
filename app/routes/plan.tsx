@@ -9,13 +9,11 @@ import {
 } from '@remix-run/react';
 import {
   Page,
-  InlineGrid,
   Card,
   BlockStack,
   InlineStack,
   Box,
   Text,
-  Badge,
   Button,
   ButtonGroup,
   Banner,
@@ -24,27 +22,17 @@ import { SettingsIcon } from '@shopify/polaris-icons';
 import { authenticate } from '~/shopify.server';
 import { prisma } from '~/db.server';
 import { buildPlanCards, type PlanCard } from '~/components/Billing/plan-catalog';
-import { BASE_CURRENCY, formatMoney, formatMoneyExact } from '~/lib/billing/money';
+import { BASE_CURRENCY, formatMoney } from '~/lib/billing/money';
 import { useLocale, useT } from '~/lib/i18n/context';
-import type { Locale } from '~/lib/i18n/locales';
 import { resolveShopPricing } from '~/lib/billing/shop-pricing.server';
 import { wantedCurrency } from '~/lib/i18n/preferences';
-import {
-  effectivePrice,
-  savingBadge,
-  type BillingInterval,
-  type EffectivePrice,
-} from '~/lib/billing/partner-pricing';
+import { type BillingInterval } from '~/lib/billing/partner-pricing';
 
-/** Testo del risparmio, o niente: decide anche se il badge esiste. */
-function savingLabel(price: EffectivePrice, currency: string, locale: Locale): string | null {
-  return price.discountAmount > 0
-    ? savingBadge(price, formatMoneyExact(price.discountAmount, currency, locale))
-    : null;
-}
 import { shouldHighlightRecommended } from '~/components/Billing/plan-highlight';
+import { PlanOptionGrid } from '~/components/Dashboard/PlanOptionGrid';
+import { preselectedPlan } from '~/components/Dashboard/plan-step';
+import { samePlanName } from '~/lib/billing/plan-name';
 import { canAccessPlanTab } from '~/components/Billing/plan-access';
-import { PlanFeatureList } from '~/components/Billing/PlanFeatureList';
 import {
   planButtonLabel,
   planButtonState,
@@ -163,16 +151,6 @@ export default function Plan() {
   // decidendo se il servizio gli serve.
   const [interval, setInterval] = useState<BillingInterval>('monthly');
 
-  // Se anche una sola card mostra il risparmio, tutte riservano quella riga:
-  // altrimenti gli elenchi partono ad altezze diverse e le card, affiancate,
-  // sembrano disallineate. Quando nessuno ha uno sconto la riga non esiste
-  // proprio, e nessuno paga uno spazio vuoto.
-  const anyDiscount = cards.some((plan) =>
-    interval === 'yearly'
-      ? plan.partnerYearly != null && plan.partnerYearly < plan.priceYearly
-      : plan.partnerMonthly != null && plan.partnerMonthly < plan.priceMonthly,
-  );
-
   const yearlySaving = cards.reduce<number | null>((best, plan) => {
     const monthly = plan.partnerMonthly ?? plan.priceMonthly;
     const yearly = plan.partnerYearly ?? plan.priceYearly;
@@ -192,6 +170,12 @@ export default function Plan() {
   // uno per card: lo stato locale (submittingPlan) traccia quale piano è in corso.
   const fetcher = useFetcher<SubscribeResponse>();
   const [submittingPlan, setSubmittingPlan] = useState<string | null>(null);
+
+  // Il piano su cui si posa l'anello. Si parte da quello attivo: e' quello su
+  // cui l'app sta lavorando, e presentarne un altro gia' scelto vorrebbe dire
+  // far confermare una spesa a chi era passato solo a guardare.
+  const [selectedPlan, setSelectedPlan] = useState(() => preselectedPlan(cards, currentPlan));
+  const selectedIsCurrent = samePlanName(selectedPlan, currentPlan);
 
   // Legge il parametro querystring ?billing=ok|ko dopo il ritorno dal flusso.
   const [searchParams, setSearchParams] = useSearchParams();
@@ -380,120 +364,41 @@ export default function Plan() {
           )}
         </InlineStack>
 
-        <InlineGrid columns={{ xs: 1, sm: 2, lg: 4 }} gap="400">
-          {cards.map((plan) => {
-            const isCurrent = plan.name.trim().toLowerCase() === currentPlan;
-            const isHighlighted = plan.recommended && highlightRecommended;
-            // Prezzo mostrato: listino, oppure quello riservato al partner del
-            // negozio. Il calcolo e' lo stesso che /billing/subscribe rifa sul
-            // server per l'addebito, cosi' cifra vista e cifra pagata non
-            // possono divergere.
-            const price = effectivePrice(
-              interval === 'yearly' ? plan.priceYearly : plan.priceMonthly,
-              interval === 'yearly' ? plan.partnerYearly : plan.partnerMonthly,
-              discountIntervals,
-            );
-            return (
-              // Il consigliato non ha uno sfondo diverso (sembrava disabilitato) ma un
-              // bordo piu' spesso nello stesso colore del pulsante primario. Polaris non
-              // espone bordi sulla Card: outline su un wrapper (non occupa spazio, quindi
-              // la card non si restringe) con il raggio della Card. display:grid fa
-              // stirare la Card all'altezza della riga, come le altre colonne.
-              <div
-                key={plan.name}
-                className="plan-card"
-                style={{
-                  borderRadius: 'var(--p-border-radius-300)',
-                  outline: isHighlighted
-                    ? '2px solid var(--p-color-bg-fill-brand)'
-                    : undefined,
-                }}
-              >
-                <Card padding="500">
-                  {/* Colonna a tutta altezza con la CTA spinta in fondo. La garanzia
-                      vera dell'allineamento e' che tutte le card elencano le stesse 6
-                      righe senza andare a capo, quindi hanno la stessa altezza: il
-                      flex e' la rete di sicurezza. Polaris non espone un "pin in
-                      basso", questi style inline sono l'eccezione gia' adottata per
-                      il contenitore del grafico. */}
-                  <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-                    <BlockStack gap="500">
-                      <BlockStack gap="200">
-                        <InlineStack gap="200" blockAlign="center" wrap={false}>
-                          <Text as="h2" variant="headingMd">
-                            {plan.name}
-                          </Text>
-                          {isHighlighted && <Badge tone="success">{t.plan.recommended}</Badge>}
-                          {isCurrent && <Badge tone="info">{t.plan.currentPlan}</Badge>}
-                        </InlineStack>
+        {/* Le stesse card del passo della configurazione: e' la stessa
+            decisione, e mostrarla in due forme diverse costringerebbe a
+            rileggerle entrambe per convincersi che dicono la stessa cosa. */}
+        <PlanOptionGrid
+          cards={cards}
+          selected={selectedPlan}
+          onSelect={setSelectedPlan}
+          currentPlanName={currentPlan}
+          recommendedPlanName={
+            highlightRecommended ? (cards.find((plan) => plan.recommended)?.name ?? null) : null
+          }
+          discountIntervals={discountIntervals}
+          interval={interval}
+          currency={currency}
+          loading={submittingPlan !== null}
+        />
 
-                        {/* Prezzo, periodo, prezzo pieno barrato e risparmio: tutto
-                            su UNA riga. Non e' solo estetica — su righe separate le
-                            sole card scontate diventavano piu' alte, e i pulsanti in
-                            fondo si sollevavano rispetto a quelli delle altre. */}
-                        <InlineStack gap="200" blockAlign="baseline" wrap={false}>
-                          <Text as="span" variant="heading3xl">
-                            {formatMoney(price.payablePrice, currency, locale)}
-                          </Text>
-                          <Text as="span" tone="subdued">
-                            {interval === 'yearly' ? t.plan.perYear : t.plan.perMonth}
-                          </Text>
-                          {/* Il prezzo pieno resta in vista: senza, il merchant non
-                              ha modo di sapere quanto valga la condizione riservata. */}
-                          {price.discountAmount > 0 && (
-                            <Text as="span" tone="subdued" textDecorationLine="line-through">
-                              {formatMoney(price.listPrice, currency, locale)}
-                            </Text>
-                          )}
-                        </InlineStack>
-                        {/* Il badge nasce dal testo, non dalla condizione: cosi'
-                            non puo' esistere un badge senza niente dentro, che
-                            e' cio' che compariva ai negozi senza partnership —
-                            una pillina grigia vuota sotto ogni prezzo. */}
-                        {anyDiscount && (
-                          // Altezza riservata anche dove il badge non c'e': e'
-                          // quella riga a decidere dove comincia l'elenco, e su
-                          // card affiancate deve cominciare alla stessa quota.
-                          <Box minHeight="20px">
-                            {savingLabel(price, currency, locale) && (
-                              <InlineStack>
-                                <Badge tone="info">
-                                  {savingLabel(price, currency, locale) as string}
-                                </Badge>
-                              </InlineStack>
-                            )}
-                          </Box>
-                        )}
-                      </BlockStack>
-
-                      <PlanFeatureList features={plan.features} />
-                    </BlockStack>
-
-                    {/* marginBlockStart:auto tiene la CTA in fondo alla colonna anche
-                        se il contenuto sopra è più corto. */}
-                    <div style={{ marginBlockStart: 'auto', paddingBlockStart: 'var(--p-space-500)' }}>
-                      <Button
-                        variant={isHighlighted ? 'primary' : undefined}
-                        {...planButtonState(plan.name, isCurrent, submittingPlan)}
-                        fullWidth
-                        onClick={() => {
-                          setSubmittingPlan(plan.name);
-                          setFetcherError(null); // Azzera eventuali errori precedenti
-                          fetcher.submit(
-                            { plan: plan.name, interval },
-                            { method: 'POST', action: '/billing/subscribe' },
-                          );
-                        }}
-                      >
-                        {planButtonLabel(plan.name, isCurrent, t)}
-                      </Button>
-                    </div>
-                  </div>
-                </Card>
-              </div>
-            );
-          })}
-        </InlineGrid>
+        {/* Un pulsante solo sotto la griglia, non uno per card: la scelta la
+            fanno le card, qui si conferma. */}
+        <InlineStack>
+          <Button
+            variant="primary"
+            {...planButtonState(selectedPlan, selectedIsCurrent, submittingPlan)}
+            onClick={() => {
+              setSubmittingPlan(selectedPlan);
+              setFetcherError(null);
+              fetcher.submit(
+                { plan: selectedPlan, interval },
+                { method: 'POST', action: '/billing/subscribe' },
+              );
+            }}
+          >
+            {planButtonLabel(selectedPlan, selectedIsCurrent, t)}
+          </Button>
+        </InlineStack>
 
         <Text as="p" tone="subdued" variant="bodySm" alignment="center">
           {t.plan.billedByShopify}

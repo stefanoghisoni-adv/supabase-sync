@@ -16,7 +16,8 @@ import type { PlanCard } from '~/components/Billing/plan-catalog';
 import { formatMoney } from '~/lib/billing/money';
 import { PlanFeatureList } from '~/components/Billing/PlanFeatureList';
 import type { BillingInterval } from '~/lib/billing/partner-pricing';
-import { planPriceLabel, planSavingBadge, yearlySaving } from './plan-step';
+import { yearlySaving } from './plan-step';
+import { PlanOptionGrid } from './PlanOptionGrid';
 
 export interface PlanStepProps {
   /** Le card fra cui scegliere. Vuoto = nessuna scelta da fare. */
@@ -119,84 +120,18 @@ export function PlanStep({
             )}
           </InlineStack>
 
-          <InlineGrid columns={{ xs: 1, sm: 2, lg: 4 }} gap="300">
-            {cards.map((card) => {
-              const chosen = card.name === selected;
-              return (
-                // L'anello attorno alla card selezionata: Polaris non espone il
-                // bordo della Card, e l'outline su un contenitore non occupa
-                // spazio — quindi la card non si restringe quando si accende.
-                // Stessa tecnica gia' usata per il "Consigliato" nella tab Piano.
-                <div
-                  key={card.name}
-                  // Tutta la card sceglie, non il solo pallino: il bersaglio e'
-                  // grande quanto la cosa che si sta scegliendo. Il radio resta
-                  // dov'e' — e' lui a dire quale sia lo stato, e a permettere di
-                  // scegliere da tastiera — ma non e' piu' l'unico modo.
-                  onClick={() => {
-                    if (disabled || loading) return;
-                    onSelect(card.name);
-                  }}
-                  style={{
-                    borderRadius: 'var(--p-border-radius-300)',
-                    outline: chosen ? '2px solid var(--p-color-bg-fill-brand)' : undefined,
-                    display: 'grid',
-                    cursor: disabled || loading ? undefined : 'pointer',
-                  }}
-                >
-                  <Card padding="400">
-                    {/* Colonna a tutta altezza: l'elenco delle funzioni parte
-                        alla stessa quota su tutte le card, che affiancate hanno
-                        altezze diverse solo se qualcosa va a capo. */}
-                    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-                      <BlockStack gap="300">
-                        <InlineStack gap="200" blockAlign="center" wrap={false}>
-                          {/* Il radio e' l'unico comando: l'etichetta e' il nome
-                              del piano, quindi ci si clicca sopra. */}
-                          <RadioButton
-                            label={card.name}
-                            checked={chosen}
-                            id={`plan-${card.name}`}
-                            name="plan-step"
-                            onChange={() => onSelect(card.name)}
-                            disabled={disabled || loading}
-                          />
-                          {isCurrent(card) && (
-                            <Badge tone="info">{t.planStep.current}</Badge>
-                          )}
-                          {/* Consigliato per QUESTO negozio: il piu' economico
-                              che contenga il suo catalogo. Non e' il
-                              "consigliato" del listino, uguale per tutti. */}
-                          {card.name === recommendedPlanName && !isCurrent(card) && (
-                            <Badge tone="success">{t.planStep.recommended}</Badge>
-                          )}
-                        </InlineStack>
-
-                        <BlockStack gap="150">
-                          <Text as="p" variant="headingLg">
-                            {planPriceLabel(card, discountIntervals, interval, t, currency, locale)}
-                          </Text>
-                          {/* Quanto fa risparmiare l'annuale su questo piano,
-                              sotto il prezzo a cui si riferisce. Nasce dal
-                              testo: dove non c'e' risparmio — il gratuito — il
-                              badge non esiste, invece di comparire vuoto. */}
-                          {planSavingBadge(card, t, currency, locale) && (
-                            <InlineStack>
-                              <Badge tone="info">
-                                {planSavingBadge(card, t, currency, locale) as string}
-                              </Badge>
-                            </InlineStack>
-                          )}
-                        </BlockStack>
-
-                        <PlanFeatureList features={card.features} />
-                      </BlockStack>
-                    </div>
-                  </Card>
-                </div>
-              );
-            })}
-          </InlineGrid>
+          <PlanOptionGrid
+            cards={cards}
+            selected={selected}
+            onSelect={onSelect}
+            currentPlanName={currentPlanName}
+            recommendedPlanName={recommendedPlanName}
+            discountIntervals={discountIntervals}
+            interval={interval}
+            currency={currency}
+            disabled={disabled}
+            loading={loading}
+          />
         </BlockStack>
       ) : (
         <Text as="p">
