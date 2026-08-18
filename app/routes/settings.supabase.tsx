@@ -24,7 +24,7 @@ import { loadSyncTiming } from '~/lib/sync/sync-timing.server';
 import { projectDashboardUrl } from '~/lib/supabase-management.server';
 import { SyncCard } from '~/components/Dashboard/SyncCard';
 import { useT } from '~/lib/i18n/context';
-import type { MarketId } from '~/lib/i18n/markets';
+import type { Preferences } from '~/components/Dashboard/PreferencesSelect';
 import { useCallback, useEffect } from 'react';
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -136,8 +136,11 @@ export default function SupabaseSettings() {
   const localeFetcher = useFetcher<{ ok?: boolean }>();
   const revalidator = useRevalidator();
   const changeLocale = useCallback(
-    (next: MarketId) => {
-      localeFetcher.submit({ locale: next }, { method: 'POST', action: '/api/locale' });
+    (next: Preferences) => {
+      localeFetcher.submit(
+        { locale: next.locale, currency: next.currency },
+        { method: 'POST', action: '/api/locale' },
+      );
     },
     [localeFetcher],
   );
@@ -204,9 +207,13 @@ export default function SupabaseSettings() {
                 productsSyncActive={account.productsSyncActive}
                 customersSyncActive={account.customersSyncActive}
                 customersUpgradePlan={account.customersUpgradePlan}
-                market={root?.market ?? 'en-US'}
-                markets={root?.markets ?? []}
-                onLocaleChange={changeLocale}
+                preferences={{
+                  locale: root?.locale ?? 'en',
+                  currency: root?.currency ?? 'USD',
+                }}
+                locales={root?.locales ?? []}
+                currencies={root?.currencies ?? []}
+                onPreferencesChange={changeLocale}
                 localeSaving={localeFetcher.state !== 'idle'}
               />
               <DatabaseCard

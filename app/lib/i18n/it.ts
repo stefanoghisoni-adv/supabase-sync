@@ -33,6 +33,7 @@ export const it = {
 
   language: {
     label: 'Lingua',
+    currency: 'Valuta',
     /** Testo del campo di ricerca, quando le lingue sono molte. */
     searchPlaceholder: 'Cerca una lingua…',
     saving: 'Salvataggio…',

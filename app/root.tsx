@@ -28,16 +28,17 @@ import { canAccessPlanTab } from './components/Billing/plan-access';
 import { adminAppUrl, reloadWholePage } from './utils/admin-page';
 import { FALLBACK_LOCALE } from './lib/i18n/locales';
 import {
-  FALLBACK_MARKET,
-  MARKETS,
-  marketFromTag,
-  marketLabel,
-  resolveMarket,
-} from './lib/i18n/markets';
+  currencyOptions,
+  localeFromTag,
+  localeOptions,
+  wantedCurrency,
+  wantedLocale,
+} from './lib/i18n/preferences';
 import { I18nProvider, dictionaryFor } from './lib/i18n/context';
 import { isSetupComplete } from './lib/setup/setup-state.server';
 import { completeCurrenciesCached } from './lib/billing/shop-pricing.server';
 import { resolveShopCurrency } from './lib/billing/currency';
+import { BASE_CURRENCY } from './lib/billing/money';
 
 // Rete di sicurezza del tema chiaro, in linea nel documento e DOPO i fogli di
 // stile: force-light.css fa il lavoro completo, ma e' un file esterno, e se per
@@ -93,16 +94,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
     // lui ad aprire l'app: alle navigazioni interne quel parametro non c'e'.
     // Quando arriva lo si ricorda, cosi' la lingua non cambia a meta' sessione.
     const declared = new URL(request.url).searchParams.get('locale');
-    if (shop && declared && marketFromTag(declared).id !== shop.detectedLocale) {
+    if (shop && declared && localeFromTag(declared) !== shop.detectedLocale) {
       // Best effort: e' una preferenza, non un dato su cui si regge una pagina.
       prisma.shop
-        .update({ where: { id: shop.id }, data: { detectedLocale: marketFromTag(declared).id } })
+        .update({ where: { id: shop.id }, data: { detectedLocale: localeFromTag(declared) } })
         .catch(() => {});
     }
 
-    // Lingua e valuta insieme: e' una scelta sola, e il selettore in alto la
-    // mostra come tale.
-    const market = resolveMarket(shop?.locale, declared ?? shop?.detectedLocale);
+    // Lingua e valuta: due scelte, prese nello stesso comando.
+    const locale = wantedLocale(shop, declared);
+    const wanted = wantedCurrency(shop, declared);
 
     // Un prezzo riservato tiene il negozio nella valuta in cui l'accordo e'
     // stato fatto: le etichette devono dirlo, non promettere altro.
@@ -110,16 +111,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
       ? (await prisma.partnerPlanPrice.count({ where: { partnerName: shop.partnerName } })) > 0
       : false;
     const complete = await completeCurrenciesCached();
-    const markets = MARKETS.map((m) => ({
-      id: m.id,
-      // La valuta scritta e' quella che si otterrebbe davvero scegliendo questa
-      // voce: finche' il listino in una valuta non esiste, prometterla sarebbe
-      // un prezzo che non incassiamo.
-      label: marketLabel(
-        m,
-        resolveShopCurrency({ shopCurrency: m.currency, complete, hasReservedPrice }),
-      ),
-    }));
+    // Si offrono solo le valute che il listino ha davvero: una valuta senza
+    // prezzi, scelta, finirebbe per addebitarne un'altra.
+    const currencies = currencyOptions(hasReservedPrice ? [] : complete);
+    // E la valuta in uso e' quella che il negozio otterrebbe davvero.
+    const currency = resolveShopCurrency({
+      shopCurrency: wanted,
+      complete,
+      hasReservedPrice,
+    });
 
     return json({
       apiKey,
@@ -131,9 +131,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
       setupComplete: await isSetupComplete(session.shop),
       // La lingua sta in root perche' la usa tutta l'app, menu compreso. La
       // scelta del merchant vince su tutto; senza una scelta si segue l'admin.
-      locale: market.language,
-      market: market.id,
-      markets,
+      locale,
+      currency,
+      locales: localeOptions(),
+      currencies,
       // Serve alla pagina d'errore per ricaricare la pagina dell'admin. Si
       // ricava dalla sessione e non dai parametri della URL, che una
       // navigazione interna si porta via.
@@ -149,8 +150,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
       canSeePlanTab: true,
       adminAppUrl: null,
       locale: FALLBACK_LOCALE,
-      market: FALLBACK_MARKET.id,
-      markets: MARKETS.map((m) => ({ id: m.id, label: marketLabel(m, m.currency) })),
+      currency: BASE_CURRENCY,
+      locales: localeOptions(),
+      currencies: currencyOptions([]),
       // Non sapendo a che punto sia, si mostra il menu intero: nascondere
       // pagine per un guasto nostro sarebbe peggio del guasto.
       setupComplete: true,

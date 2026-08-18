@@ -2,7 +2,9 @@ import type { ActionFunctionArgs } from '@remix-run/node';
 import { json } from '@remix-run/node';
 import { authenticate } from '~/shopify.server';
 import { prisma } from '~/db.server';
-import { isMarketId } from '~/lib/i18n/markets';
+import { LOCALES } from '~/lib/i18n/locales';
+import { completeCurrenciesCached } from '~/lib/billing/shop-pricing.server';
+import { BASE_CURRENCY } from '~/lib/billing/money';
 
 /**
  * Lingua e valuta scelte dal merchant.
@@ -17,8 +19,17 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const form = await request.formData();
   const locale = String(form.get('locale') ?? '');
-  if (!isMarketId(locale)) {
+  if (!(LOCALES as readonly string[]).includes(locale)) {
     return json({ ok: false, error: 'Lingua non disponibile' }, { status: 400 });
+  }
+
+  // La valuta si accetta solo se il listino ce l'ha davvero: il selettore le
+  // offre gia' filtrate, ma la richiesta arriva dal browser e questa e' l'unica
+  // difesa che non dipende da cosa il browser dichiara.
+  const currency = String(form.get('currency') ?? '').trim().toUpperCase();
+  const available = [BASE_CURRENCY, ...(await completeCurrenciesCached())];
+  if (currency && !available.includes(currency)) {
+    return json({ ok: false, error: 'Valuta non disponibile' }, { status: 400 });
   }
 
   const shop = await prisma.shop.findUnique({ where: { shopDomain: session.shop } });
@@ -26,6 +37,9 @@ export async function action({ request }: ActionFunctionArgs) {
     return json({ ok: false, error: 'Negozio non trovato' }, { status: 404 });
   }
 
-  await prisma.shop.update({ where: { id: shop.id }, data: { locale } });
+  await prisma.shop.update({
+    where: { id: shop.id },
+    data: { locale, preferredCurrency: currency || null },
+  });
   return json({ ok: true });
 }

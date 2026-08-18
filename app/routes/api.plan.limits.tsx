@@ -5,7 +5,7 @@ import { prisma } from '~/db.server';
 import { samePlanName } from '~/lib/billing/plan-name';
 import { BASE_CURRENCY } from '~/lib/billing/money';
 import { resolveShopPricing } from '~/lib/billing/shop-pricing.server';
-import { resolveMarket } from '~/lib/i18n/markets';
+import { wantedCurrency } from '~/lib/i18n/preferences';
 
 /**
  * Piano in uso e listino, per l'avviso sul limite prodotti.
@@ -31,7 +31,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   // Anche qui i prezzi escono nella valuta del negozio: l'avviso propone un
   // piano e ne scrive il costo, e un costo in una valuta che il merchant non
   // usa e' peggio di nessun costo.
-  const market = resolveMarket(shop.locale, shop.detectedLocale);
+
   const reserved = shop.partnerName
     ? await prisma.partnerPlanPrice.count({ where: { partnerName: shop.partnerName } })
     : 0;
@@ -44,7 +44,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       maxCustomers: p.maxCustomers,
       customersSyncEnabled: p.customersSyncEnabled,
     })),
-    { preferredCurrency: market.currency, hasReservedPrice: reserved > 0 },
+    { preferredCurrency: wantedCurrency(shop), hasReservedPrice: reserved > 0 },
   );
 
   return json({

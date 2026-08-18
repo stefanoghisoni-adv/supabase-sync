@@ -21,7 +21,7 @@ import {
 import { samePlanName } from '~/lib/billing/plan-name';
 import { resolveShopPricing } from '~/lib/billing/shop-pricing.server';
 import { dictionaryForShop } from '~/lib/i18n/server';
-import { resolveMarket } from '~/lib/i18n/markets';
+import { wantedCurrency } from '~/lib/i18n/preferences';
 
 // Avvio del cambio di piano. Qui NON si attiva niente: l'abbonamento nasce in
 // attesa di conferma e diventa effettivo solo in /billing/callback, dopo che
@@ -122,7 +122,7 @@ export async function action({ request }: ActionFunctionArgs) {
   // risposta che ha prodotto le card: un prezzo mostrato in una valuta e
   // addebitato in un'altra non e' un dettaglio, e' una cifra che il merchant
   // non ha mai accettato.
-  const market = resolveMarket(shop.locale, shop.detectedLocale);
+
   const allPlans = await prisma.plan.findMany();
   const pricing = await resolveShopPricing(
     allPlans.map((p) => ({
@@ -130,7 +130,7 @@ export async function action({ request }: ActionFunctionArgs) {
       priceMonthly: Number(p.priceMonthly),
       priceYearly: Number(p.priceYearly),
     })),
-    { preferredCurrency: market.currency, hasReservedPrice: partnerPrice != null },
+    { preferredCurrency: wantedCurrency(shop), hasReservedPrice: partnerPrice != null },
   );
   const pricedPlan =
     pricing.plans.find((p) => samePlanName(p.planName, plan.planName)) ?? {

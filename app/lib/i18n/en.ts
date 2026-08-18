@@ -31,6 +31,7 @@ export const en: typeof it = {
 
   language: {
     label: 'Language',
+    currency: 'Currency',
     searchPlaceholder: 'Search for a language…',
     saving: 'Saving…',
   },

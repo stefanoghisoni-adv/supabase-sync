@@ -3,8 +3,11 @@ import { MetricRow } from './MetricRow';
 import { planLabel, syncStatusBadge } from './account-format';
 import { useNavLoading } from './nav-loading';
 import { useT } from '~/lib/i18n/context';
-import { LanguageSelect, type MarketOption } from './LanguageSelect';
-import type { MarketId } from '~/lib/i18n/markets';
+import {
+  PreferencesSelect,
+  type PreferenceOption,
+  type Preferences,
+} from './PreferencesSelect';
 
 export interface AccountCardProps {
   planName: string;
@@ -18,9 +21,10 @@ export interface AccountCardProps {
   customersUpgradePlan?: string | null;
   /** La lingua in uso e come cambiarla: vive qui perche' e' un dato di account. */
   /** Lingua e valuta in uso, e quelle fra cui scegliere. */
-  market: MarketId;
-  markets: MarketOption[];
-  onLocaleChange: (market: MarketId) => void;
+  preferences: Preferences;
+  locales: PreferenceOption[];
+  currencies: PreferenceOption[];
+  onPreferencesChange: (next: Preferences) => void;
   localeSaving?: boolean;
 }
 
@@ -29,9 +33,10 @@ export function AccountCard({
   productsSyncActive,
   customersSyncActive,
   customersUpgradePlan,
-  market,
-  markets,
-  onLocaleChange,
+  preferences,
+  locales,
+  currencies,
+  onPreferencesChange,
   localeSaving,
 }: AccountCardProps) {
   const t = useT();
@@ -91,10 +96,11 @@ export function AccountCard({
             {t.language.label}
           </Text>
           <Box minWidth="45%">
-            <LanguageSelect
-              options={markets}
-              value={market}
-              onChange={onLocaleChange}
+            <PreferencesSelect
+              locales={locales}
+              currencies={currencies}
+              value={preferences}
+              onConfirm={onPreferencesChange}
               saving={localeSaving}
             />
           </Box>

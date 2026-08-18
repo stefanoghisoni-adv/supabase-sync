@@ -76,9 +76,11 @@ import {
 } from '~/components/Dashboard/tracking-platforms';
 import { preselectedPlan, recommendedPlan } from '~/components/Dashboard/plan-step';
 import { resolveShopPricing } from '~/lib/billing/shop-pricing.server';
-import { resolveMarket } from '~/lib/i18n/markets';
-import { LanguageSelect } from '~/components/Dashboard/LanguageSelect';
-import type { MarketId } from '~/lib/i18n/markets';
+import { wantedCurrency } from '~/lib/i18n/preferences';
+import {
+  PreferencesSelect,
+  type Preferences,
+} from '~/components/Dashboard/PreferencesSelect';
 import type { loader as rootLoader } from '~/root';
 
 /**
@@ -181,8 +183,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
       prisma.trackingSetup.findUnique({ where: { shopId: shop.id } }),
     ]);
 
-    // Lingua e valuta scelte dal merchant, o dedotte dal suo admin.
-    const market = resolveMarket(shop.locale, shop.detectedLocale);
+    // La valuta che il merchant si aspetta: la sua scelta, o quella che di
+    // solito accompagna la sua lingua.
 
     // In che valuta parlare a questo negozio, e il listino gia' riscritto in
     // quella valuta. Da qui in giu' nessuno tocca piu' i prezzi: quelli mostrati
@@ -198,7 +200,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         customersSyncEnabled: p.customersSyncEnabled,
         supportLevel: p.supportLevel,
       })),
-      { preferredCurrency: market.currency, hasReservedPrice: partnerPrices.length > 0 },
+      { preferredCurrency: wantedCurrency(shop), hasReservedPrice: partnerPrices.length > 0 },
     );
 
     const plan = plans.find((p) => samePlanName(p.planName, shop.currentPlan)) ?? null;
@@ -600,8 +602,11 @@ export default function Dashboard() {
   const root = useRouteLoaderData<typeof rootLoader>('root');
   const localeFetcher = useFetcher<{ ok?: boolean }>();
   const changeLocale = useCallback(
-    (next: MarketId) => {
-      localeFetcher.submit({ locale: next }, { method: 'POST', action: '/api/locale' });
+    (next: Preferences) => {
+      localeFetcher.submit(
+        { locale: next.locale, currency: next.currency },
+        { method: 'POST', action: '/api/locale' },
+      );
     },
     [localeFetcher],
   );
@@ -1065,7 +1070,10 @@ export default function Dashboard() {
   return (
     <Page
       fullWidth
-      title={t.dashboard.title}
+      // Durante la configurazione la pagina si chiama come quello che ci si
+      // fa: "Dashboard" prometterebbe numeri che ancora non esistono, ed e' la
+      // stessa parola che il menu ha gia' sostituito.
+      title={setupComplete ? t.dashboard.title : t.nav.configuration}
       // Durante la configurazione la barra porta la sola lingua: Impostazioni
       // parlerebbe di un progetto che non c'e' ancora, ed e' fra le pagine che
       // in questa fase non si raggiungono. A configurazione conclusa il
@@ -1084,11 +1092,15 @@ export default function Dashboard() {
               },
             ]
           : (
-              <LanguageSelect
+              <PreferencesSelect
                 variant="header"
-                options={root?.markets ?? []}
-                value={root?.market ?? 'en-US'}
-                onChange={changeLocale}
+                locales={root?.locales ?? []}
+                currencies={root?.currencies ?? []}
+                value={{
+                  locale: root?.locale ?? 'en',
+                  currency: root?.currency ?? 'USD',
+                }}
+                onConfirm={changeLocale}
                 saving={localeFetcher.state !== 'idle'}
               />
             )

@@ -60,10 +60,16 @@ model Shop {
   // ogni apertura dell'app — la risposta arriva da una richiesta al browser, e
   // il browser riparte da zero ogni volta.
   trackingCheckedAt     DateTime?          @map("tracking_checked_at")
-  // Lingua scelta dal merchant in Impostazioni. null = si segue quella del suo
-  // admin Shopify, che e' il comportamento normale: la lingua non si chiede,
-  // la si eredita. Una scelta esplicita invece vince sempre.
+  // Lingua scelta dal merchant. null = si segue quella del suo admin Shopify,
+  // che e' il comportamento normale: la lingua non si chiede, la si eredita.
+  // Una scelta esplicita invece vince sempre. Contiene la sola lingua ("it",
+  // "en"); i valori "en-US"/"en-GB" salvati quando lingua e valuta erano una
+  // scelta sola si leggono ancora, e portano con se' la loro valuta.
   locale                String?
+  // Valuta scelta dal merchant, indipendente dalla lingua: un negozio olandese
+  // legge in inglese e paga in euro, e prima non poteva dirlo. null = si usa
+  // quella che di solito accompagna la sua lingua.
+  preferredCurrency     String?            @map("preferred_currency")
   // L'ultima lingua che Shopify ci ha dichiarato per questo admin. La manda in
   // coda alla URL a ogni apertura, ma non alle navigazioni interne: senza
   // ricordarla, a meta' sessione l'app cambierebbe lingua da sola.
