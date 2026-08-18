@@ -27,7 +27,15 @@ export interface ShopPricing<T extends PricedPlan> {
  */
 export async function resolveShopPricing<T extends PricedPlan>(
   plans: T[],
-  opts: { billingCurrency: string | null | undefined; hasReservedPrice: boolean },
+  opts: {
+    /**
+     * La valuta che il negozio si aspetta: quella del mercato scelto nel
+     * selettore in alto. Si onora solo se il listino esiste per intero in
+     * quella valuta — un prezzo si mostra quando lo si incassa davvero.
+     */
+    preferredCurrency: string | null | undefined;
+    hasReservedPrice: boolean;
+  },
 ): Promise<ShopPricing<T>> {
   const rows = await prisma.planPrice.findMany();
   const prices = rows.map((row) => ({
@@ -38,10 +46,54 @@ export async function resolveShopPricing<T extends PricedPlan>(
   }));
 
   const currency = resolveShopCurrency({
-    shopCurrency: opts.billingCurrency,
+    shopCurrency: opts.preferredCurrency,
     complete: completeCurrencies(plans, prices),
     hasReservedPrice: opts.hasReservedPrice,
   });
 
   return { currency, plans: planPricesIn(plans, prices, currency) };
+}
+
+/**
+ * Le valute in cui il listino e' completo, per il selettore in alto.
+ *
+ * Serve a ogni apertura di ogni pagina — l'etichetta di ogni voce dice in che
+ * valuta si finirebbe — e cambia solo quando l'owner tocca il listino: tenerla
+ * in memoria per un minuto evita due letture per pagina senza rischiare di
+ * mostrare per molto un listino vecchio.
+ */
+const CACHE_MS = 60_000;
+let cache: { at: number; currencies: string[] } | null = null;
+
+export async function completeCurrenciesCached(): Promise<string[]> {
+  if (cache && Date.now() - cache.at < CACHE_MS) return cache.currencies;
+
+  const [plans, rows] = await Promise.all([
+    prisma.plan.findMany({
+      select: { planName: true, priceMonthly: true, priceYearly: true },
+    }),
+    prisma.planPrice.findMany(),
+  ]);
+
+  const currencies = completeCurrencies(
+    plans.map((p) => ({
+      planName: p.planName,
+      priceMonthly: Number(p.priceMonthly),
+      priceYearly: Number(p.priceYearly),
+    })),
+    rows.map((row) => ({
+      planName: row.planName,
+      currency: row.currency,
+      priceMonthly: Number(row.priceMonthly),
+      priceYearly: Number(row.priceYearly),
+    })),
+  );
+
+  cache = { at: Date.now(), currencies };
+  return currencies;
+}
+
+/** Solo per i test: dimentica quel che si e' letto. */
+export function clearPricingCache(): void {
+  cache = null;
 }

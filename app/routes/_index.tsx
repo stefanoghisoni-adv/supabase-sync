@@ -6,6 +6,7 @@ import {
   useLoaderData,
   useFetcher,
   useRevalidator,
+  useRouteLoaderData,
   useSearchParams,
 } from '@remix-run/react';
 import type { CSSProperties } from 'react';
@@ -75,9 +76,10 @@ import {
 } from '~/components/Dashboard/tracking-platforms';
 import { preselectedPlan, recommendedPlan } from '~/components/Dashboard/plan-step';
 import { resolveShopPricing } from '~/lib/billing/shop-pricing.server';
+import { resolveMarket } from '~/lib/i18n/markets';
 import { LanguageSelect } from '~/components/Dashboard/LanguageSelect';
-import { useLocale } from '~/lib/i18n/context';
-import type { Locale } from '~/lib/i18n/locales';
+import type { MarketId } from '~/lib/i18n/markets';
+import type { loader as rootLoader } from '~/root';
 
 /**
  * Larghezza del contenitore durante la configurazione.
@@ -179,6 +181,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
       prisma.trackingSetup.findUnique({ where: { shopId: shop.id } }),
     ]);
 
+    // Lingua e valuta scelte dal merchant, o dedotte dal suo admin.
+    const market = resolveMarket(shop.locale, shop.detectedLocale);
+
     // In che valuta parlare a questo negozio, e il listino gia' riscritto in
     // quella valuta. Da qui in giu' nessuno tocca piu' i prezzi: quelli mostrati
     // nelle card e quelli che finiscono in fattura escono dalla stessa lista.
@@ -193,7 +198,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         customersSyncEnabled: p.customersSyncEnabled,
         supportLevel: p.supportLevel,
       })),
-      { billingCurrency: shop.billingCurrency, hasReservedPrice: partnerPrices.length > 0 },
+      { preferredCurrency: market.currency, hasReservedPrice: partnerPrices.length > 0 },
     );
 
     const plan = plans.find((p) => samePlanName(p.planName, shop.currentPlan)) ?? null;
@@ -592,10 +597,10 @@ export default function Dashboard() {
   // l'app: chi non legge l'italiano non arriva al primo passo. La scelta vale
   // per tutta l'app, quindi si rilegge il dato di root, che e' dove la lingua
   // vive.
-  const locale = useLocale();
+  const root = useRouteLoaderData<typeof rootLoader>('root');
   const localeFetcher = useFetcher<{ ok?: boolean }>();
   const changeLocale = useCallback(
-    (next: Locale) => {
+    (next: MarketId) => {
       localeFetcher.submit({ locale: next }, { method: 'POST', action: '/api/locale' });
     },
     [localeFetcher],
@@ -1081,7 +1086,8 @@ export default function Dashboard() {
           : (
               <LanguageSelect
                 variant="header"
-                value={locale}
+                options={root?.markets ?? []}
+                value={root?.market ?? 'en-US'}
                 onChange={changeLocale}
                 saving={localeFetcher.state !== 'idle'}
               />

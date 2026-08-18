@@ -3,8 +3,8 @@ import { MetricRow } from './MetricRow';
 import { planLabel, syncStatusBadge } from './account-format';
 import { useNavLoading } from './nav-loading';
 import { useT } from '~/lib/i18n/context';
-import { LanguageSelect } from './LanguageSelect';
-import type { Locale } from '~/lib/i18n/locales';
+import { LanguageSelect, type MarketOption } from './LanguageSelect';
+import type { MarketId } from '~/lib/i18n/markets';
 
 export interface AccountCardProps {
   planName: string;
@@ -17,8 +17,10 @@ export interface AccountCardProps {
    */
   customersUpgradePlan?: string | null;
   /** La lingua in uso e come cambiarla: vive qui perche' e' un dato di account. */
-  locale: Locale;
-  onLocaleChange: (locale: Locale) => void;
+  /** Lingua e valuta in uso, e quelle fra cui scegliere. */
+  market: MarketId;
+  markets: MarketOption[];
+  onLocaleChange: (market: MarketId) => void;
   localeSaving?: boolean;
 }
 
@@ -27,7 +29,8 @@ export function AccountCard({
   productsSyncActive,
   customersSyncActive,
   customersUpgradePlan,
-  locale,
+  market,
+  markets,
   onLocaleChange,
   localeSaving,
 }: AccountCardProps) {
@@ -89,7 +92,8 @@ export function AccountCard({
           </Text>
           <Box minWidth="45%">
             <LanguageSelect
-              value={locale}
+              options={markets}
+              value={market}
               onChange={onLocaleChange}
               saving={localeSaving}
             />

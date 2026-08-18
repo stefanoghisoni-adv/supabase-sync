@@ -28,6 +28,7 @@ import { BASE_CURRENCY, formatMoney, formatMoneyExact } from '~/lib/billing/mone
 import { useLocale, useT } from '~/lib/i18n/context';
 import type { Locale } from '~/lib/i18n/locales';
 import { resolveShopPricing } from '~/lib/billing/shop-pricing.server';
+import { resolveMarket } from '~/lib/i18n/markets';
 import {
   effectivePrice,
   savingBadge,
@@ -108,6 +109,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
     ]),
   );
 
+  const market = resolveMarket(shop?.locale, shop?.detectedLocale);
+
   // Valuta del negozio e listino gia' scritto in quella valuta: i prezzi che si
   // leggono qui sono gli stessi che /billing/subscribe ricalcola per la fattura.
   const pricing = await resolveShopPricing(
@@ -121,7 +124,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       customersSyncEnabled: plan.customersSyncEnabled,
       supportLevel: plan.supportLevel,
     })),
-    { billingCurrency: shop?.billingCurrency, hasReservedPrice: partnerPrices.length > 0 },
+    { preferredCurrency: market.currency, hasReservedPrice: partnerPrices.length > 0 },
   );
 
   const cards = buildPlanCards(pricing.plans, reserved);

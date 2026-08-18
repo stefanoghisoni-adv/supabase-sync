@@ -40,6 +40,11 @@ function formatter(currency: string, locale: Locale, fractionDigits: number): In
   return new Intl.NumberFormat(NUMBER_LOCALE[locale] ?? NUMBER_LOCALE.en, {
     style: 'currency',
     currency,
+    // Il simbolo, non la sigla: in italiano Intl scriverebbe "29 USD" per le
+    // valute straniere, e un prezzo si legge meglio con "$" o "€" davanti alla
+    // cifra che con tre lettere. Con il mercato scelto dal merchant la valuta
+    // straniera e' ormai un caso di ripiego, ma resta un prezzo da leggere.
+    currencyDisplay: 'narrowSymbol',
     minimumFractionDigits: fractionDigits,
     maximumFractionDigits: fractionDigits,
   });

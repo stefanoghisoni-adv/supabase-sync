@@ -1,6 +1,7 @@
 import { prisma } from '~/db.server';
 import { dictionaryFor, type Dictionary } from './context';
-import { FALLBACK_LOCALE, resolveLocale, type Locale } from './locales';
+import { type Locale } from './locales';
+import { FALLBACK_MARKET, resolveMarket, type Market } from './markets';
 
 /**
  * Il dizionario di un negozio, dal server.
@@ -14,7 +15,7 @@ import { FALLBACK_LOCALE, resolveLocale, type Locale } from './locales';
  * costa meno di tutto il resto, e sui percorsi che vanno a buon fine non viene
  * mai chiamata.
  */
-export async function localeForShop(shopDomain: string): Promise<Locale> {
+export async function marketForShop(shopDomain: string): Promise<Market> {
   const shop = await prisma.shop
     .findUnique({
       where: { shopDomain },
@@ -23,9 +24,13 @@ export async function localeForShop(shopDomain: string): Promise<Locale> {
     .catch(() => null);
 
   // Un guasto del database non deve trasformare un errore in un errore
-  // diverso: si ripiega sulla lingua di riserva e il messaggio arriva comunque.
-  if (!shop) return FALLBACK_LOCALE;
-  return resolveLocale(shop.locale, shop.detectedLocale);
+  // diverso: si ripiega sul mercato di riserva e il messaggio arriva comunque.
+  if (!shop) return FALLBACK_MARKET;
+  return resolveMarket(shop.locale, shop.detectedLocale);
+}
+
+export async function localeForShop(shopDomain: string): Promise<Locale> {
+  return (await marketForShop(shopDomain)).language;
 }
 
 export async function dictionaryForShop(shopDomain: string): Promise<Dictionary> {

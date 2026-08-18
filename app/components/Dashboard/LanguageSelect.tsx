@@ -1,12 +1,21 @@
 import { useMemo, useState } from 'react';
 import { Box, Button, Icon, OptionList, Popover, TextField } from '@shopify/polaris';
 import { LanguageIcon, SearchIcon } from '@shopify/polaris-icons';
-import { LOCALES, LOCALE_LABELS, needsSearch, type Locale } from '~/lib/i18n/locales';
+import { needsSearch } from '~/lib/i18n/locales';
+import type { MarketId } from '~/lib/i18n/markets';
 import { useT } from '~/lib/i18n/context';
 
+export interface MarketOption {
+  id: MarketId;
+  /** Bandiera, lingua e valuta gia' composte: "🇪🇺 Italiano — EUR". */
+  label: string;
+}
+
 export interface LanguageSelectProps {
-  value: Locale;
-  onChange: (locale: Locale) => void;
+  /** I mercati fra cui scegliere, con le etichette gia' pronte dal server. */
+  options: MarketOption[];
+  value: MarketId;
+  onChange: (market: MarketId) => void;
   /** La scelta e' in viaggio verso il server. */
   saving?: boolean;
   disabled?: boolean;
@@ -24,7 +33,11 @@ export interface LanguageSelectProps {
 }
 
 /**
- * Il selettore della lingua.
+ * Il selettore della lingua — e con essa della valuta.
+ *
+ * Sono una scelta sola perche' per il merchant sono una cosa sola: chi legge in
+ * italiano vuole i prezzi in euro. L'etichetta le dice entrambe, cosi' nessuno
+ * scopre la valuta al momento di pagare.
  *
  * Popover + OptionList, non `<Select>`: quest'ultimo rende un `<select>` nativo,
  * quindi il menu aperto sarebbe quello del sistema operativo — un pezzo di
@@ -40,6 +53,7 @@ export interface LanguageSelectProps {
  * usa.
  */
 export function LanguageSelect({
+  options: markets,
   value,
   onChange,
   saving,
@@ -51,8 +65,8 @@ export function LanguageSelect({
   const [query, setQuery] = useState('');
 
   const options = useMemo(
-    () => LOCALES.map((locale) => ({ value: locale, label: LOCALE_LABELS[locale] })),
-    [],
+    () => markets.map((market) => ({ value: market.id, label: market.label })),
+    [markets],
   );
 
   const filtered = useMemo(() => {
@@ -61,7 +75,7 @@ export function LanguageSelect({
     return options.filter((option) => option.label.toLowerCase().includes(needle));
   }, [options, query]);
 
-  const searchable = needsSearch();
+  const searchable = needsSearch(markets.length);
   const inHeader = variant === 'header';
 
   return (
@@ -92,7 +106,7 @@ export function LanguageSelect({
             // chi il pulsante lo sente leggere invece di vederlo.
             accessibilityLabel={t.language.label}
           >
-            {LOCALE_LABELS[value]}
+            {markets.find((market) => market.id === value)?.label ?? value}
           </Button>
         }
       >
@@ -119,7 +133,7 @@ export function LanguageSelect({
             options={filtered}
             selected={[value]}
             onChange={(selected) => {
-              if (selected[0]) onChange(selected[0] as Locale);
+              if (selected[0]) onChange(selected[0] as MarketId);
               setActive(false);
               setQuery('');
             }}

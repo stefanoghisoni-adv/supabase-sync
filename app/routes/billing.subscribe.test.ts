@@ -209,8 +209,10 @@ describe('/billing/subscribe', () => {
     ).toBe('admin.shopify.com/store/test-shop');
   });
 
-  it('il negozio paga nella sua valuta quando il listino esiste in quella valuta', async () => {
-    findUniqueShop.mockResolvedValue({ ...SHOP, billingCurrency: 'GBP' });
+  it('il negozio paga nella valuta che ha scelto, se il listino esiste', async () => {
+    // La valuta segue il mercato scelto nel selettore in alto: lingua e valuta
+    // sono la stessa scelta.
+    findUniqueShop.mockResolvedValue({ ...SHOP, locale: 'en-GB' });
     findPlanMock.mockResolvedValue({ planName: 'Pro', priceMonthly: 29, trialDays: 7 });
     findManyPlanPrices.mockResolvedValue([
       { planName: 'Pro', currency: 'GBP', priceMonthly: 32, priceYearly: 320 },
@@ -229,7 +231,7 @@ describe('/billing/subscribe', () => {
   });
 
   it('senza listino nella sua valuta si addebita nella valuta base, non un prezzo inventato', async () => {
-    findUniqueShop.mockResolvedValue({ ...SHOP, billingCurrency: 'GBP' });
+    findUniqueShop.mockResolvedValue({ ...SHOP, locale: 'en-GB' });
     findPlanMock.mockResolvedValue({ planName: 'Pro', priceMonthly: 29, trialDays: 7 });
     findManyPlanPrices.mockResolvedValue([]);
     createAppSubscription.mockResolvedValue({

@@ -1,7 +1,8 @@
 import { requireSetupComplete } from '~/lib/setup/require-setup.server';
 import type { LoaderFunctionArgs } from '@remix-run/node';
 import { json } from '@remix-run/node';
-import { useFetcher, useLoaderData, useRevalidator } from '@remix-run/react';
+import { useFetcher, useLoaderData, useRevalidator, useRouteLoaderData } from '@remix-run/react';
+import type { loader as rootLoader } from '~/root';
 import {
   Page,
   Layout,
@@ -22,8 +23,8 @@ import { syncIsActive } from '~/lib/sync/sync-active';
 import { loadSyncTiming } from '~/lib/sync/sync-timing.server';
 import { projectDashboardUrl } from '~/lib/supabase-management.server';
 import { SyncCard } from '~/components/Dashboard/SyncCard';
-import { useT, useLocale } from '~/lib/i18n/context';
-import type { Locale } from '~/lib/i18n/locales';
+import { useT } from '~/lib/i18n/context';
+import type { MarketId } from '~/lib/i18n/markets';
 import { useCallback, useEffect } from 'react';
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -126,14 +127,16 @@ export async function loader({ request }: LoaderFunctionArgs) {
 export default function SupabaseSettings() {
   const { account, config, sync } = useLoaderData<typeof loader>();
   const t = useT();
-  const locale = useLocale();
+  // Lingua e valuta vivono in root: sono una scelta sola e valgono per tutta
+  // l'app, non per questa pagina.
+  const root = useRouteLoaderData<typeof rootLoader>('root');
 
   // La lingua si applica a tutta l'app, non alla sola pagina: salvata la
   // scelta si rilegge il dato di root, che e' dove la lingua vive.
   const localeFetcher = useFetcher<{ ok?: boolean }>();
   const revalidator = useRevalidator();
   const changeLocale = useCallback(
-    (next: Locale) => {
+    (next: MarketId) => {
       localeFetcher.submit({ locale: next }, { method: 'POST', action: '/api/locale' });
     },
     [localeFetcher],
@@ -201,7 +204,8 @@ export default function SupabaseSettings() {
                 productsSyncActive={account.productsSyncActive}
                 customersSyncActive={account.customersSyncActive}
                 customersUpgradePlan={account.customersUpgradePlan}
-                locale={locale}
+                market={root?.market ?? 'en-US'}
+                markets={root?.markets ?? []}
                 onLocaleChange={changeLocale}
                 localeSaving={localeFetcher.state !== 'idle'}
               />
