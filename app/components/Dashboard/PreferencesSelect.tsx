@@ -125,7 +125,9 @@ export function PreferencesSelect({
       // riga della card l'attivatore e' meta' riga — le colonne finivano
       // tagliate. Il riquadro si dimensiona sul contenuto.
       preferredPosition="below"
-      preferredAlignment={inHeader ? 'right' : undefined}
+      // Il comando sta sempre all'estremo destro — della barra o della riga di
+      // card — quindi il riquadro si apre verso l'interno, o sborda dal bordo.
+      preferredAlignment="right"
       onClose={() => setActive(false)}
       activator={
         <Button

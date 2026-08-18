@@ -61,5 +61,12 @@ export async function action({ request }: ActionFunctionArgs) {
   await prisma.supabaseOAuthToken.deleteMany({ where: { shopId: shop.id } });
   await prisma.supabaseConfig.deleteMany({ where: { shopId: shop.id } });
 
+  // Scollegarsi riporta il negozio al punto di partenza: da qui la
+  // configurazione si rifa' da capo, ed e' l'unico gesto che la riapre.
+  await prisma.shop.update({
+    where: { id: shop.id },
+    data: { setupCompletedAt: null },
+  });
+
   return json({ ok: true });
 }

@@ -2,6 +2,7 @@ import { useT } from '~/lib/i18n/context';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useFetcher, useRevalidator } from '@remix-run/react';
 import {
+  Tooltip,
   ActionList,
   BlockStack,
   Box,
@@ -111,15 +112,6 @@ export function SupabaseProjectConnect({
   // pulsante di upgrade valgono in entrambi i casi.
   const planLimitFromCreate = createFetcher.data?.code === 'plan_limit';
   const planLimitHit = Boolean(limits?.limitReached || planLimitFromCreate);
-  // Quanti progetti risultano occupati, e su quanti quando lo sappiamo. E' la
-  // sola cosa che conosciamo sempre: il numero dei progetti arriva con il loro
-  // elenco, mentre il tetto dipende dal piano, che Supabase ci dice solo se il
-  // merchant ci ha concesso di leggerlo.
-  const projectCountLabel = limits
-    ? limits.maxProjects != null
-      ? t.connect.database.projectsUsed(limits.activeProjects, limits.maxProjects)
-      : t.connect.database.projectsActive(limits.activeProjects)
-    : undefined;
   const planLimitBillingUrl = createFetcher.data?.billingUrl ?? limits?.billingUrl ?? null;
 
   const [regionPopoverActive, setRegionPopoverActive] = useState(false);
@@ -346,36 +338,52 @@ export function SupabaseProjectConnect({
                   </Button>
                 }
               >
-                <ActionList
-                  actionRole="menuitem"
-                  items={[
-                    {
-                      content: t.connect.database.create,
-                      icon: PlusIcon,
-                      // Spento quando il piano Supabase non consente altri
-                      // progetti: resta al suo posto per dire cosa non si puo'
-                      // fare, invece di sparire senza spiegazioni. Quanti ne
-                      // risultano attivi si scrive comunque — anche quando il
-                      // piano non e' noto, cosi' il merchant vede da se' se lo
-                      // spazio e' finito.
-                      disabled: limitsChecking || planLimitHit,
-                      helpText: projectCountLabel,
-                      onAction: () => {
+                {/* Due comandi in colonna invece di un ActionList: a limite
+                    raggiunto il primo va spento, e su una voce spenta un
+                    elenco Polaris non sa mostrare il perche'. Con un pulsante
+                    dentro un Tooltip il motivo arriva al passaggio del
+                    puntatore, dove lo si cerca. */}
+                <Box padding="200" minWidth="260px">
+                  <BlockStack gap="100">
+                    {planLimitHit ? (
+                      // Il Tooltip vuole un bersaglio che riceva il puntatore:
+                      // un pulsante spento non lo riceve, quindi si avvolge.
+                      <Tooltip content={t.connect.database.limitReached} preferredPosition="above">
+                        <div>
+                          <Button icon={PlusIcon} textAlign="left" fullWidth disabled>
+                            {t.connect.database.create}
+                          </Button>
+                        </div>
+                      </Tooltip>
+                    ) : (
+                      <Button
+                        icon={PlusIcon}
+                        textAlign="left"
+                        fullWidth
+                        loading={limitsChecking}
+                        disabled={limitsChecking}
+                        onClick={() => {
+                          setManageOpen(false);
+                          setChanging(true);
+                          setShowCreate(true);
+                        }}
+                      >
+                        {t.connect.database.create}
+                      </Button>
+                    )}
+                    <Button
+                      icon={ExchangeIcon}
+                      textAlign="left"
+                      fullWidth
+                      onClick={() => {
                         setManageOpen(false);
                         setChanging(true);
-                        setShowCreate(true);
-                      },
-                    },
-                    {
-                      content: t.connect.database.change,
-                      icon: ExchangeIcon,
-                      onAction: () => {
-                        setManageOpen(false);
-                        setChanging(true);
-                      },
-                    },
-                  ]}
-                />
+                      }}
+                    >
+                      {t.connect.database.change}
+                    </Button>
+                  </BlockStack>
+                </Box>
               </Popover>
             </InlineStack>
           </InlineStack>

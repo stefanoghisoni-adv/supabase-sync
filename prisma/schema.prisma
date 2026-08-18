@@ -66,6 +66,13 @@ model Shop {
   // "en"); i valori "en-US"/"en-GB" salvati quando lingua e valuta erano una
   // scelta sola si leggono ancora, e portano con se' la loro valuta.
   locale                String?
+  // Quando la configurazione e' arrivata in fondo la prima volta.
+  //
+  // Da quel momento non ci si torna piu': cambiare database o piano non
+  // rimanda a rifare i passi, che e' quel che succedeva finche' lo stato si
+  // ricalcolava ogni volta dai dati. Si azzera solo scollegando l'account, che
+  // e' l'unico gesto che riporta il negozio al punto di partenza.
+  setupCompletedAt      DateTime?          @map("setup_completed_at")
   // Valuta scelta dal merchant, indipendente dalla lingua: un negozio olandese
   // legge in inglese e paga in euro, e prima non poteva dirlo. null = si usa
   // quella che di solito accompagna la sua lingua.
@@ -174,6 +181,9 @@ model SupabaseConfig {
   supabasePublicKey      String    @map("supabase_public_key")
   supabaseServiceRoleKey String    @map("supabase_service_role_key")
   supabaseProjectRef     String?   @map("supabase_project_ref")
+  /// Nome del progetto come il merchant l'ha chiamato su Supabase: il ref e'
+  /// una sigla, e in Impostazioni il nome e' quello che gli dice quale sia.
+  supabaseProjectName    String?   @map("supabase_project_name")
   tableNameProducts      String    @default("products") @map("table_name_products")
   tableNameCustomers     String    @default("customers") @map("table_name_customers")
   // Nessun campo per "sincronizzazione attiva": e' automatica e sempre attiva

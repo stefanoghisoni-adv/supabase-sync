@@ -9,8 +9,10 @@ import {
   Banner,
   BlockStack,
   InlineGrid,
+  InlineStack,
   Box,
   Button,
+  Text,
 } from '@shopify/polaris';
 import { authenticate } from '~/shopify.server';
 import { prisma } from '~/db.server';
@@ -122,6 +124,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       // progetto risponde, che aperto in un browser da' una risposta dell'API.
       databaseUrl: config.supabaseUrl,
       projectRef: config.supabaseProjectRef,
+      projectName: config.supabaseProjectName,
       dashboardUrl: config.supabaseProjectRef
         ? projectDashboardUrl(config.supabaseProjectRef)
         : null,
@@ -259,6 +262,25 @@ export default function SupabaseSettings() {
                         projectUrl={config?.databaseUrl ?? undefined}
                         authorization={authorization}
                       />
+                      {/* Il ref e' una sigla: il nome e' quello che dice al
+                          merchant quale database sia. Compare solo se lo
+                          conosciamo — i collegamenti fatti prima che lo
+                          registrassimo non ce l'hanno. */}
+                      {config?.projectName && (
+                        <InlineStack
+                          align="space-between"
+                          blockAlign="center"
+                          gap="300"
+                          wrap={false}
+                        >
+                          <Text as="span" variant="bodyMd">
+                            {t.database.name}
+                          </Text>
+                          <Text as="span" tone="subdued" truncate>
+                            {config.projectName}
+                          </Text>
+                        </InlineStack>
+                      )}
                     </BlockStack>
                   ) : undefined
                 }

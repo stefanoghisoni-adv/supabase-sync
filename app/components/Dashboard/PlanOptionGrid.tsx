@@ -1,4 +1,13 @@
-import { Badge, BlockStack, Card, InlineGrid, InlineStack, RadioButton, Text } from '@shopify/polaris';
+import {
+  Badge,
+  BlockStack,
+  Box,
+  Card,
+  InlineGrid,
+  InlineStack,
+  RadioButton,
+  Text,
+} from '@shopify/polaris';
 import type { PlanCard } from '~/components/Billing/plan-catalog';
 import { PlanFeatureList } from '~/components/Billing/PlanFeatureList';
 import type { BillingInterval } from '~/lib/billing/partner-pricing';
@@ -48,6 +57,12 @@ export function PlanOptionGrid({
   const t = useT();
   const locale = useLocale();
   const isCurrent = (card: PlanCard) => samePlanName(card.name, currentPlanName);
+
+  // Se anche una sola card annuncia un risparmio, tutte riservano quella riga:
+  // altrimenti gli elenchi partono a quote diverse e le card affiancate
+  // sembrano disallineate. Dove nessuno risparmia la riga non esiste proprio, e
+  // nessuno paga uno spazio vuoto.
+  const anySaving = cards.some((card) => planSavingBadge(card, t, currency, locale) != null);
 
   return (
     <InlineGrid columns={{ xs: 1, sm: 2, lg: 4 }} gap="300">
@@ -109,12 +124,16 @@ export function PlanOptionGrid({
                         prezzo a cui si riferisce. Nasce dal testo: dove non c'e'
                         risparmio — il gratuito — il badge non esiste, invece di
                         comparire vuoto. */}
-                    {planSavingBadge(card, t, currency, locale) && (
-                      <InlineStack>
-                        <Badge tone="info">
-                          {planSavingBadge(card, t, currency, locale) as string}
-                        </Badge>
-                      </InlineStack>
+                    {anySaving && (
+                      <Box minHeight="20px">
+                        {planSavingBadge(card, t, currency, locale) && (
+                          <InlineStack>
+                            <Badge tone="info">
+                              {planSavingBadge(card, t, currency, locale) as string}
+                            </Badge>
+                          </InlineStack>
+                        )}
+                      </Box>
                     )}
                   </BlockStack>
 

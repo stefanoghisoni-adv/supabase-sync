@@ -55,10 +55,35 @@ export async function loadSetupInput(shopDomain: string): Promise<StepInput | nu
 /**
  * La configurazione non ha piu' niente da chiedere.
  *
- * Un negozio che non risulta ancora sul database e' all'inizio di tutto, quindi
- * non e' concluso: e' il primo istante dell'installazione.
+ * Si attraversa una volta sola: appena arriva in fondo la si registra, e da
+ * quel momento la risposta viene da li'. Ricalcolarla ogni volta dai dati
+ * significava rimandare il merchant a rifare i passi ogni volta che cambiava
+ * database — perche' il piano risultava confermato per il collegamento di
+ * prima. Si torna al punto di partenza solo scollegando l'account, che e'
+ * l'unico gesto che disfa davvero tutto.
+ *
+ * Un negozio che non risulta ancora sul database e' all'inizio di tutto,
+ * quindi non e' concluso: e' il primo istante dell'installazione.
  */
 export async function isSetupComplete(shopDomain: string): Promise<boolean> {
+  const shop = await prisma.shop.findUnique({
+    where: { shopDomain },
+    select: { id: true, setupCompletedAt: true },
+  });
+  if (!shop) return false;
+  if (shop.setupCompletedAt != null) return true;
+
   const input = await loadSetupInput(shopDomain);
-  return input != null && allStepsComplete(resolveStepStates(input));
+  const complete = input != null && allStepsComplete(resolveStepStates(input));
+
+  // Prima volta che arriva in fondo: si segna, e non si ripassa piu' di qui.
+  // Best effort — se la scrittura fallisce la risposta resta giusta, si
+  // riproverà alla prossima apertura.
+  if (complete) {
+    prisma.shop
+      .update({ where: { id: shop.id }, data: { setupCompletedAt: new Date() } })
+      .catch(() => {});
+  }
+
+  return complete;
 }

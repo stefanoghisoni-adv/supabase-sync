@@ -19,6 +19,7 @@ describe('Supabase client factory', () => {
       supabasePublicKey: 'encrypted_public',
       supabaseServiceRoleKey: 'encrypted_service',
       supabaseProjectRef: null,
+  supabaseProjectName: null,
       tableNameProducts: 'products',
       tableNameCustomers: 'customers',
       schemaVersion: 2,

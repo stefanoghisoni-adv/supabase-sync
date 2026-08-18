@@ -33,6 +33,7 @@ export const en: typeof it = {
     label: 'Language/currency',
     currency: 'Currency',
     searchPlaceholder: 'Search for a language…',
+    translating: 'Give it a moment while the translation finishes…',
     saving: 'Saving…',
   },
 
@@ -58,6 +59,7 @@ export const en: typeof it = {
   },
 
   database: {
+    name: 'Database name',
     title: 'Database',
     status: 'Status',
     appUrl: 'App URL',
@@ -115,27 +117,27 @@ export const en: typeof it = {
   },
 
   steps: {
-    badge: { complete: 'Done', active: 'In progress', locked: 'Locked' },
+    badge: { complete: 'Completed', active: 'In progress', locked: 'Locked' },
     connectAccount: {
       title: 'Connect Supabase',
-      complete: 'Connected',
+      complete: 'Completed',
       notConnected: 'Not connected',
       failed: 'Failed',
       inProgress: 'In progress',
     },
     connectDatabase: {
       title: 'Create or connect a database',
-      complete: 'Connected',
+      complete: 'Completed',
       locked: 'Sign in to Supabase to pick the database to connect.',
     },
     trackingCheck: {
       title: 'Tracking check',
-      complete: 'Checked',
+      complete: 'Completed',
       locked: 'Connect a database to check what already sends data.',
     },
     serverSide: {
       title: 'Do you already have full server-side tracking?',
-      complete: 'Answered',
+      complete: 'Completed',
       beta: 'Beta',
       locked: 'Finish the tracking check to answer this question.',
     },
@@ -202,8 +204,7 @@ export const en: typeof it = {
       limitAfter:
         ', or pause an existing project from the Supabase dashboard: paused projects take up no slot.',
       connectedTo: 'Database connected:',
-      projectsUsed: (used: number, max: number) => `${used} of ${max} used`,
-      projectsActive: (n: number) => `${n} ${n === 1 ? 'active project' : 'active projects'}`,
+      limitReached: 'You’ve reached the maximum number of databases for your Supabase plan.',
       manage: 'Manage',
       change: 'Change database',
       disconnect: 'Disconnect',

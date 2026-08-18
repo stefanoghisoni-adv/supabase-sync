@@ -303,6 +303,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
       // riparte da zero a ogni apertura: senza saperlo qui, la configurazione
       // risultava incompleta per i primi secondi e i passi ricomparivano sopra
       // una dashboard gia' pronta.
+      // La configurazione e' gia' stata attraversata: da li' in poi la
+      // dashboard non rimostra i passi, nemmeno quando qualche dato cambia
+      // (un database nuovo, un piano nuovo).
+      setupDone: shop.setupCompletedAt != null,
       trackingCheckedForConnection:
         shop.trackingCheckedAt != null &&
         shop.supabaseConfig?.connectionVerifiedAt != null &&
@@ -473,7 +477,7 @@ interface ProductHistoryResponse {
 }
 
 export default function Dashboard() {
-  const { shop, plan, supabaseConnected, supabaseAccountConnected, customersEnabled, authorization, syncState, planChanged, currentMaxProducts, previousMaxProducts, previousCustomersEnabled, customersTableCreated, customersUpgradePlan, trackingAuthorization, schemaUpdatePending, planOptions, sync, recentRuns, planChosen, planConfirmedForConnection, trackingCheckedForConnection, planCards, discountIntervals, currency, serverSideAnswer, serverSidePlatforms } =
+  const { shop, plan, supabaseConnected, supabaseAccountConnected, customersEnabled, authorization, syncState, planChanged, currentMaxProducts, previousMaxProducts, previousCustomersEnabled, customersTableCreated, customersUpgradePlan, trackingAuthorization, schemaUpdatePending, planOptions, sync, recentRuns, planChosen, planConfirmedForConnection, trackingCheckedForConnection, setupDone, planCards, discountIntervals, currency, serverSideAnswer, serverSidePlatforms } =
     useLoaderData<typeof loader>();
   const blocked = authorization !== 'ENABLED';
   const t = useT();
@@ -595,6 +599,24 @@ export default function Dashboard() {
     },
     [localeFetcher],
   );
+  // La lingua cambia in due tempi: prima la si salva, poi la pagina torna con i
+  // testi nuovi. In mezzo ci sono un paio di secondi in cui meta' schermata e'
+  // ancora nella lingua di prima: i comandi restano fermi, cosi' nessuno
+  // conferma un passo leggendo una frase che sta per cambiare.
+  // Mentre la traduzione arriva i comandi dei passi restano fermi: confermare
+  // un passo leggendo una frase che sta per cambiare sarebbe una scelta fatta
+  // su un testo che non c'e' piu'.
+  const [translating, setTranslating] = useState(false);
+  useEffect(() => {
+    if (localeFetcher.state === 'submitting') setTranslating(true);
+  }, [localeFetcher.state]);
+  useEffect(() => {
+    if (translating && localeFetcher.state === 'idle' && revalidator.state === 'idle') {
+      setTranslating(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [translating, localeFetcher.state, revalidator.state]);
+
   useEffect(() => {
     if (localeFetcher.state === 'idle' && localeFetcher.data?.ok) revalidator.revalidate();
     // revalidator fuori dalle dipendenze: revalidate() ne cambia lo stato, e
@@ -820,7 +842,9 @@ export default function Dashboard() {
   // Da qui in poi lo stepper sparisce — continuare a mostrarlo significa tenere
   // spazio occupato da caselle tutte spuntate — e quel che di utile conteneva,
   // account e database e disconnessione, passa nella card Connessione.
-  const setupComplete = allStepsComplete(steps);
+  // Conclusa una volta, conclusa per sempre: ci si torna solo scollegando
+  // l'account, che azzera il segno lasciato dal server.
+  const setupComplete = setupDone || allStepsComplete(steps);
 
   const planBanner = planChangeBanner({
     planChanged,
@@ -956,7 +980,7 @@ export default function Dashboard() {
         <SupabaseAccountConnect
           key={supabaseAccountConnected ? 'connected' : 'disconnected'}
           connected={supabaseAccountConnected}
-          disabled={blocked}
+          disabled={blocked || translating}
           projectName={shop.supabaseConfig?.supabaseProjectRef ?? undefined}
           projectUrl={shop.supabaseConfig?.supabaseUrl ?? undefined}
           onDisconnected={setDisconnectDone}
@@ -976,7 +1000,7 @@ export default function Dashboard() {
           connected={supabaseConnected}
           projectName={shop.supabaseConfig?.supabaseProjectRef ?? undefined}
           projectUrl={shop.supabaseConfig?.supabaseUrl ?? undefined}
-          disabled={blocked}
+          disabled={blocked || translating}
           authorization={authorization}
         />
       ),
@@ -1014,7 +1038,7 @@ export default function Dashboard() {
           onSelectedChange={setSelectedPlatforms}
           onAnswer={answerServerSide}
           submitting={answeringServerSide}
-          disabled={blocked}
+          disabled={blocked || translating}
           answered={isServerSideAnswer(serverSideAnswer) ? serverSideAnswer : null}
           error={serverSideError}
         />
@@ -1047,7 +1071,7 @@ export default function Dashboard() {
           recommendedPlanName={recommendedPlanName}
           onConfirm={confirmPlanAndSync}
           loading={inProgress || subscribing}
-          disabled={blocked}
+          disabled={blocked || translating}
           error={planError ?? syncFetcher.data?.error ?? null}
         />
       ),
@@ -1135,6 +1159,15 @@ export default function Dashboard() {
             <Text as="p">{b.message}</Text>
           </Banner>
         ))}
+
+        {/* Il cambio di lingua non e' istantaneo: la pagina deve tornare dal
+            server con i testi nuovi. Finche' non e' tornata lo si dice, gia'
+            nella lingua scelta, e i passi restano fermi. */}
+        {translating && (
+          <Banner tone="info">
+            <Text as="p">{t.language.translating}</Text>
+          </Banner>
+        )}
 
         {/* Chi altro sta gia' inviando eventi. Non compare se non c'e' niente
             da segnalare — e durante la configurazione non compare affatto:

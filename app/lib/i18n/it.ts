@@ -36,6 +36,7 @@ export const it = {
     currency: 'Valuta',
     /** Testo del campo di ricerca, quando le lingue sono molte. */
     searchPlaceholder: 'Cerca una lingua…',
+    translating: 'Attendi qualche istante per completare la traduzione…',
     saving: 'Salvataggio…',
   },
 
@@ -61,6 +62,7 @@ export const it = {
   },
 
   database: {
+    name: 'Nome database',
     title: 'Database',
     status: 'Stato',
     appUrl: 'App URL',
@@ -122,24 +124,24 @@ export const it = {
     badge: { complete: 'Completato', active: 'In corso', locked: 'Bloccato' },
     connectAccount: {
       title: 'Collega Supabase',
-      complete: 'Collegato',
+      complete: 'Completato',
       notConnected: 'Non collegato',
       failed: 'Fallito',
       inProgress: 'In corso',
     },
     connectDatabase: {
       title: 'Crea o collega un database',
-      complete: 'Collegato',
+      complete: 'Completato',
       locked: 'Accedi a Supabase per scegliere il database da collegare.',
     },
     trackingCheck: {
       title: 'Controllo tracciamenti',
-      complete: 'Controllato',
+      complete: 'Completato',
       locked: 'Collega un database per controllare cosa trasmette già dati.',
     },
     serverSide: {
       title: 'Hai già un tracciamento full server side?',
-      complete: 'Risposto',
+      complete: 'Completato',
       beta: 'Beta',
       locked: 'Finisci il controllo dei tracciamenti per rispondere a questa domanda.',
     },
@@ -207,8 +209,7 @@ export const it = {
       limitAfter:
         ', oppure metti in pausa un progetto esistente dalla dashboard Supabase: i progetti in pausa non occupano nessuno slot.',
       connectedTo: 'Database collegato:',
-      projectsUsed: (used: number, max: number) => `${used} di ${max} usati`,
-      projectsActive: (n: number) => `${n} ${n === 1 ? 'progetto attivo' : 'progetti attivi'}`,
+      limitReached: 'Hai raggiunto il limite massimo di database per il tuo piano Supabase.',
       manage: 'Gestisci',
       change: 'Cambia database',
       disconnect: 'Disconnetti',

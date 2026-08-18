@@ -7,6 +7,7 @@ import { encrypt } from '~/utils/crypto.server';
 import { getValidAccessToken } from '~/lib/supabase-oauth.server';
 import {
   getProjectApiKeys,
+  listProjects,
   runQuery,
   runQueryRows,
   projectUrl,
@@ -59,6 +60,13 @@ export async function action({ request }: ActionFunctionArgs) {
     const keys = await getProjectApiKeys(token, ref);
     const url = projectUrl(ref);
 
+    // Il nome che il merchant ha dato al progetto: il ref e' una sigla, e in
+    // Impostazioni e' il nome a dirgli quale database sia. Best effort — se
+    // l'elenco non arriva si collega lo stesso, con la sola sigla.
+    const projectName =
+      (await listProjects(token).catch(() => []))
+        .find((p) => p.id === ref)?.name ?? null;
+
     await prisma.supabaseConfig.upsert({
       where: { shopId: shop.id },
       create: {
@@ -69,12 +77,14 @@ export async function action({ request }: ActionFunctionArgs) {
         // Il ref è la sola fonte dell'host di inoltro del proxy di lettura:
         // senza, ogni lettura di tracciamento risponderebbe "non collegato".
         supabaseProjectRef: ref,
+        supabaseProjectName: projectName,
       },
       update: {
         supabaseUrl: url,
         supabasePublicKey: encrypt(keys.anon),
         supabaseServiceRoleKey: encrypt(keys.serviceRole),
         supabaseProjectRef: ref,
+        supabaseProjectName: projectName,
       },
     });
 
