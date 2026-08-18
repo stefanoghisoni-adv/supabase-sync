@@ -1,3 +1,4 @@
+import { dictionaryForShop } from '~/lib/i18n/server';
 import { useT } from '~/lib/i18n/context';
 import type { ActionFunctionArgs, LoaderFunctionArgs } from '@remix-run/node';
 import { json } from '@remix-run/node';
@@ -398,7 +399,10 @@ export async function action({ request }: ActionFunctionArgs) {
     // i pulsanti nell'HTML.
     if (!isAuthorized(shop.authorization)) {
       return json(
-        { error: "L'utilizzo dell'app è sospeso per questo negozio.", code: 'not_authorized' },
+        {
+          error: (await dictionaryForShop(session.shop)).errors.suspended,
+          code: 'not_authorized',
+        },
         { status: 403 },
       );
     }

@@ -1,3 +1,4 @@
+import { dictionaryForShop } from '~/lib/i18n/server';
 import type { ActionFunctionArgs } from '@remix-run/node';
 import { json } from '@remix-run/node';
 import { authenticate } from '~/shopify.server';
@@ -38,7 +39,11 @@ export async function action({ request }: ActionFunctionArgs) {
   const includeCustomers = plan?.customersSyncEnabled ?? false;
   if (!isAuthorized(shop.authorization)) {
     return json(
-      { ok: false, error: "L'utilizzo dell'app è sospeso per questo negozio.", code: 'not_authorized' },
+      {
+        ok: false,
+        error: (await dictionaryForShop(session.shop)).errors.suspended,
+        code: 'not_authorized',
+      },
       { status: 403 },
     );
   }
@@ -192,7 +197,7 @@ export async function action({ request }: ActionFunctionArgs) {
       .update({ where: { shopId: shop.id }, data: { connectionVerifiedAt: null } })
       .catch(() => {});
     return json(
-      { ok: false, error: 'Impossibile completare il collegamento. Riprova.' },
+      { ok: false, error: (await dictionaryForShop(session.shop)).errors.linkFailed },
       { status: 500 },
     );
   }

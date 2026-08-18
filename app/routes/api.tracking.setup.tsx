@@ -1,3 +1,4 @@
+import { dictionaryForShop } from '~/lib/i18n/server';
 import type { ActionFunctionArgs } from '@remix-run/node';
 import { json } from '@remix-run/node';
 import { authenticate } from '~/shopify.server';
@@ -56,7 +57,7 @@ export async function action({ request }: ActionFunctionArgs) {
       err instanceof Error ? err.message : 'errore sconosciuto',
     );
     return json(
-      { ok: false, error: 'Non è stato possibile registrare la risposta. Riprova.' },
+      { ok: false, error: (await dictionaryForShop(session.shop)).errors.trackingAnswerFailed },
       { status: 500 },
     );
   }

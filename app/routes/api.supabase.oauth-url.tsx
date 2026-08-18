@@ -1,3 +1,4 @@
+import { dictionaryForShop } from '~/lib/i18n/server';
 import type { ActionFunctionArgs } from '@remix-run/node';
 import { json } from '@remix-run/node';
 import { authenticate } from '~/shopify.server';
@@ -17,7 +18,10 @@ export async function action({ request }: ActionFunctionArgs) {
   }
   if (!isAuthorized(shop.authorization)) {
     return json(
-      { error: "L'utilizzo dell'app è sospeso per questo negozio.", code: 'not_authorized' },
+      {
+        error: (await dictionaryForShop(session.shop)).errors.suspended,
+        code: 'not_authorized',
+      },
       { status: 403 },
     );
   }

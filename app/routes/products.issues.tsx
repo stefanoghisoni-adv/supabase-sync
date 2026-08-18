@@ -1,3 +1,6 @@
+import { useT } from '~/lib/i18n/context';
+import { dictionaryForShop } from '~/lib/i18n/server';
+import type { Dictionary } from '~/lib/i18n/context';
 // app/routes/products.issues.tsx
 // Tab dedicata: varianti a cui manca cost_per_item, con campo editabile.
 // I valori inseriti restano appunti finche' il merchant non preme "Ricontrolla e
@@ -88,7 +91,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     await enrichVariantCosts(client, allProducts);
   } catch (err) {
     console.error('[products.issues loader] fetch prodotti fallito:', err);
-    error = 'Impossibile recuperare i prodotti da Shopify. Riprova tra poco.';
+    error = (await dictionaryForShop(session.shop)).errors.productsFetchFailed;
   }
 
   const rows = error ? [] : collectProblemVariants(allProducts);
@@ -120,13 +123,14 @@ async function applyCost(
   supabaseConfig: SupabaseConfig | null,
   client: ShopifyAPIClient,
   entry: { variantId: number; inventoryItemId: number; cost: string },
+  t: Pick<Dictionary, 'errors'>,
 ): Promise<string | null> {
   const parsed = Number(entry.cost);
   if (!Number.isInteger(entry.inventoryItemId) || entry.inventoryItemId <= 0) {
-    return 'Variante non valida.';
+    return t.errors.variantInvalid;
   }
   if (entry.cost === '' || !Number.isFinite(parsed) || parsed < 0) {
-    return 'Inserisci un costo valido (≥ 0).';
+    return t.errors.costInvalid;
   }
 
   // 1) Shopify (fonte di verità del cost_per_item, sull'InventoryItem)
@@ -138,9 +142,7 @@ async function applyCost(
     // 401/403 = permesso mancante: lo scope write_inventory non è stato ancora
     // concesso dal merchant (serve riautorizzare l'app dopo l'aggiunta dello scope).
     const permission = /\b(401|403)\b/.test(msg);
-    return permission
-      ? "L'app non ha il permesso di modificare i costi su Shopify. Riapri/reinstalla l'app per concedere l'autorizzazione, poi riprova."
-      : 'Salvataggio su Shopify non riuscito. Riprova.';
+    return permission ? t.errors.costWritePermission : t.errors.costWriteFailed;
   }
 
   // 2) Supabase (se collegato): allinea subito la riga, senza attendere la sync
@@ -171,7 +173,7 @@ async function applyCost(
       }
     } catch (err) {
       console.error('[products.issues save] update Supabase fallito:', err);
-      return 'Costo salvato su Shopify ma non su Supabase. Riprova per allineare i dati.';
+      return t.errors.costHalfSaved;
     }
   }
 
@@ -190,7 +192,7 @@ export async function action({ request }: ActionFunctionArgs) {
   }
   if (!isAuthorized(shop.authorization)) {
     return json(
-      { ok: false, error: "L'utilizzo dell'app è sospeso per questo negozio." },
+      { ok: false, error: (await dictionaryForShop(session.shop)).errors.suspended },
       { status: 403 },
     );
   }
@@ -217,11 +219,15 @@ export async function action({ request }: ActionFunctionArgs) {
     cost: String(entry.cost ?? '').trim().replace(',', '.'),
   }));
 
+  // Il dizionario si legge una volta sola: i messaggi di riga sono tanti quante
+  // le varianti, e non ha senso richiederlo per ognuna.
+  const t = await dictionaryForShop(session.shop);
+
   // In sequenza: le API di Shopify hanno un tetto di chiamate al secondo e una
   // raffica parallela si farebbe rifiutare a meta' elenco.
   const failures: { variantId: number; error: string }[] = [];
   for (const entry of updates) {
-    const error = await applyCost(shop.supabaseConfig, client, entry);
+    const error = await applyCost(shop.supabaseConfig, client, entry, t);
     if (error) failures.push({ variantId: entry.variantId, error });
   }
 
@@ -253,7 +259,7 @@ export async function action({ request }: ActionFunctionArgs) {
     // I costi salvati prima dell'errore restano salvati: il messaggio parla solo
     // del ricontrollo, e le righe restano in elenco fino al tentativo dopo.
     return json(
-      { ok: false, error: 'Ricontrollo non riuscito. Riprova.', failures },
+      { ok: false, error: t.errors.recheckFailed, failures },
       { status: 502 },
     );
   }
@@ -323,6 +329,7 @@ function CostRow({
 }
 
 export default function ProblemProducts() {
+  const t = useT();
   const loaderData = useLoaderData<typeof loader>();
   const { error, shopDomain, blocked, readyCount, planLimit } = loaderData;
 
@@ -402,13 +409,13 @@ export default function ProblemProducts() {
         const next = { ...prev };
         for (const item of rejected) {
           next[item.variantId] =
-            item.reason === 'invalid' ? 'Costo non valido' : 'Variante senza inventory item';
+            item.reason === 'invalid'
+              ? t.issues.rowError.invalid
+              : t.issues.rowError.noInventoryItem;
         }
         return next;
       });
-      setFormError(
-        'Controlla i costi segnalati in rosso: devono essere numeri maggiori o uguali a zero.',
-      );
+      setFormError(t.issues.fixHighlighted);
       return;
     }
 
@@ -467,10 +474,10 @@ export default function ProblemProducts() {
   return (
     <Page
       fullWidth
-      title="Prodotti non idonei"
+      title={t.issues.title}
       backAction={{ url: '/' }}
       primaryAction={{
-        content: 'Ricontrolla e aggiorna',
+        content: t.issues.recheck,
         onAction: runRecheck,
         loading: updating,
         disabled: !hasChanges || blocked,
@@ -482,10 +489,7 @@ export default function ProblemProducts() {
         {error && <Banner tone="critical">{error}</Banner>}
 
         {blocked && !error && (
-          <Banner tone="warning">
-            L'app è sospesa per questo negozio: puoi consultare l'elenco ma non
-            modificare i costi finché non viene riattivata.
-          </Banner>
+          <Banner tone="warning">{t.issues.suspended}</Banner>
         )}
 
         {formError && (
@@ -501,24 +505,18 @@ export default function ProblemProducts() {
         {/* I costi scritti su Shopify sono definitivi: se qualcuno non e'
             passato va detto, altrimenti il merchant crede di aver finito. */}
         {(recheckFetcher.data?.failures?.length ?? 0) > 0 && (
-          <Banner tone="warning">
-            Alcuni costi non sono stati salvati: le righe interessate restano in
-            elenco con il motivo accanto al campo.
-          </Banner>
+          <Banner tone="warning">{t.issues.someFailed}</Banner>
         )}
 
         {removedCount > 0 && (
           <Banner tone="success" onDismiss={() => setRemovedCount(0)}>
-            {removedCount}{' '}
-            {removedCount === 1 ? 'variante risolta e rimossa' : 'varianti risolte e rimosse'}{' '}
-            dall'elenco. Il conteggio in Dashboard è aggiornato.
+            {t.issues.resolved(removedCount)}
           </Banner>
         )}
 
         {!error && rows.length === 0 && (
           <Banner tone="success">
-            Nessun prodotto con problemi: tutte le varianti hanno il valore{' '}
-            <code>cost_per_item</code>.
+            {t.issues.allGood} <code>cost_per_item</code>.
           </Banner>
         )}
 
@@ -527,7 +525,7 @@ export default function ProblemProducts() {
             <Box padding="400">
               <BlockStack gap="300">
                 <Text as="h2" variant="headingMd">
-                  Elenco prodotti non idonei
+                  {t.issues.listTitle}
                 </Text>
                 {/* Descrizione e ricerca affiancate a meta' larghezza ciascuna:
                     la ricerca finisce a destra senza doverla dimensionare a mano.
@@ -539,25 +537,22 @@ export default function ProblemProducts() {
                       e' solo la ricerca a non aver trovato nulla. */}
                   {query.trim() && filtered.length === 0 ? (
                     <Text as="p" tone="subdued">
-                      Nessun risultato per &laquo;{query.trim()}&raquo;. Le varianti
-                      con problemi sono {rows.length}: prova a modificare la ricerca.
+                      {t.issues.noResults(query.trim(), rows.length)}
                     </Text>
                   ) : (
                     <Text as="p" tone="subdued">
-                      I prodotti elencati non presentano un valore per il parametro{' '}
-                      <code>cost_per_item</code> (costo prodotto) pertanto non potranno
-                      essere sincronizzati fino al loro adeguamento. Il valore verrà
-                      aggiornato sia sul database che su Shopify dopo aver cliccato
-                      &laquo;Ricontrolla e aggiorna&raquo;.
+                      {t.issues.intro.before}
+                      <code>cost_per_item</code>
+                      {t.issues.intro.after}
                     </Text>
                   )}
                   <TextField
-                    label="Cerca"
+                    label={t.issues.search}
                     labelHidden
                     value={query}
                     onChange={setQuery}
                     autoComplete="off"
-                    placeholder="Cerca per titolo, variante, SKU, ID prodotto o prezzo"
+                    placeholder={t.issues.searchPlaceholder}
                     clearButton
                     onClearButtonClick={() => setQuery('')}
                   />
@@ -565,14 +560,14 @@ export default function ProblemProducts() {
               </BlockStack>
             </Box>
             <IndexTable
-              resourceName={{ singular: 'variante', plural: 'varianti' }}
+              resourceName={t.issues.resource}
               itemCount={visibleRows.length}
               selectable={false}
               headings={[
-                { title: 'Prodotto' },
-                { title: 'Variante' },
-                { title: 'SKU' },
-                { title: 'Prezzo' },
+                { title: t.issues.columns.product },
+                { title: t.issues.columns.variant },
+                { title: t.issues.columns.sku },
+                { title: t.issues.columns.price },
                 { title: 'cost_per_item' },
                 { title: '%' },
               ]}
@@ -603,7 +598,7 @@ export default function ProblemProducts() {
                     onNext={() => setPage((p) => p + 1)}
                   />
                   <Text as="span" tone="subdued">
-                    {page} di {totalPages}
+                    {t.issues.pageOf(page, totalPages)}
                   </Text>
                 </InlineStack>
               </Box>

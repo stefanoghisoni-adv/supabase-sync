@@ -20,6 +20,7 @@ import {
 } from '~/lib/billing/partner-pricing';
 import { samePlanName } from '~/lib/billing/plan-name';
 import { resolveShopPricing } from '~/lib/billing/shop-pricing.server';
+import { dictionaryForShop } from '~/lib/i18n/server';
 
 // Avvio del cambio di piano. Qui NON si attiva niente: l'abbonamento nasce in
 // attesa di conferma e diventa effettivo solo in /billing/callback, dopo che
@@ -39,7 +40,6 @@ export type SubscribeResponse =
 
 // Nessun errore mostrato al merchant racconta cosa e' andato storto dietro le
 // quinte: non gli serve e non deve finire in uno screenshot al supporto.
-const GENERIC_ERROR = 'Non è stato possibile avviare il cambio di piano. Riprova.';
 
 /** Solo un id numerico puo' essere ricomposto in un gid: il resto si ignora. */
 function numericChargeId(value: string | null | undefined): string | null {
@@ -49,6 +49,11 @@ function numericChargeId(value: string | null | undefined): string | null {
 
 export async function action({ request }: ActionFunctionArgs) {
   const { session, admin } = await authenticate.admin(request);
+
+  // La lingua del merchant: questi messaggi finiscono tutti in un banner
+  // davanti a lui.
+  const t = await dictionaryForShop(session.shop);
+  const GENERIC_ERROR = t.errors.planChangeFailed;
 
   if (request.method !== 'POST') {
     return json<SubscribeResponse>({ error: GENERIC_ERROR }, { status: 405 });
@@ -65,7 +70,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const authorization = normalizeAuthorization(shop.authorization);
   if (authorization === 'DISABLED') {
     return json<SubscribeResponse>(
-      { error: authorizationMessage(authorization) },
+      { error: authorizationMessage(authorization, t) },
       { status: 403 },
     );
   }
@@ -73,7 +78,7 @@ export async function action({ request }: ActionFunctionArgs) {
   // Piani interni assegnati dall'owner: non hanno limiti e non si acquistano.
   if (!canAccessPlanTab(shop.currentPlan)) {
     return json<SubscribeResponse>(
-      { error: 'Il tuo piano non prevede acquisti né rinnovi.' },
+      { error: t.errors.planNoPurchases },
       { status: 403 },
     );
   }
@@ -81,18 +86,18 @@ export async function action({ request }: ActionFunctionArgs) {
   const form = await request.formData();
   const requestedName = String(form.get('plan') ?? '').trim();
   if (!requestedName) {
-    return json<SubscribeResponse>({ error: 'Scegli un piano per continuare.' }, { status: 400 });
+    return json<SubscribeResponse>({ error: t.errors.planPickOne }, { status: 400 });
   }
 
   const plan = await findPlanByName(requestedName);
   if (!plan || !isSelectablePlan(plan.planName)) {
     return json<SubscribeResponse>(
-      { error: 'Il piano scelto non è disponibile.' },
+      { error: t.errors.planUnavailable },
       { status: 400 },
     );
   }
   if (samePlanName(plan.planName, shop.currentPlan)) {
-    return json<SubscribeResponse>({ error: 'Stai già usando questo piano.' }, { status: 400 });
+    return json<SubscribeResponse>({ error: t.errors.planAlreadyActive }, { status: 400 });
   }
 
   // Ciclo di fatturazione scelto dal merchant. Qualunque valore diverso da

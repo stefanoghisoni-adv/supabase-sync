@@ -52,6 +52,10 @@ const SHOP = {
   activeChargeId: null as string | null,
   authorization: 'ENABLED',
   trackingAuthorization: 'ENABLED',
+  // I messaggi d'errore escono nella lingua del negozio: qui l'italiano, cosi'
+  // i test leggono quello che leggerebbe questo merchant.
+  locale: 'it',
+  detectedLocale: null,
 };
 
 function call(plan: string | null, opts: { method?: string; url?: string } = {}) {
@@ -78,6 +82,17 @@ describe('/billing/subscribe', () => {
       { planName: 'Pro', priceMonthly: 29, priceYearly: 290 },
     ]);
     findManyPlanPrices.mockResolvedValue([]);
+  });
+
+  it('il messaggio arriva nella lingua del merchant', async () => {
+    // Stesso errore, negozio con l'admin in inglese: e' un testo che finisce in
+    // un banner davanti a lui, non un log.
+    findUniqueShop.mockResolvedValue({ ...SHOP, locale: null, detectedLocale: 'en' });
+    findPlanMock.mockResolvedValue(null);
+
+    const res = await call('Inesistente');
+
+    expect(await res.json()).toEqual({ error: 'The plan you picked isn’t available.' });
   });
 
   it('metodo diverso da POST → 405', async () => {

@@ -464,6 +464,69 @@ export const en: typeof it = {
     perMonth: (price: string) => `${price} / month`,
   },
 
+  issues: {
+    title: 'Products not eligible',
+    recheck: 'Recheck and update',
+    listTitle: 'Products not eligible',
+    suspended:
+      'The app is suspended for this store: you can read the list but not change costs until ' +
+      'it’s reactivated.',
+    fetchFailed: 'Couldn’t fetch your products from Shopify. Try again shortly.',
+    fixHighlighted: 'Check the costs flagged in red: they must be numbers of zero or more.',
+    someFailed:
+      'Some costs weren’t saved: the rows involved stay in the list with the reason next to ' +
+      'the field.',
+    resolved: (n: number) =>
+      `${n} ${n === 1 ? 'variant fixed and removed' : 'variants fixed and removed'} from the list. ` +
+      'The count on your dashboard is up to date.',
+    allGood: 'No products with issues: every variant has a value for',
+    intro: {
+      before: 'The products listed here have no value for ',
+      after:
+        ' (product cost), so they can’t be synced until you fill it in. The value is written ' +
+        'both to your database and to Shopify once you click «Recheck and update».',
+    },
+    noResults: (query: string, total: number) =>
+      `No results for «${query}». There are ${total} variants with issues: try a different search.`,
+    search: 'Search',
+    searchPlaceholder: 'Search by title, variant, SKU, product ID or price',
+    resource: { singular: 'variant', plural: 'variants' },
+    columns: { product: 'Product', variant: 'Variant', sku: 'SKU', price: 'Price' },
+    pageOf: (page: number, total: number) => `${page} of ${total}`,
+    rowError: {
+      invalid: 'Invalid cost',
+      noInventoryItem: 'Variant without an inventory item',
+    },
+  },
+
+  errors: {
+    suspended: 'This store’s access to the app is suspended.',
+    appDisabled: 'This store’s access to the app has been disabled. Contact support.',
+    trialEnded:
+      'Your trial has ended: the app’s features and syncs are suspended. Upgrade your plan to ' +
+      'turn them back on.',
+    noOrganization: 'No Supabase organisation found.',
+    createProjectScope: 'Not enough permissions to create projects. Reconnect Supabase.',
+    createProjectFailed: 'Couldn’t create the project. Try again.',
+    linkFailed: 'Couldn’t finish connecting. Try again.',
+    projectsFailed: 'Couldn’t fetch your Supabase projects.',
+    planChangeFailed: 'Couldn’t start the plan change. Try again.',
+    planNoPurchases: 'Your plan doesn’t include purchases or renewals.',
+    planPickOne: 'Pick a plan to continue.',
+    planUnavailable: 'The plan you picked isn’t available.',
+    planAlreadyActive: 'You’re already on this plan.',
+    trackingAnswerFailed: 'Couldn’t record your answer. Try again.',
+    productsFetchFailed: 'Couldn’t fetch your products from Shopify. Try again shortly.',
+    costInvalid: 'Enter a valid cost (0 or more).',
+    variantInvalid: 'Invalid variant.',
+    costWritePermission:
+      'The app doesn’t have permission to change costs on Shopify. Reopen or reinstall the app ' +
+      'to grant it, then try again.',
+    costWriteFailed: 'Couldn’t save to Shopify. Try again.',
+    costHalfSaved: 'The cost was saved to Shopify but not to your database. Try again to line them up.',
+    recheckFailed: 'The recheck didn’t go through. Try again.',
+  },
+
   sync: {
     title: 'Sync',
     frequency: 'Frequency',

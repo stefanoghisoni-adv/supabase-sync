@@ -1,3 +1,4 @@
+import { dictionaryForShop } from '~/lib/i18n/server';
 import type { LoaderFunctionArgs } from '@remix-run/node';
 import { json } from '@remix-run/node';
 import { authenticate } from '~/shopify.server';
@@ -21,6 +22,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
     return json({ projects });
   } catch (e) {
     console.error('[api.supabase.projects]', e instanceof Error ? e.message : 'errore sconosciuto');
-    return json({ projects: [], error: 'Impossibile recuperare i progetti Supabase.' }, { status: 502 });
+    return json(
+      { projects: [], error: (await dictionaryForShop(session.shop)).errors.projectsFailed },
+      { status: 502 },
+    );
   }
 }

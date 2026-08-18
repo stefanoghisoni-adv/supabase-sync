@@ -1,3 +1,4 @@
+import { it as itDict } from '~/lib/i18n/it';
 import { describe, it, expect } from 'vitest';
 import {
   normalizeAuthorization,
@@ -31,8 +32,8 @@ describe('isAuthorized', () => {
 
 describe('authorizationMessage', () => {
   it('fornisce messaggi per PENDING e DISABLED, vuoto per ENABLED', () => {
-    expect(authorizationMessage('DISABLED')).toContain('disabilitato');
-    expect(authorizationMessage('PENDING')).toContain('prova');
-    expect(authorizationMessage('ENABLED')).toBe('');
+    expect(authorizationMessage('DISABLED', itDict)).toContain('disabilitato');
+    expect(authorizationMessage('PENDING', itDict)).toContain('prova');
+    expect(authorizationMessage('ENABLED', itDict)).toBe('');
   });
 });

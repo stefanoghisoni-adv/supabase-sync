@@ -1,3 +1,4 @@
+import type { Dictionary } from '~/lib/i18n/context';
 // Stato di autorizzazione di un negozio. Gestito manualmente dall'owner sulla
 // tabella `shops` di Supabase, e/o impostato automaticamente (es. trial scaduto
 // → PENDING). Il gating è SERVER-SIDE: anche se l'utente riabilita i pulsanti
@@ -41,12 +42,11 @@ export function grantsDataAccess(value: string | null | undefined): boolean {
 // Messaggio utente per lo stato di blocco dell'USO DELL'APP (risposte d'errore
 // lato server). Del tracciamento non parla: e' un'altra autorizzazione, e i
 // banner della dashboard la raccontano a parte (authorization-banners.ts).
-export function authorizationMessage(state: AuthorizationState): string {
-  if (state === 'DISABLED') {
-    return "L'utilizzo dell'app è stato disabilitato per questo negozio. Contatta il supporto.";
-  }
-  if (state === 'PENDING') {
-    return 'Il periodo di prova è terminato: le funzioni dell’app e le sincronizzazioni sono sospese. Aggiorna il piano per riattivarle.';
-  }
+export function authorizationMessage(
+  state: AuthorizationState,
+  t: Pick<Dictionary, 'errors'>,
+): string {
+  if (state === 'DISABLED') return t.errors.appDisabled;
+  if (state === 'PENDING') return t.errors.trialEnded;
   return '';
 }

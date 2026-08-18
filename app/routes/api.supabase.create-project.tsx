@@ -1,4 +1,5 @@
 // app/routes/api.supabase.create-project.tsx
+import { dictionaryForShop } from '~/lib/i18n/server';
 import type { ActionFunctionArgs } from '@remix-run/node';
 import { json } from '@remix-run/node';
 import { authenticate } from '~/shopify.server';
@@ -22,7 +23,11 @@ export async function action({ request }: ActionFunctionArgs) {
   if (!shop) return json({ ok: false, error: 'Shop non trovato' }, { status: 404 });
   if (!isAuthorized(shop.authorization)) {
     return json(
-      { ok: false, error: "L'utilizzo dell'app è sospeso per questo negozio.", code: 'not_authorized' },
+      {
+        ok: false,
+        error: (await dictionaryForShop(session.shop)).errors.suspended,
+        code: 'not_authorized',
+      },
       { status: 403 },
     );
   }
@@ -60,7 +65,10 @@ export async function action({ request }: ActionFunctionArgs) {
       }
     }
     if (!organizationId) {
-      return json({ ok: false, error: 'Nessuna organizzazione Supabase trovata.' }, { status: 400 });
+      return json(
+        { ok: false, error: (await dictionaryForShop(session.shop)).errors.noOrganization },
+        { status: 400 },
+      );
     }
 
     const dbPass = generateDbPassword();
@@ -135,10 +143,17 @@ export async function action({ request }: ActionFunctionArgs) {
     // 403 = scope Projects:Write mancante nella OAuth App.
     if (msg.includes('403')) {
       return json(
-        { ok: false, error: 'Permesso insufficiente per creare progetti. Ricollega Supabase.', code: 'scope' },
+        {
+          ok: false,
+          error: (await dictionaryForShop(session.shop)).errors.createProjectScope,
+          code: 'scope',
+        },
         { status: 403 },
       );
     }
-    return json({ ok: false, error: 'Creazione del progetto non riuscita. Riprova.' }, { status: 502 });
+    return json(
+      { ok: false, error: (await dictionaryForShop(session.shop)).errors.createProjectFailed },
+      { status: 502 },
+    );
   }
 }

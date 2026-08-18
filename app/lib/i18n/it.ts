@@ -488,6 +488,78 @@ export const it = {
     perMonth: (price: string) => `${price} / mese`,
   },
 
+  // Prodotti che restano fuori dalla sincronizzazione, e come rimetterli dentro.
+  issues: {
+    title: 'Prodotti non idonei',
+    recheck: 'Ricontrolla e aggiorna',
+    listTitle: 'Elenco prodotti non idonei',
+    suspended:
+      'L’app è sospesa per questo negozio: puoi consultare l’elenco ma non modificare i costi ' +
+      'finché non viene riattivata.',
+    fetchFailed: 'Impossibile recuperare i prodotti da Shopify. Riprova tra poco.',
+    fixHighlighted:
+      'Controlla i costi segnalati in rosso: devono essere numeri maggiori o uguali a zero.',
+    someFailed:
+      'Alcuni costi non sono stati salvati: le righe interessate restano in elenco con il ' +
+      'motivo accanto al campo.',
+    resolved: (n: number) =>
+      `${n} ${n === 1 ? 'variante risolta e rimossa' : 'varianti risolte e rimosse'} dall’elenco. ` +
+      'Il conteggio in Dashboard è aggiornato.',
+    allGood: 'Nessun prodotto con problemi: tutte le varianti hanno il valore',
+    intro: {
+      before: 'I prodotti elencati non presentano un valore per il parametro ',
+      after:
+        ' (costo prodotto) pertanto non potranno essere sincronizzati fino al loro adeguamento. ' +
+        'Il valore verrà aggiornato sia sul database che su Shopify dopo aver cliccato ' +
+        '«Ricontrolla e aggiorna».',
+    },
+    noResults: (query: string, total: number) =>
+      `Nessun risultato per «${query}». Le varianti con problemi sono ${total}: prova a ` +
+      'modificare la ricerca.',
+    search: 'Cerca',
+    searchPlaceholder: 'Cerca per titolo, variante, SKU, ID prodotto o prezzo',
+    resource: { singular: 'variante', plural: 'varianti' },
+    columns: { product: 'Prodotto', variant: 'Variante', sku: 'SKU', price: 'Prezzo' },
+    pageOf: (page: number, total: number) => `${page} di ${total}`,
+    rowError: {
+      invalid: 'Costo non valido',
+      noInventoryItem: 'Variante senza inventory item',
+    },
+  },
+
+  // Messaggi che nascono sul server e finiscono in un banner.
+  errors: {
+    suspended: 'L’utilizzo dell’app è sospeso per questo negozio.',
+    appDisabled:
+      'L’utilizzo dell’app è stato disabilitato per questo negozio. Contatta il supporto.',
+    trialEnded:
+      'Il periodo di prova è terminato: le funzioni dell’app e le sincronizzazioni sono ' +
+      'sospese. Aggiorna il piano per riattivarle.',
+    // Supabase
+    noOrganization: 'Nessuna organizzazione Supabase trovata.',
+    createProjectScope: 'Permesso insufficiente per creare progetti. Ricollega Supabase.',
+    createProjectFailed: 'Creazione del progetto non riuscita. Riprova.',
+    linkFailed: 'Impossibile completare il collegamento. Riprova.',
+    projectsFailed: 'Impossibile recuperare i progetti Supabase.',
+    // Piano
+    planChangeFailed: 'Non è stato possibile avviare il cambio di piano. Riprova.',
+    planNoPurchases: 'Il tuo piano non prevede acquisti né rinnovi.',
+    planPickOne: 'Scegli un piano per continuare.',
+    planUnavailable: 'Il piano scelto non è disponibile.',
+    planAlreadyActive: 'Stai già usando questo piano.',
+    // Tracciamento e prodotti
+    trackingAnswerFailed: 'Non è stato possibile registrare la risposta. Riprova.',
+    productsFetchFailed: 'Impossibile recuperare i prodotti da Shopify. Riprova tra poco.',
+    costInvalid: 'Inserisci un costo valido (≥ 0).',
+    variantInvalid: 'Variante non valida.',
+    costWritePermission:
+      'L’app non ha il permesso di modificare i costi su Shopify. Riapri o reinstalla l’app ' +
+      'per concedere l’autorizzazione, poi riprova.',
+    costWriteFailed: 'Salvataggio su Shopify non riuscito. Riprova.',
+    costHalfSaved: 'Costo salvato su Shopify ma non nel tuo database. Riprova per allinearli.',
+    recheckFailed: 'Ricontrollo non riuscito. Riprova.',
+  },
+
   sync: {
     title: 'Sincronizzazione',
     frequency: 'Frequenza',
