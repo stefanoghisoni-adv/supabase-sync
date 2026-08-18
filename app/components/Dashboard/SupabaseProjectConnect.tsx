@@ -119,9 +119,12 @@ export function SupabaseProjectConnect({
 
   // L'elenco dei progetti si carica appena la scelta e' a video: chi e' qui ha
   // gia' dato il consenso, quindi non c'e' altro da chiedergli.
+  // Ogni volta che la scelta si riapre, non solo la prima: chi torna qui dopo
+  // aver creato un database lo deve trovare nell'elenco, e chi ne ha cancellato
+  // uno da Supabase non deve vederselo ancora offerto.
   useEffect(() => {
     if (!choosing) return;
-    if (projectsFetcher.state === 'idle' && !projectsFetcher.data) {
+    if (projectsFetcher.state === 'idle') {
       projectsFetcher.load('/api/supabase/projects');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -174,10 +177,21 @@ export function SupabaseProjectConnect({
     );
   }, [selectFetcher, selectedRef]);
 
-  // Scelto il database, ricarica il loader: da li' in poi la pagina parla del
-  // collegamento nuovo.
+  // Scelto il database, il passo si richiude su quello nuovo.
+  //
+  // Ricaricare il loader non basta: il negozio era gia' collegato prima e lo e'
+  // anche adesso, quindi per la pagina non e' cambiato niente e la scelta
+  // restava aperta — con "Conferma" di nuovo disponibile, come se il clic non
+  // fosse mai avvenuto. La scelta la chiude chi l'ha aperta.
   useEffect(() => {
-    if (selectFetcher.data?.ok) revalidator.revalidate();
+    if (!selectFetcher.data?.ok) return;
+    setChanging(false);
+    setShowCreate(false);
+    // E si svuota il foglio di brutta: riaprendo "Cambia database" non deve
+    // ritrovare selezionato quello di due scelte fa.
+    setSelectedRef('');
+    setQuery('');
+    revalidator.revalidate();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectFetcher.data]);
 
