@@ -1,7 +1,10 @@
 import { useT } from '~/lib/i18n/context';
+import { matchesProjectName } from './disconnect-confirm';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useFetcher, useRevalidator } from '@remix-run/react';
 import {
+  Modal,
+  RadioButton,
   ActionList,
   BlockStack,
   Box,
@@ -18,7 +21,7 @@ import {
   Text,
   TextField,
 } from '@shopify/polaris';
-import { ExchangeIcon, SearchIcon, PlusIcon } from '@shopify/polaris-icons';
+import { DeleteIcon, ExchangeIcon, SearchIcon, PlusIcon } from '@shopify/polaris-icons';
 import { groupRegionsByContinent } from '~/lib/supabase-regions';
 
 interface SupabaseProject {
@@ -72,6 +75,11 @@ export function SupabaseProjectConnect({
 
   const [selectedRef, setSelectedRef] = useState<string>('');
   const [manageOpen, setManageOpen] = useState(false);
+  // Eliminazione di un database non in uso: quale si sta eliminando, e il nome
+  // che va riscritto per confermare.
+  const [deleting, setDeleting] = useState(false);
+  const [deleteRef, setDeleteRef] = useState('');
+  const [deleteTyped, setDeleteTyped] = useState('');
   const [query, setQuery] = useState('');
 
   // Creazione di un nuovo progetto.
@@ -188,6 +196,38 @@ export function SupabaseProjectConnect({
       { method: 'post', action: '/api/supabase/select-project', encType: 'application/json' },
     );
   }, [selectFetcher, selectedRef]);
+
+  const deleteFetcher = useFetcher<{ ok?: boolean; error?: string }>();
+
+  // I database che si possono eliminare: tutti tranne quello collegato. Il
+  // collegato non e' in elenco perche' da qui non lo si tocca — prima lo si
+  // stacca, e quella e' una strada con le sue conferme.
+  const deletableProjects = (projectsFetcher.data?.projects ?? []).filter(
+    (project) => project.id !== projectName,
+  );
+  const deleteTarget = deletableProjects.find((project) => project.id === deleteRef) ?? null;
+  const deleteConfirmed =
+    deleteTarget != null && matchesProjectName(deleteTyped, deleteTarget.name);
+
+  // Eliminato: l'elenco e i limiti del piano non sono piu' quelli di prima.
+  useEffect(() => {
+    if (!deleteFetcher.data?.ok) return;
+    setDeleting(false);
+    setDeleteRef('');
+    setDeleteTyped('');
+    projectsFetcher.load('/api/supabase/projects');
+    limitsFetcher.load('/api/supabase/project-limits');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deleteFetcher.data]);
+
+  // La finestra ha bisogno dell'elenco: aprendola da sola, senza passare dalla
+  // scelta del database, quell'elenco non e' ancora stato chiesto.
+  useEffect(() => {
+    if (deleting && projectsFetcher.state === 'idle' && !projectsFetcher.data) {
+      projectsFetcher.load('/api/supabase/projects');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deleting]);
 
   // Scelto il database, il passo si richiude su quello nuovo.
   //
@@ -339,10 +379,12 @@ export function SupabaseProjectConnect({
               >
                 <ActionList
                   actionRole="menuitem"
-                  items={[
+                  sections={[
                     {
-                      content: t.connect.database.create,
-                      prefix: <Icon source={PlusIcon} />,
+                      items: [
+                        {
+                          content: t.connect.database.create,
+                          prefix: <Icon source={PlusIcon} />,
                       // Spento quando il piano Supabase non consente altri
                       // progetti. Un elenco Polaris non porta tooltip: il
                       // motivo va sotto la voce, e compare solo quando c'e'
@@ -355,18 +397,130 @@ export function SupabaseProjectConnect({
                         setShowCreate(true);
                       },
                     },
+                        {
+                          content: t.connect.database.change,
+                          prefix: <Icon source={ExchangeIcon} />,
+                          onAction: () => {
+                            setManageOpen(false);
+                            setChanging(true);
+                          },
+                        },
+                      ],
+                    },
                     {
-                      content: t.connect.database.change,
-                      prefix: <Icon source={ExchangeIcon} />,
-                      onAction: () => {
-                        setManageOpen(false);
-                        setChanging(true);
-                      },
+                      // Sezione a se': il divisore lo disegna Polaris, e un
+                      // gesto irreversibile non deve stare in fila con quelli
+                      // che si possono disfare.
+                      items: [
+                        {
+                          content: t.connect.database.deleteProject,
+                          prefix: <Icon source={DeleteIcon} tone="critical" />,
+                          destructive: true,
+                          onAction: () => {
+                            setManageOpen(false);
+                            setDeleting(true);
+                          },
+                        },
+                      ],
                     },
                   ]}
                 />
               </Popover>
             </InlineStack>
+            <Modal
+              open={deleting}
+              onClose={() => {
+                setDeleting(false);
+                setDeleteRef('');
+                setDeleteTyped('');
+              }}
+              title={t.connect.database.deleteTitle}
+              primaryAction={{
+                content: t.connect.database.deleteConfirm,
+                destructive: true,
+                disabled: !deleteConfirmed || deleteFetcher.state !== 'idle',
+                loading: deleteFetcher.state !== 'idle',
+                onAction: () => {
+                  deleteFetcher.submit(
+                    { ref: deleteRef },
+                    {
+                      method: 'post',
+                      action: '/api/supabase/delete-project',
+                      encType: 'application/json',
+                    },
+                  );
+                },
+              }}
+              secondaryActions={[
+                {
+                  content: t.common.cancel,
+                  onAction: () => {
+                    setDeleting(false);
+                    setDeleteRef('');
+                    setDeleteTyped('');
+                  },
+                  disabled: deleteFetcher.state !== 'idle',
+                },
+              ]}
+            >
+              <Modal.Section>
+                <BlockStack gap="400">
+                  <Text as="p">{t.connect.database.deleteIntro}</Text>
+
+                  {deleteFetcher.data?.error && (
+                    <Banner tone="critical">{deleteFetcher.data.error}</Banner>
+                  )}
+
+                  {deletableProjects.length === 0 ? (
+                    <Text as="p" tone="subdued">
+                      {t.connect.database.deleteNone}
+                    </Text>
+                  ) : (
+                    <BlockStack gap="200">
+                      {deletableProjects.map((project) => (
+                        <RadioButton
+                          key={project.id}
+                          label={project.name}
+                          helpText={project.id}
+                          checked={deleteRef === project.id}
+                          id={`delete-${project.id}`}
+                          name="delete-project"
+                          onChange={() => {
+                            setDeleteRef(project.id);
+                            // Cambiando bersaglio la conferma riparte: il nome
+                            // scritto valeva per un altro database.
+                            setDeleteTyped('');
+                          }}
+                          disabled={deleteFetcher.state !== 'idle'}
+                        />
+                      ))}
+                    </BlockStack>
+                  )}
+
+                  {/* Il nome si riscrive a mano, come per l'eliminazione dei
+                      dati: e' l'ultimo gesto prima di una cosa che non si
+                      disfa. */}
+                  {deleteTarget && (
+                    <BlockStack gap="200">
+                      <Text as="p">
+                        {t.connect.database.deleteTypeName}{' '}
+                        <strong>{deleteTarget.name}</strong>
+                      </Text>
+                      <TextField
+                        label={t.connect.database.projectName}
+                        labelHidden
+                        value={deleteTyped}
+                        onChange={setDeleteTyped}
+                        autoComplete="off"
+                        autoFocus
+                        placeholder={deleteTarget.name}
+                        disabled={deleteFetcher.state !== 'idle'}
+                      />
+                    </BlockStack>
+                  )}
+                </BlockStack>
+              </Modal.Section>
+            </Modal>
           </InlineStack>
         ) : (
           <>

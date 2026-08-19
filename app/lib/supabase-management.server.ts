@@ -136,6 +136,21 @@ export async function listProjects(accessToken: string): Promise<SupabaseProject
   }));
 }
 
+/**
+ * Elimina un progetto dall'account del merchant.
+ *
+ * Irreversibile, e non e' roba nostra: e' un progetto suo, con i suoi dati.
+ * Qui non c'e' nessuna difesa — chi chiama deve aver gia' verificato che il
+ * progetto sia davvero suo e che non sia quello collegato all'app.
+ */
+export async function deleteProject(accessToken: string, ref: string): Promise<void> {
+  const res = await fetch(`${MGMT_BASE}/v1/projects/${ref}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  if (!res.ok) throw new Error(`Supabase delete project error: ${res.status}`);
+}
+
 // /v1/profile e' l'unico posto che dichiara l'email dell'account, ma nella
 // specifica non porta alcuno scope OAuth: e' pensato per i token personali, e
 // con un token di integrazione puo' rispondere 401/403. Per questo esiste la
