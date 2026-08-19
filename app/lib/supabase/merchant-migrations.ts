@@ -67,7 +67,7 @@ ALTER INDEX IF EXISTS idx_customers_phone RENAME TO idx_customers_phone_number;
  * basta alzare il numero (ci pensa la DDL idempotente); per tutto il resto si
  * aggiunge anche un passo a MERCHANT_MIGRATIONS.
  */
-export const LATEST_SCHEMA_VERSION = 2;
+export const LATEST_SCHEMA_VERSION = 3;
 
 /** Il database del merchant e' indietro rispetto a cio' che l'app si aspetta. */
 export function needsSchemaUpdate(currentVersion: number | null | undefined): boolean {

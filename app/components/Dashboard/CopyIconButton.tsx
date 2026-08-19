@@ -54,6 +54,10 @@ export function CopyIconButton({ value }: CopyIconButtonProps) {
       <Button
         icon={DuplicateIcon}
         variant="tertiary"
+        // La scatola piu' piccola possibile: a misura piena il pulsante e' piu'
+        // alto della riga di testo e, pur centrato, sembra salito — l'occhio
+        // confronta il suo bordo con le lettere, non con la riga.
+        size="slim"
         onClick={copy}
         accessibilityLabel={t.database.copy}
       />

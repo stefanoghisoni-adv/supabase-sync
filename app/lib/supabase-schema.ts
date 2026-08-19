@@ -101,6 +101,71 @@ const CUSTOMERS_INDEXES = [
   `CREATE INDEX IF NOT EXISTS idx_customers_phone_number ON customers(phone_number) WHERE phone_number IS NOT NULL;`,
 ];
 
+// Ordini e loro righe. Servono a una cosa sola: il profitto per cliente.
+//
+// Cosa NON c'e' dentro, di proposito: indirizzi, telefoni, email, note. Di un
+// ordine qui interessano il quando, il chi (per raggruppare) e il cosa (per
+// moltiplicare quantita' per margine). Tutto il resto sarebbe dato personale
+// raccolto senza motivo.
+//
+// Il nome e il cognome ci sono perche' l'elenco deve dire di chi si parla, e
+// arrivano dall'ordine: sono del merchant, stanno nel suo database, e non
+// finiscono nella tabella dei clienti — quella resta di chi ha dato consenso al
+// marketing.
+const ORDERS_COLUMNS: Column[] = [
+  { name: 'id', type: 'UUID', constraints: 'PRIMARY KEY DEFAULT gen_random_uuid()' },
+  { name: 'shopify_order_id', type: 'BIGINT', constraints: 'UNIQUE NOT NULL' },
+  { name: 'order_number', type: 'TEXT' },
+  // null = ordine senza account cliente (acquisto come ospite): resta fuori
+  // dagli elenchi per cliente, ma non si butta — vive nei totali del negozio.
+  { name: 'shopify_customer_id', type: 'BIGINT' },
+  { name: 'customer_first_name', type: 'TEXT' },
+  { name: 'customer_last_name', type: 'TEXT' },
+  { name: 'currency', type: 'TEXT' },
+  { name: 'total_price', type: 'NUMERIC(10, 2)' },
+  { name: 'financial_status', type: 'TEXT' },
+  // Un ordine annullato o rimborsato non e' profitto: la colonna c'e' perche'
+  // il conto possa lasciarlo fuori invece di far finta che sia andato bene.
+  { name: 'cancelled_at', type: 'TIMESTAMP' },
+  { name: 'placed_at', type: 'TIMESTAMP' },
+  { name: 'updated_at', type: 'TIMESTAMP' },
+  { name: 'synced_at', type: 'TIMESTAMP DEFAULT NOW()' },
+];
+
+const ORDERS_INDEXES = [
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_shopify_id ON orders(shopify_order_id);`,
+  // I due modi in cui questa tabella viene interrogata: per cliente, e per
+  // periodo. Senza, ogni apertura della tab leggerebbe tutto.
+  `CREATE INDEX IF NOT EXISTS idx_orders_customer ON orders(shopify_customer_id) WHERE shopify_customer_id IS NOT NULL;`,
+  `CREATE INDEX IF NOT EXISTS idx_orders_placed_at ON orders(placed_at);`,
+];
+
+// Le righe: quanto e' stato pagato e per cosa. Il costo NON sta qui — si legge
+// dai prodotti quando serve, ed e' il motivo per cui compilare un costo oggi
+// aggiorna il profitto di ieri.
+const ORDER_LINES_COLUMNS: Column[] = [
+  { name: 'id', type: 'UUID', constraints: 'PRIMARY KEY DEFAULT gen_random_uuid()' },
+  { name: 'shopify_line_id', type: 'BIGINT', constraints: 'UNIQUE NOT NULL' },
+  { name: 'shopify_order_id', type: 'BIGINT', constraints: 'NOT NULL' },
+  { name: 'shopify_product_id', type: 'BIGINT' },
+  // E' la chiave con cui si arriva al costo: una riga senza variante resta
+  // fuori dal conto, e la tab lo dichiara invece di stimare.
+  { name: 'shopify_variant_id', type: 'BIGINT' },
+  { name: 'title', type: 'TEXT' },
+  { name: 'quantity', type: 'INTEGER' },
+  // Prezzo unitario davvero pagato, sconti di riga gia' tolti: il margine si fa
+  // su quello che e' entrato in cassa, non sul listino.
+  { name: 'unit_price', type: 'NUMERIC(10, 2)' },
+  { name: 'total_discount', type: 'NUMERIC(10, 2)' },
+  { name: 'synced_at', type: 'TIMESTAMP DEFAULT NOW()' },
+];
+
+const ORDER_LINES_INDEXES = [
+  `CREATE UNIQUE INDEX IF NOT EXISTS idx_order_lines_shopify_id ON order_lines(shopify_line_id);`,
+  `CREATE INDEX IF NOT EXISTS idx_order_lines_order ON order_lines(shopify_order_id);`,
+  `CREATE INDEX IF NOT EXISTS idx_order_lines_variant ON order_lines(shopify_variant_id) WHERE shopify_variant_id IS NOT NULL;`,
+];
+
 function columnCreateDef(col: Column): string {
   return `${col.name} ${col.type}${col.constraints ? ` ${col.constraints}` : ''}`;
 }
@@ -138,13 +203,30 @@ export function buildCustomersSchemaSQL(): string {
   return buildTableSQL('customers', CUSTOMERS_COLUMNS, CUSTOMERS_INDEXES);
 }
 
-/**
- * DDL per le sole tabelle abilitate dal piano: `products` sempre, `customers`
- * solo se il piano include la sincronizzazione clienti.
- */
-export function buildMerchantSchemaSQL(includeCustomers: boolean): string {
+export function buildOrdersSchemaSQL(): string {
   return (
-    buildProductsSchemaSQL() + (includeCustomers ? buildCustomersSchemaSQL() : '')
+    buildTableSQL('orders', ORDERS_COLUMNS, ORDERS_INDEXES) +
+    buildTableSQL('order_lines', ORDER_LINES_COLUMNS, ORDER_LINES_INDEXES)
+  );
+}
+
+/**
+ * DDL per le sole tabelle abilitate: `products` sempre, `customers` se il piano
+ * include la sincronizzazione clienti, `orders` se il negozio ci ha concesso di
+ * leggere gli ordini.
+ *
+ * Gli ordini non dipendono dal piano ma dal permesso: senza, le tabelle non
+ * verrebbero mai riempite, e crearle vuote nel database di qualcuno che non le
+ * usera' mai e' spazio occupato per niente.
+ */
+export function buildMerchantSchemaSQL(
+  includeCustomers: boolean,
+  includeOrders = false,
+): string {
+  return (
+    buildProductsSchemaSQL() +
+    (includeCustomers ? buildCustomersSchemaSQL() : '') +
+    (includeOrders ? buildOrdersSchemaSQL() : '')
   );
 }
 

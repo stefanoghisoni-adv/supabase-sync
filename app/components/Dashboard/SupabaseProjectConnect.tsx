@@ -429,15 +429,19 @@ export function SupabaseProjectConnect({
               </Popover>
             </InlineStack>
             <Modal
-              open={deleting}
+              open={deleting && !confirmingDelete}
               onClose={closeDelete}
               title={t.connect.database.deleteTitle}
               primaryAction={{
                 content: t.connect.database.deleteConfirm,
                 destructive: true,
                 disabled: deleteRefs.length === 0,
-                // Non elimina: apre la domanda finale. Il pulsante rosso qui e'
-                // ancora dentro una scelta che si puo' cambiare.
+                // Non elimina: apre la domanda finale, e chiude questa. Due
+                // modal aperti insieme non si sovrappongono come sembra: il
+                // velo del secondo finisce sotto il riquadro del primo, e la
+                // domanda arriva senza niente che la stacchi da cio' che c'e'
+                // dietro. Uno alla volta, e annullando si torna qui con la
+                // selezione intatta.
                 onAction: () => setConfirmingDelete(true),
               }}
               secondaryActions={[
@@ -519,6 +523,7 @@ export function SupabaseProjectConnect({
               secondaryActions={[
                 {
                   content: t.common.cancel,
+                  // Torna alla scelta, che e' rimasta com'era.
                   onAction: () => setConfirmingDelete(false),
                   disabled: deleteFetcher.state !== 'idle',
                 },
