@@ -29,10 +29,10 @@ const SHOP = {
   supabaseConfig: { supabaseProjectRef: 'collegato' },
 };
 
-function call(ref: unknown, method = 'POST') {
+function call(refs: string[], method = 'POST') {
   const request = new Request('https://app.example.com/api/supabase/delete-project', {
     method,
-    body: method === 'POST' ? JSON.stringify({ ref }) : undefined,
+    body: method === 'POST' ? JSON.stringify({ refs }) : undefined,
     headers: { 'Content-Type': 'application/json' },
   });
   return action({ request, params: {}, context: {} } as never);
@@ -50,16 +50,17 @@ describe('/api/supabase/delete-project', () => {
   });
 
   it('elimina un database che non e in uso', async () => {
-    const res = await call('altro');
+    const res = await call(['altro']);
 
     expect(await res.json()).toEqual({ ok: true });
     expect(deleteProject).toHaveBeenCalledWith('token', 'altro');
   });
 
-  it('il database collegato non si elimina da qui', async () => {
+  it('il database collegato ferma tutta la richiesta', async () => {
     // E' quello su cui l'app sta scrivendo: cancellarlo porterebbe via i dati
-    // sincronizzati, e da li' non si torna indietro. Prima lo si scollega.
-    const res = await call('collegato');
+    // sincronizzati, e da li' non si torna indietro. Con altri in elenco non se
+    // ne elimina meta': si ferma tutto.
+    const res = await call(['collegato', 'altro']);
 
     expect(res.status).toBe(400);
     expect(deleteProject).not.toHaveBeenCalled();
@@ -68,7 +69,7 @@ describe('/api/supabase/delete-project', () => {
   it('un progetto che non e suo non si tocca', async () => {
     // Il ref arriva dal browser: che appartenga a questo account lo dice
     // Supabase, non la richiesta.
-    const res = await call('di-qualcun-altro');
+    const res = await call(['di-qualcun-altro']);
 
     expect(res.status).toBe(404);
     expect(deleteProject).not.toHaveBeenCalled();
@@ -77,23 +78,49 @@ describe('/api/supabase/delete-project', () => {
   it('a negozio sospeso non si elimina niente', async () => {
     findUniqueShop.mockResolvedValue({ ...SHOP, authorization: 'DISABLED' });
 
-    const res = await call('altro');
+    const res = await call(['altro']);
 
     expect(res.status).toBe(403);
     expect(deleteProject).not.toHaveBeenCalled();
   });
 
-  it('senza ref non si fa niente', async () => {
-    const res = await call('');
+  it('senza niente selezionato non si fa niente', async () => {
+    const res = await call([]);
 
     expect(res.status).toBe(400);
     expect(deleteProject).not.toHaveBeenCalled();
   });
 
   it('metodo diverso da POST → 405', async () => {
-    const res = await call('altro', 'GET');
+    const res = await call(['altro'], 'GET');
 
     expect(res.status).toBe(405);
     expect(deleteProject).not.toHaveBeenCalled();
+  });
+});
+
+describe('piu di un database insieme', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    findUniqueShop.mockResolvedValue({ ...SHOP });
+    listProjects.mockResolvedValue([
+      { id: 'collegato', name: 'In uso' },
+      { id: 'uno', name: 'Uno' },
+      { id: 'due', name: 'Due' },
+    ]);
+    deleteProject.mockResolvedValue(undefined);
+  });
+
+  it('li elimina tutti', async () => {
+    const res = await call(['uno', 'due']);
+
+    expect(await res.json()).toEqual({ ok: true });
+    expect(deleteProject.mock.calls.map((c) => c[1])).toEqual(['uno', 'due']);
+  });
+
+  it('lo stesso indicato due volte si elimina una volta sola', async () => {
+    await call(['uno', 'uno']);
+
+    expect(deleteProject).toHaveBeenCalledTimes(1);
   });
 });

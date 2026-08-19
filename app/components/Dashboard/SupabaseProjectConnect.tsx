@@ -1,10 +1,10 @@
 import { useT } from '~/lib/i18n/context';
-import { matchesProjectName } from './disconnect-confirm';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useFetcher, useRevalidator } from '@remix-run/react';
 import {
+  Badge,
+  Checkbox,
   Modal,
-  RadioButton,
   ActionList,
   BlockStack,
   Box,
@@ -75,11 +75,11 @@ export function SupabaseProjectConnect({
 
   const [selectedRef, setSelectedRef] = useState<string>('');
   const [manageOpen, setManageOpen] = useState(false);
-  // Eliminazione di un database non in uso: quale si sta eliminando, e il nome
-  // che va riscritto per confermare.
+  // Eliminazione dei database non in uso: quali sono spuntati, e se si e' alla
+  // domanda finale.
   const [deleting, setDeleting] = useState(false);
-  const [deleteRef, setDeleteRef] = useState('');
-  const [deleteTyped, setDeleteTyped] = useState('');
+  const [deleteRefs, setDeleteRefs] = useState<string[]>([]);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [query, setQuery] = useState('');
 
   // Creazione di un nuovo progetto.
@@ -199,22 +199,23 @@ export function SupabaseProjectConnect({
 
   const deleteFetcher = useFetcher<{ ok?: boolean; error?: string }>();
 
-  // I database che si possono eliminare: tutti tranne quello collegato. Il
-  // collegato non e' in elenco perche' da qui non lo si tocca — prima lo si
-  // stacca, e quella e' una strada con le sue conferme.
-  const deletableProjects = (projectsFetcher.data?.projects ?? []).filter(
-    (project) => project.id !== projectName,
-  );
-  const deleteTarget = deletableProjects.find((project) => project.id === deleteRef) ?? null;
-  const deleteConfirmed =
-    deleteTarget != null && matchesProjectName(deleteTyped, deleteTarget.name);
+  const closeDelete = useCallback(() => {
+    setDeleting(false);
+    setConfirmingDelete(false);
+    setDeleteRefs([]);
+  }, []);
+
+  // Tutti i database dell'account, quello collegato compreso: sta in elenco ma
+  // spento, cosi' si vede che c'e' e che non si tocca — sparendo sembrerebbe
+  // che l'app non lo veda.
+  const allProjects = projectsFetcher.data?.projects ?? [];
 
   // Eliminato: l'elenco e i limiti del piano non sono piu' quelli di prima.
   useEffect(() => {
     if (!deleteFetcher.data?.ok) return;
     setDeleting(false);
-    setDeleteRef('');
-    setDeleteTyped('');
+    setConfirmingDelete(false);
+    setDeleteRefs([]);
     projectsFetcher.load('/api/supabase/projects');
     limitsFetcher.load('/api/supabase/project-limits');
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -429,20 +430,84 @@ export function SupabaseProjectConnect({
             </InlineStack>
             <Modal
               open={deleting}
-              onClose={() => {
-                setDeleting(false);
-                setDeleteRef('');
-                setDeleteTyped('');
-              }}
+              onClose={closeDelete}
               title={t.connect.database.deleteTitle}
               primaryAction={{
                 content: t.connect.database.deleteConfirm,
                 destructive: true,
-                disabled: !deleteConfirmed || deleteFetcher.state !== 'idle',
+                disabled: deleteRefs.length === 0,
+                // Non elimina: apre la domanda finale. Il pulsante rosso qui e'
+                // ancora dentro una scelta che si puo' cambiare.
+                onAction: () => setConfirmingDelete(true),
+              }}
+              secondaryActions={[
+                { content: t.common.cancel, onAction: closeDelete },
+              ]}
+            >
+              <Modal.Section>
+                <BlockStack gap="400">
+                  <Text as="p">{t.connect.database.deleteIntro}</Text>
+
+                  {deleteFetcher.data?.error && (
+                    <Banner tone="critical">{deleteFetcher.data.error}</Banner>
+                  )}
+
+                  {allProjects.length === 0 ? (
+                    <Text as="p" tone="subdued">
+                      {t.connect.database.deleteNone}
+                    </Text>
+                  ) : (
+                    <BlockStack gap="200">
+                      {allProjects.map((project) => {
+                        const inUse = project.id === projectName;
+                        return (
+                          <InlineStack
+                            key={project.id}
+                            gap="200"
+                            blockAlign="center"
+                            wrap={false}
+                          >
+                            {/* Spunte e non pallini: i database da eliminare
+                                possono essere piu' d'uno. */}
+                            <Checkbox
+                              label={project.name}
+                              helpText={project.id}
+                              checked={deleteRefs.includes(project.id)}
+                              // Quello in uso resta in elenco, spento: sparendo
+                              // sembrerebbe che l'app non lo veda.
+                              disabled={inUse}
+                              onChange={(checked) =>
+                                setDeleteRefs((refs) =>
+                                  checked
+                                    ? [...refs, project.id]
+                                    : refs.filter((ref) => ref !== project.id),
+                                )
+                              }
+                            />
+                            {inUse && <Badge>{t.connect.database.inUse}</Badge>}
+                          </InlineStack>
+                        );
+                      })}
+                    </BlockStack>
+                  )}
+                </BlockStack>
+              </Modal.Section>
+            </Modal>
+
+            {/* La domanda finale, senza niente da riscrivere: a questo punto la
+                scelta e' fatta, e quel che serve e' un istante per fermarsi. */}
+            <Modal
+              open={confirmingDelete}
+              onClose={() => setConfirmingDelete(false)}
+              title={t.connect.database.deleteConfirmTitle}
+              primaryAction={{
+                content: t.connect.database.deleteProceed,
+                destructive: true,
                 loading: deleteFetcher.state !== 'idle',
+                disabled: deleteFetcher.state !== 'idle',
                 onAction: () => {
                   deleteFetcher.submit(
-                    { ref: deleteRef },
+                    { refs: deleteRefs },
                     {
                       method: 'post',
                       action: '/api/supabase/delete-project',
@@ -454,70 +519,22 @@ export function SupabaseProjectConnect({
               secondaryActions={[
                 {
                   content: t.common.cancel,
-                  onAction: () => {
-                    setDeleting(false);
-                    setDeleteRef('');
-                    setDeleteTyped('');
-                  },
+                  onAction: () => setConfirmingDelete(false),
                   disabled: deleteFetcher.state !== 'idle',
                 },
               ]}
             >
               <Modal.Section>
-                <BlockStack gap="400">
-                  <Text as="p">{t.connect.database.deleteIntro}</Text>
-
-                  {deleteFetcher.data?.error && (
-                    <Banner tone="critical">{deleteFetcher.data.error}</Banner>
-                  )}
-
-                  {deletableProjects.length === 0 ? (
-                    <Text as="p" tone="subdued">
-                      {t.connect.database.deleteNone}
-                    </Text>
-                  ) : (
-                    <BlockStack gap="200">
-                      {deletableProjects.map((project) => (
-                        <RadioButton
-                          key={project.id}
-                          label={project.name}
-                          helpText={project.id}
-                          checked={deleteRef === project.id}
-                          id={`delete-${project.id}`}
-                          name="delete-project"
-                          onChange={() => {
-                            setDeleteRef(project.id);
-                            // Cambiando bersaglio la conferma riparte: il nome
-                            // scritto valeva per un altro database.
-                            setDeleteTyped('');
-                          }}
-                          disabled={deleteFetcher.state !== 'idle'}
-                        />
-                      ))}
-                    </BlockStack>
-                  )}
-
-                  {/* Il nome si riscrive a mano, come per l'eliminazione dei
-                      dati: e' l'ultimo gesto prima di una cosa che non si
-                      disfa. */}
-                  {deleteTarget && (
-                    <BlockStack gap="200">
-                      <Text as="p">
-                        {t.connect.database.deleteTypeName}{' '}
-                        <strong>{deleteTarget.name}</strong>
-                      </Text>
-                      <TextField
-                        label={t.connect.database.projectName}
-                        labelHidden
-                        value={deleteTyped}
-                        onChange={setDeleteTyped}
-                        autoComplete="off"
-                        autoFocus
-                        placeholder={deleteTarget.name}
-                        disabled={deleteFetcher.state !== 'idle'}
-                      />
-                    </BlockStack>
-                  )}
+                <BlockStack gap="300">
+                  <Text as="p">
+                    {t.connect.database.deleteConfirmBody(deleteRefs.length)}
+                  </Text>
+                  <Text as="p" fontWeight="semibold">
+                    {allProjects
+                      .filter((project) => deleteRefs.includes(project.id))
+                      .map((project) => project.name)
+                      .join(', ')}
+                  </Text>
                 </BlockStack>
               </Modal.Section>
             </Modal>

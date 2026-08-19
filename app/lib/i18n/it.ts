@@ -72,7 +72,7 @@ export const it = {
     notConfigured: 'Non configurato',
     ownerUrl: 'URL Database proprietario',
     open: 'Vai al database',
-    copy: 'Clicca per copiare',
+    copy: 'Copia',
     copied: 'Copiato!',
   },
 
@@ -220,6 +220,13 @@ export const it = {
       deleteNone: 'Non hai altri database da eliminare.',
       deleteTypeName: 'Per confermare, scrivi il nome del database:',
       deleteConfirm: 'Elimina definitivamente',
+      inUse: 'In uso',
+      deleteConfirmTitle: 'Sicuro di voler proseguire?',
+      deleteConfirmBody: (n: number) =>
+        n === 1
+          ? 'Il database e tutto quello che contiene verranno eliminati definitivamente. L’operazione è irreversibile.'
+          : `I ${n} database e tutto quello che contengono verranno eliminati definitivamente. L’operazione è irreversibile.`,
+      deleteProceed: 'Prosegui ed elimina',
       manage: 'Gestisci',
       change: 'Cambia database',
       disconnect: 'Disconnetti',

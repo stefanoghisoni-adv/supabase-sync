@@ -1,15 +1,15 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import {
   Card,
   BlockStack,
   InlineStack,
   Text,
   Button,
-  Tooltip,
   Divider,
 } from '@shopify/polaris';
 import { MetricRow } from './MetricRow';
-import { middleTruncate, copyToClipboard } from './copy-value';
+import { middleTruncate } from './copy-value';
+import { CopyIconButton } from './CopyIconButton';
 import { useT } from '~/lib/i18n/context';
 
 export interface DatabaseCardProps {
@@ -48,37 +48,20 @@ export interface DatabaseCardProps {
  * per colonne invece che a blocchi.
  */
 function CopyableRow({ label, value }: { label: string; value: string }) {
-  const t = useT();
-  const [copied, setCopied] = useState(false);
-
-  const copy = useCallback(() => {
-    // La conferma appare solo a copia riuscita: dentro la cornice dell'admin il
-    // permesso puo' mancare, e copyToClipboard lo dice invece di far finta.
-    copyToClipboard(value).then((ok) => {
-      if (!ok) return;
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    });
-  }, [value]);
-
   return (
+    // Il valore non e' piu' il bersaglio del clic: accanto c'e' un pulsante che
+    // dice apertamente cosa fa. Cliccare un testo per copiarlo lo sapeva solo
+    // chi ci passava sopra col puntatore.
     <InlineStack align="space-between" blockAlign="center" gap="200" wrap={false}>
       <Text as="span" variant="bodyMd">
         {label}
       </Text>
-      {/* copy-value: il valore sta in secondo piano e si accende al passaggio
-          del puntatore (regole in dashboard.css, il pulsante non prende una
-          classe propria). */}
-      <div className="copy-value">
-        <Tooltip content={copied ? t.database.copied : t.database.copy}>
-          {/* monochromePlain: e' un valore da leggere, non un link da seguire, e
-              del blu non ha bisogno. Il testo mostrato puo' essere accorciato,
-              quello copiato e' sempre intero. */}
-          <Button variant="monochromePlain" onClick={copy} textAlign="right">
-            {middleTruncate(value)}
-          </Button>
-        </Tooltip>
-      </div>
+      <InlineStack gap="200" blockAlign="center" wrap={false}>
+        <Text as="span" tone="subdued" truncate>
+          {middleTruncate(value)}
+        </Text>
+        <CopyIconButton value={value} />
+      </InlineStack>
     </InlineStack>
   );
 }

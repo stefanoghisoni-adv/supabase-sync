@@ -11,8 +11,8 @@ import { dictionaryForShop } from '~/lib/i18n/server';
  * Eliminazione di un database che il merchant non sta usando.
  *
  * Il gesto e' irreversibile e riguarda dati suoi, quindi qui ci sono due
- * verifiche che non dipendono da cosa dichiara il browser: il progetto deve
- * risultare fra i suoi, e non deve essere quello collegato all'app. La seconda
+ * verifiche che non dipendono da cosa dichiara il browser: i progetti devono
+ * risultare fra i suoi, e nessuno di loro puo' essere quello collegato all'app. La seconda
  * conta piu' della prima — cancellare il database collegato significherebbe
  * portarsi via i dati che l'app sta sincronizzando, e da qui non si torna
  * indietro.
@@ -38,30 +38,38 @@ export async function action({ request }: ActionFunctionArgs) {
     );
   }
 
-  const body = (await request.json().catch(() => ({}))) as { ref?: unknown };
-  const ref = typeof body.ref === 'string' ? body.ref.trim() : '';
-  if (!ref) {
-    return json({ ok: false, error: 'ref del progetto mancante' }, { status: 400 });
+  const body = (await request.json().catch(() => ({}))) as { refs?: unknown };
+  const refs = Array.isArray(body.refs)
+    ? [...new Set(body.refs.filter((r): r is string => typeof r === 'string' && r.trim() !== ''))]
+    : [];
+  if (refs.length === 0) {
+    return json({ ok: false, error: 'nessun progetto indicato' }, { status: 400 });
   }
 
   const t = await dictionaryForShop(session.shop);
 
   // Il database collegato non si elimina da qui: prima lo si stacca, e quella
-  // e' una strada che chiede le sue conferme.
-  if (shop.supabaseConfig?.supabaseProjectRef === ref) {
+  // e' una strada che chiede le sue conferme. Basta che sia in elenco perche'
+  // l'intera richiesta si fermi — non se ne elimina meta'.
+  if (refs.includes(shop.supabaseConfig?.supabaseProjectRef ?? '')) {
     return json({ ok: false, error: t.errors.deleteConnected }, { status: 400 });
   }
 
   try {
     const token = await getValidAccessToken(shop.id);
 
-    // Che il progetto sia suo lo dice Supabase, non il browser.
+    // Che i progetti siano suoi lo dice Supabase, non il browser.
     const projects = await listProjects(token);
-    if (!projects.some((p) => p.id === ref)) {
+    const known = new Set(projects.map((p) => p.id));
+    if (refs.some((ref) => !known.has(ref))) {
       return json({ ok: false, error: t.errors.deleteUnknown }, { status: 404 });
     }
 
-    await deleteProject(token, ref);
+    // In sequenza: sono richieste distruttive, e mandarle in parallelo
+    // renderebbe piu' difficile dire quale non e' passata.
+    for (const ref of refs) {
+      await deleteProject(token, ref);
+    }
     return json({ ok: true });
   } catch (e) {
     console.error(

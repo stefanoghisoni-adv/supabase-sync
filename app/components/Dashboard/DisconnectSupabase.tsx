@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useFetcher, useRevalidator } from '@remix-run/react';
-import { BlockStack, Button, Modal, Text, TextField } from '@shopify/polaris';
+import { BlockStack, Button, InlineStack, Modal, Text, TextField } from '@shopify/polaris';
 import { useT } from '~/lib/i18n/context';
 import { matchesProjectName, projectConfirmationName } from './disconnect-confirm';
+import { CopyIconButton } from './CopyIconButton';
 
 export type DisconnectMode = 'delete' | 'keep';
 
@@ -135,9 +136,15 @@ export function DisconnectSupabase({
 
               {askingName && (
                 <BlockStack gap="200">
-                  <Text as="p">
-                    {t.connect.database.typeName} <strong>{confirmationName}</strong>
-                  </Text>
+                  {/* Il nome da riscrivere si puo' anche copiare: e' una sigla
+                      lunga, e chi la ribatte a mano sbaglia un carattere e non
+                      capisce perche' il pulsante resta spento. */}
+                  <InlineStack gap="200" blockAlign="center" wrap={false}>
+                    <Text as="p">
+                      {t.connect.database.typeName} <strong>{confirmationName}</strong>
+                    </Text>
+                    <CopyIconButton value={confirmationName} />
+                  </InlineStack>
                   <TextField
                     label={t.connect.database.projectName}
                     labelHidden

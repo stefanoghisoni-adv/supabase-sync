@@ -68,7 +68,7 @@ export const en: typeof it = {
     notConfigured: 'Not configured',
     ownerUrl: 'Your database URL',
     open: 'Open database',
-    copy: 'Click to copy',
+    copy: 'Copy',
     copied: 'Copied!',
   },
 
@@ -214,6 +214,13 @@ export const en: typeof it = {
       deleteNone: 'You have no other databases to delete.',
       deleteTypeName: 'To confirm, type the database name:',
       deleteConfirm: 'Delete permanently',
+      inUse: 'In use',
+      deleteConfirmTitle: 'Sure you want to continue?',
+      deleteConfirmBody: (n: number) =>
+        n === 1
+          ? 'The database and everything in it will be permanently deleted. This can’t be undone.'
+          : `The ${n} databases and everything in them will be permanently deleted. This can’t be undone.`,
+      deleteProceed: 'Continue and delete',
       manage: 'Manage',
       change: 'Change database',
       disconnect: 'Disconnect',
